@@ -1,9 +1,16 @@
 {
   "name": "FloraFlow",
   "short_name": "FloraFlow",
-  "start_url": "./index.html",
+  "description": "QC Inventory & Leftover Management System",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#f4f7f6",
   "theme_color": "#2e7d32",
-  "icons": []
+  "icons": [
+    {
+      "src": "/icon.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
 }
