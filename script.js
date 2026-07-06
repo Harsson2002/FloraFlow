@@ -20,7 +20,7 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
 
-renderInventory();
+loadInventoryFromSupabase();
 renderHistory();
 updateDashboard();
 
@@ -40,7 +40,7 @@ todayBtn.addEventListener("click", function () {
     document.getElementById("date").value = getToday();
 });
 
-addBtn.addEventListener("click", function () {
+addBtn.addEventListener("click", async function () {
     const product = document.getElementById("product").value;
     const color = document.getElementById("color").value;
     const quantity = document.getElementById("quantity").value;
@@ -53,27 +53,63 @@ addBtn.addEventListener("click", function () {
         return;
     }
 
-    const id = "LO-" + String(nextId).padStart(6, "0");
-    nextId++;
+    const leftoverCode = "LO-" + Date.now();
+
+    const { data, error } = await supabaseClient
+        .from("inventory")
+        .insert([
+            {
+                leftover_code: leftoverCode,
+                product: product,
+                color: color,
+                quantity: Number(quantity),
+                case_number: caseNumber,
+                date_received: date,
+                notes: notes,
+                status: "Available",
+                created_by: "Harsson"
+            }
+        ])
+        .select()
+        .single();
+
+    if (error) {
+        alert("Error saving to Supabase: " + error.message);
+        console.error(error);
+        return;
+    }
 
     inventory.push({
-        id,
-        product,
-        color,
-        quantity: Number(quantity),
-        caseNumber,
-        date,
-        notes,
-        status: "Available"
+        id: data.id,
+        leftover_code: data.leftover_code,
+        product: data.product,
+        color: data.color,
+        quantity: data.quantity,
+        caseNumber: data.case_number,
+        date: data.date_received,
+        notes: data.notes,
+        status: data.status
     });
 
-    addHistory(id, "ADD", product, color, caseNumber, "-", Number(quantity), Number(quantity));
+    history.push({
+        date: getToday(),
+        time: getTime(),
+        id: data.id,
+        action: "ADD",
+        product: data.product,
+        color: data.color,
+        caseNumber: data.case_number,
+        beforeQty: "-",
+        quantity: data.quantity,
+        afterQty: data.quantity
+    });
 
-    saveData();
     renderInventory();
     renderHistory();
     updateDashboard();
     clearForm();
+
+    alert("Leftover saved to Supabase!");
 });
 
 function renderInventory() {
@@ -334,3 +370,31 @@ function updateDashboard() {
     document.getElementById("removedCount").innerHTML = removed;
 
 }
+async function loadInventoryFromSupabase() {
+    const { data, error } = await supabaseClient
+        .from("inventory")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        alert("Error loading inventory from Supabase: " + error.message);
+        console.error(error);
+        return;
+    }
+
+    inventory = data.map(item => ({
+        id: item.id,
+        leftover_code: item.leftover_code,
+        product: item.product,
+        color: item.color,
+        quantity: item.quantity,
+        caseNumber: item.case_number,
+        date: item.date_received,
+        notes: item.notes,
+        status: item.status
+    }));
+
+    renderInventory();
+    updateDashboard();
+}
+
