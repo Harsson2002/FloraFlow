@@ -218,36 +218,70 @@ function openEditModal(index) {
     editModal.style.display = "block";
 }
 
-saveEditBtn.addEventListener("click", function () {
+saveEditBtn.addEventListener("click", async function () {
+
     if (editingIndex === null) return;
 
     const item = inventory[editingIndex];
     const oldQty = item.quantity;
 
-    item.product = document.getElementById("editProduct").value;
-    item.color = document.getElementById("editColor").value;
-    item.quantity = Number(document.getElementById("editQuantity").value);
-    item.caseNumber = document.getElementById("editCase").value;
-    item.date = document.getElementById("editDate").value;
-    item.notes = document.getElementById("editNotes").value;
+    const updatedProduct = document.getElementById("editProduct").value;
+    const updatedColor = document.getElementById("editColor").value;
+    const updatedQuantity = Number(document.getElementById("editQuantity").value);
+    const updatedCase = document.getElementById("editCase").value;
+    const updatedDate = document.getElementById("editDate").value;
+    const updatedNotes = document.getElementById("editNotes").value;
 
-    if (item.quantity === 0) {
-        item.status = "Removed from Inventory";
-    } else {
-        item.status = "Available";
+    const newStatus = updatedQuantity === 0
+        ? "Removed from Inventory"
+        : "Available";
+
+    const { error } = await supabaseClient
+        .from("inventory")
+        .update({
+            product: updatedProduct,
+            color: updatedColor,
+            quantity: updatedQuantity,
+            case_number: updatedCase,
+            date_received: updatedDate,
+            notes: updatedNotes,
+            status: newStatus
+        })
+        .eq("id", item.id);
+
+    if (error) {
+        alert("Error updating inventory: " + error.message);
+        console.error(error);
+        return;
     }
 
-    addHistory(item.id, "EDIT", item.product, item.color, item.caseNumber, oldQty, "-", item.quantity);
+    item.product = updatedProduct;
+    item.color = updatedColor;
+    item.quantity = updatedQuantity;
+    item.caseNumber = updatedCase;
+    item.date = updatedDate;
+    item.notes = updatedNotes;
+    item.status = newStatus;
 
-    saveData();
+    await addHistory(
+        item.id,
+        "EDIT",
+        item.product,
+        item.color,
+        item.caseNumber,
+        oldQty,
+        "-",
+        updatedQuantity
+    );
+
     renderInventory();
     renderHistory();
     updateDashboard();
 
     editModal.style.display = "none";
     editingIndex = null;
-});
 
+});
 function addHistory(id, action, product, color, caseNumber, beforeQty, quantity, afterQty) {
     history.push({
         date: getToday(),
