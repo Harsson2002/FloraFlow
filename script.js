@@ -21,8 +21,7 @@ let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
 
 loadInventoryFromSupabase();
-renderHistory();
-updateDashboard();
+loadHistoryFromSupabase();
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
@@ -297,6 +296,40 @@ function addHistory(id, action, product, color, caseNumber, beforeQty, quantity,
     });
 }
 
+async function loadHistoryFromSupabase() {
+    const { data, error } = await supabaseClient
+        .from("activity")
+        .select("*")
+        .order("created_at", { ascending: false });
+
+    if (error) {
+        alert("Error loading activity: " + error.message);
+        console.error(error);
+        return;
+    }
+
+    history = data.map(item => ({
+        date: item.created_at ? item.created_at.split("T")[0] : "",
+        time: item.created_at
+            ? new Date(item.created_at).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit"
+            })
+            : "",
+        id: item.inventory_id,
+        action: item.action,
+        product: item.product,
+        color: item.color,
+        caseNumber: item.case_number,
+        beforeQty: item.before_qty,
+        quantity: item.quantity_used,
+        afterQty: item.after_qty
+    }));
+
+    renderHistory();
+    updateDashboard();
+}
+
 function renderHistory() {
     historyTable.innerHTML = "";
 
@@ -304,15 +337,15 @@ function renderHistory() {
         const row = historyTable.insertRow();
 
         row.insertCell(0).innerHTML = item.date + " " + item.time;
-        row.insertCell(1).innerHTML = item.product;
-        row.insertCell(2).innerHTML = item.color;
-        row.insertCell(3).innerHTML = item.caseNumber;
-        row.insertCell(4).innerHTML = item.beforeQty;
-        row.insertCell(5).innerHTML = item.quantity;
-        row.insertCell(6).innerHTML = item.afterQty;
+        row.insertCell(1).innerHTML = item.action;
+        row.insertCell(2).innerHTML = item.product;
+        row.insertCell(3).innerHTML = item.color;
+        row.insertCell(4).innerHTML = item.caseNumber;
+        row.insertCell(5).innerHTML = item.beforeQty ?? "";
+        row.insertCell(6).innerHTML = item.quantity ?? "";
+        row.insertCell(7).innerHTML = item.afterQty ?? "";
     });
 }
-
 function getStatusBadge(status) {
     if (status === "Available") {
         return `<span class="status-badge status-available">Available</span>`;
