@@ -188,17 +188,18 @@ async function rotateProduct(index) {
     item.quantity = newQty;
     item.status = newStatus;
 
-    await addHistory(
-        item.id,
-        "ROTATE",
-        item.product,
-        item.color,
-        item.caseNumber,
-        currentQty,
-        rotatedQty,
-        newQty
-    );
+await addHistory(
+    item.id,
+    "ROTATE",
+    item.product,
+    item.color,
+    item.caseNumber,
+    currentQty,
+    rotatedQty,
+    newQty
+);
 
+await loadHistoryFromSupabase();await loadHistoryFromSupabase();
     renderInventory();
     renderHistory();
     updateDashboard();
@@ -272,6 +273,7 @@ saveEditBtn.addEventListener("click", async function () {
         "-",
         updatedQuantity
     );
+    await loadHistoryFromSupabase();
 
     renderInventory();
     renderHistory();
