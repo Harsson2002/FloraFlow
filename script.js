@@ -66,7 +66,7 @@ addBtn.addEventListener("click", async function () {
                 date_received: date,
                 notes: notes,
                 status: "Available",
-                created_by: "Harsson"
+                created_by: currentUser
             }
         ])
         .select()
