@@ -20,6 +20,38 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
 
+const users = [
+    "Harsson",
+    "Ender",
+    "Henry",
+    "Maidelyn",
+    "Mark",
+    "Paulina",
+    "Sandra",
+    "Dayan",
+    "Sarymed",
+    "Thalia",
+    "Laura",
+    "Liudmila",
+    "Orlando"
+];
+
+let currentUser = "Harsson";
+const userSelect = document.getElementById("userSelect");
+
+users.forEach(user => {
+    const option = document.createElement("option");
+    option.value = user;
+    option.textContent = user;
+    userSelect.appendChild(option);
+});
+
+userSelect.value = currentUser;
+
+userSelect.addEventListener("change", function () {
+    currentUser = this.value;
+});
+
 loadInventoryFromSupabase();
 loadHistoryFromSupabase();
 
@@ -66,8 +98,7 @@ addBtn.addEventListener("click", async function () {
                 date_received: date,
                 notes: notes,
                 status: "Available",
-                created_by: currentUser
-            }
+                created_by: document.getElementById("userSelect").value || "Harsson"            }
         ])
         .select()
         .single();
@@ -296,8 +327,8 @@ async function addHistory(id, action, product, color, caseNumber, beforeQty, qua
                 before_qty: beforeQty === "-" ? null : beforeQty,
                 quantity_used: quantity === "-" ? null : quantity,
                 after_qty: afterQty === "-" ? null : afterQty,
-                user_name: "Harsson",
-                details: action
+                user_name: document.getElementById("userSelect").value || "Harsson",
+               details: action
             }
         ])
         .select()
