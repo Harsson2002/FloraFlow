@@ -152,7 +152,7 @@ function renderInventory() {
     });
 }
 
-function rotateProduct(index) {
+async function rotateProduct(index) {
     const item = inventory[index];
     const currentQty = Number(item.quantity);
     const rotatedQty = Number(prompt("How many stems are you rotating to production?"));
@@ -168,23 +168,42 @@ function rotateProduct(index) {
     }
 
     const newQty = currentQty - rotatedQty;
+    const newStatus = (newQty === 0)
+        ? "Removed from Inventory"
+        : "Available";
 
-    item.quantity = newQty;
+    const { error } = await supabaseClient
+        .from("inventory")
+        .update({
+            quantity: newQty,
+            status: newStatus
+        })
+        .eq("id", item.id);
 
-    if (newQty === 0) {
-        item.status = "Removed from Inventory";
-    } else {
-        item.status = "Available";
+    if (error) {
+        alert("Error updating inventory: " + error.message);
+        console.error(error);
+        return;
     }
 
-    addHistory(item.id, "ROTATE", item.product, item.color, item.caseNumber, currentQty, rotatedQty, newQty);
+    item.quantity = newQty;
+    item.status = newStatus;
 
-    saveData();
+    await addHistory(
+        item.id,
+        "ROTATE",
+        item.product,
+        item.color,
+        item.caseNumber,
+        currentQty,
+        rotatedQty,
+        newQty
+    );
+
     renderInventory();
     renderHistory();
     updateDashboard();
 }
-
 function openEditModal(index) {
     editingIndex = index;
     const item = inventory[index];
