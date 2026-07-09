@@ -199,7 +199,7 @@ await addHistory(
     newQty
 );
 
-await loadHistoryFromSupabase();await loadHistoryFromSupabase();
+await loadHistoryFromSupabase();
     renderInventory();
     renderHistory();
     updateDashboard();
@@ -283,21 +283,35 @@ saveEditBtn.addEventListener("click", async function () {
     editingIndex = null;
 
 });
-function addHistory(id, action, product, color, caseNumber, beforeQty, quantity, afterQty) {
-    history.push({
-        date: getToday(),
-        time: getTime(),
-        id,
-        action,
-        product,
-        color,
-        caseNumber,
-        beforeQty,
-        quantity,
-        afterQty
-    });
-}
+async function addHistory(id, action, product, color, caseNumber, beforeQty, quantity, afterQty) {
+    const { data, error } = await supabaseClient
+        .from("activity")
+        .insert([
+            {
+                inventory_id: id,
+                action: action,
+                product: product,
+                color: color,
+                case_number: caseNumber,
+                before_qty: beforeQty === "-" ? null : beforeQty,
+                quantity_used: quantity === "-" ? null : quantity,
+                after_qty: afterQty === "-" ? null : afterQty,
+                user_name: "Harsson",
+                details: action
+            }
+        ])
+        .select()
+        .single();
 
+    console.log("Activity error:", error);
+    console.log("Activity data:", data);
+
+    if (error) {
+        alert("Error saving activity: " + error.message);
+        console.error(error);
+        return;
+    }
+}
 async function loadHistoryFromSupabase() {
     const { data, error } = await supabaseClient
         .from("activity")
