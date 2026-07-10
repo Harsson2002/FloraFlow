@@ -1,3 +1,81 @@
+const productsCatalog = [
+    "ACHILLEA",
+    "AGAPANTHUS",
+    "ALLIUM",
+    "ALSTROEMERIA",
+    "AMARANTHUS",
+    "AMMI",
+    "ANEMONE",
+    "ARALIA",
+    "ASTER",
+    "CALLA",
+    "CARNATION STANDARD",
+    "CHRYSANTHEMUM",
+    "CUSHION POM",
+    "DELPHINIUM",
+    "DISBUD",
+    "DUSTY MILLER",
+    "EUCALYPTUS",
+    "FREESIA",
+    "GERBERA",
+    "GYPSOPHILA",
+    "HELIANTHUS",
+    "HYPERICUM",
+    "HYDRANGEA",
+    "IRIS",
+    "LEPIDIUM",
+    "LEUCADENDRON",
+    "LISIANTHUS",
+    "LIMONIUM",
+    "MOLUCELLA",
+    "PEONY",
+    "PINCUSHION",
+    "PITTOSPORUM",
+    "PROTEA",
+    "RANUNCULUS",
+    "ROSE",
+    "RUSCUS",
+    "SCABIOSA",
+    "SNAPDRAGON",
+    "SOLIDAGO",
+    "SPRAY CARNATION",
+    "SPRAY ROSE",
+    "STOCK",
+    "TAGETES",
+    "TULIP",
+    "VERONICA",
+    "WAXFLOWER"
+];
+document.addEventListener("DOMContentLoaded", function () {
+    new TomSelect("#product", {
+        options: productsCatalog.map(function (product) {
+            return {
+                value: product,
+                text: product
+            };
+        }),
+
+        valueField: "value",
+        labelField: "text",
+        searchField: ["text"],
+
+        create: false,
+        maxItems: 1,
+        closeAfterSelect: true,
+        placeholder: "Search Product",
+
+        render: {
+            option: function (data, escape) {
+                return '<div>🌸 ' + escape(data.text) + '</div>';
+            },
+
+            item: function (data, escape) {
+                return '<div>' + escape(data.text) + '</div>';
+            }
+        }
+    });
+});
+
 const addBtn = document.getElementById("addBtn");
 const todayBtn = document.getElementById("todayBtn");
 const table = document.getElementById("inventoryTable");
@@ -749,48 +827,6 @@ document.addEventListener("touchmove", function (event) {
         }
     }
 }, { passive: false });
-if (typeof PullToRefresh !== "undefined") {
-
-    PullToRefresh.init({
-
-        mainElement: "body",
-
-        instructionsPullToRefresh: "↓ Pull to refresh",
-        instructionsReleaseToRefresh: "↻ Release to refresh",
-        instructionsRefreshing: "Refreshing FloraFlow...",
-
-        distThreshold: 70,
-        distMax: 100,
-        distReload: 60,
-
-        shouldPullToRefresh: function () {
-            return window.scrollY === 0;
-        },
-
-        onRefresh: async function () {
-
-            try {
-
-                await loadInventoryFromSupabase();
-                await loadHistoryFromSupabase();
-
-                renderInventory();
-                renderHistory();
-                updateDashboard();
-
-                console.log("FloraFlow refreshed!");
-
-            } catch (error) {
-
-                console.error(error);
-
-            }
-
-        }
-
-    });
-
-}
 
 
 
