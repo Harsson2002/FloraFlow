@@ -118,6 +118,7 @@
 </div>
 </div>
 
+
 <div id="editModal" class="modal">
 <div class="modal-content">
 <div class="modal-header">
@@ -136,7 +137,38 @@
 </div>
 </div>
 </div>
+<div id="productHistoryModal" class="modal">
+    <div class="modal-content">
 
+        <div class="modal-header">
+            <h2>📜 Product History</h2>
+            <button id="closeProductHistoryModal">X</button>
+        </div>
+
+        <div id="productHistorySummary">
+            <p><strong>Product:</strong> <span id="historyProductName"></span></p>
+            <p><strong>Color:</strong> <span id="historyProductColor"></span></p>
+            <p><strong>Case:</strong> <span id="historyProductCase"></span></p>
+            <p><strong>Current Qty:</strong> <span id="historyProductQty"></span></p>
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Date / Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Before</th>
+                    <th>Qty</th>
+                    <th>After</th>
+                </tr>
+            </thead>
+
+            <tbody id="productHistoryTable"></tbody>
+        </table>
+
+    </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="supabase.js"></script>
 <script src="script.js"></script>
