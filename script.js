@@ -364,15 +364,15 @@ async function loadHistoryFromSupabase() {
                 minute: "2-digit"
             })
             : "",
-       id: item.inventory_id,
-action: item.action,
-userName: item.user_name,
-product: item.product,
-color: item.color,
-caseNumber: item.case_number,
-beforeQty: item.before_qty,
-quantity: item.quantity_used,
-afterQty: item.after_qty
+        id: item.inventory_id,
+        action: item.action, userName: item.user_name,
+        product: item.product,
+        color: item.color,
+        caseNumber: item.case_number,
+        beforeQty: item.before_qty,
+        quantity: item.quantity_used,
+        afterQty: item.after_qty
+    }));
 
     renderHistory();
     updateDashboard();
@@ -385,14 +385,15 @@ function renderHistory() {
         const row = historyTable.insertRow();
 
         row.insertCell(0).innerHTML = item.date + " " + item.time;
-        row.insertCell(1).innerHTML = item.action;
-        row.insertCell(2).innerHTML = item.product;
-        row.insertCell(3).innerHTML = item.color;
-        row.insertCell(4).innerHTML = item.caseNumber;
-        row.insertCell(5).innerHTML = item.beforeQty ?? "";
-        row.insertCell(6).innerHTML = item.quantity ?? "";
-        row.insertCell(7).innerHTML = item.afterQty ?? "";
-    });
+       row.insertCell(1).innerHTML = item.action;
+       row.insertCell(2).innerHTML = item.userName ?? "";
+     row.insertCell(3).innerHTML = item.product;
+     row.insertCell(4).innerHTML = item.color;
+     row.insertCell(5).innerHTML = item.caseNumber;
+     row.insertCell(6).innerHTML = item.beforeQty ?? "";
+     row.insertCell(7).innerHTML = item.quantity ?? "";
+     row.insertCell(8).innerHTML = item.afterQty ?? "";
+     });
 }
 function getStatusBadge(status) {
     if (status === "Available") {
