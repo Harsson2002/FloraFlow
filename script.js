@@ -364,15 +364,15 @@ async function loadHistoryFromSupabase() {
                 minute: "2-digit"
             })
             : "",
-        id: item.inventory_id,
-        action: item.action,
-        product: item.product,
-        color: item.color,
-        caseNumber: item.case_number,
-        beforeQty: item.before_qty,
-        quantity: item.quantity_used,
-        afterQty: item.after_qty
-    }));
+       id: item.inventory_id,
+action: item.action,
+userName: item.user_name,
+product: item.product,
+color: item.color,
+caseNumber: item.case_number,
+beforeQty: item.before_qty,
+quantity: item.quantity_used,
+afterQty: item.after_qty
 
     renderHistory();
     updateDashboard();
