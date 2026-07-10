@@ -272,8 +272,14 @@ function openProductHistory(item) {
     const timeline = document.getElementById("productHistoryTimeline");
     timeline.innerHTML = "";
 
-    const itemHistory = history.filter(record => record.id === item.id);
+const itemHistory = history
+    .filter(record => record.id === item.id)
+    .sort(function(a, b) {
+        const dateA = new Date((a.date || "") + " " + (a.time || ""));
+        const dateB = new Date((b.date || "") + " " + (b.time || ""));
 
+        return dateA - dateB;
+    });
     if (itemHistory.length === 0) {
 
         timeline.innerHTML =
