@@ -263,12 +263,105 @@ await loadHistoryFromSupabase();
     updateDashboard();
 }
 function openProductHistory(item) {
+
     document.getElementById("historyProductName").textContent = item.product || "";
     document.getElementById("historyProductColor").textContent = item.color || "";
     document.getElementById("historyProductCase").textContent = item.caseNumber || "";
-    document.getElementById("historyProductQty").textContent = item.quantity || 0;
+    document.getElementById("historyProductQty").textContent = item.quantity ?? 0;
+
+    const timeline = document.getElementById("productHistoryTimeline");
+    timeline.innerHTML = "";
+
+    const itemHistory = history.filter(record => record.id === item.id);
+
+    if (itemHistory.length === 0) {
+
+        timeline.innerHTML =
+        "<p style='text-align:center;color:#777;'>No history available.</p>";
+
+    } else {
+
+        itemHistory.forEach(function(record, index){
+
+            const card = document.createElement("div");
+            card.className = "timeline-card";
+
+            let icon = "⚪";
+            let color = "#999";
+            let description = "";
+
+            switch(record.action){
+
+                case "ADD":
+                    icon = "🟢";
+                    color = "#2ecc71";
+                    description = "Added " + (record.quantity || 0) + " stems";
+                    break;
+
+                case "EDIT":
+                    icon = "🟡";
+                    color = "#f1c40f";
+                    description = (record.beforeQty || 0) + " → " + (record.afterQty || 0) + " stems";
+                    break;
+
+                case "ROTATE":
+                    icon = "🔵";
+                    color = "#3498db";
+                    description = (record.beforeQty || 0) + " → " + (record.afterQty || 0) + " stems";
+                    break;
+
+                case "REMOVE":
+                    icon = "🔴";
+                    color = "#e74c3c";
+                    description = "Removed from Inventory";
+                    break;
+            }
+
+            card.innerHTML = `
+                <div style="border-left:6px solid ${color};padding:12px;margin-bottom:10px;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);">
+
+                    <h3 style="margin:0;">
+                        ${icon} ${record.action}
+                    </h3>
+
+                    <p>👤 ${record.userName || "Unknown"}</p>
+
+                    <p>📅 ${record.date || ""} ${record.time || ""}</p>
+
+                    <strong>${description}</strong>
+
+                </div>
+            `;
+
+            timeline.appendChild(card);
+
+            if(index < itemHistory.length-1){
+
+                const arrow = document.createElement("div");
+
+                arrow.innerHTML = `
+                    <div style="
+                        text-align:center;
+                        font-size:26px;
+                        color:#999;
+                        margin:5px 0 15px 0;
+                    ">
+                        │
+                        <br>
+                        ▼
+                    </div>
+                `;
+
+                timeline.appendChild(arrow);
+
+            }
+
+        });
+
+    }
 
     document.getElementById("productHistoryModal").style.display = "block";
+
 }
 function openEditModal(index) {
     editingIndex = index;
