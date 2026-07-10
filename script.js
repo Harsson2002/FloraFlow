@@ -36,7 +36,7 @@ const users = [
     "Orlando"
 ];
 
-let currentUser = "Harsson";
+let currentUser = localStorage.getItem("currentUser") || "Harsson";
 const userSelect = document.getElementById("userSelect");
 
 users.forEach(user => {
@@ -50,6 +50,7 @@ userSelect.value = currentUser;
 
 userSelect.addEventListener("change", function () {
     currentUser = this.value;
+    localStorage.setItem("currentUser", currentUser);
 });
 
 loadInventoryFromSupabase();
