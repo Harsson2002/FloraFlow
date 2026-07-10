@@ -274,12 +274,7 @@ function openProductHistory(item) {
 
 const itemHistory = history
     .filter(record => record.id === item.id)
-    .sort(function(a, b) {
-        const dateA = new Date((a.date || "") + " " + (a.time || ""));
-        const dateB = new Date((b.date || "") + " " + (b.time || ""));
-
-        return dateA - dateB;
-    });
+    .reverse();
     if (itemHistory.length === 0) {
 
         timeline.innerHTML =
