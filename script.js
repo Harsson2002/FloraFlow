@@ -2,6 +2,7 @@ const addBtn = document.getElementById("addBtn");
 const todayBtn = document.getElementById("todayBtn");
 const table = document.getElementById("inventoryTable");
 const historyTable = document.getElementById("historyTable");
+const historySearch = document.getElementById("historySearch");
 const searchInput = document.getElementById("search");
 
 const activityBtn = document.getElementById("activityBtn");
@@ -379,21 +380,41 @@ async function loadHistoryFromSupabase() {
 }
 
 function renderHistory() {
+
     historyTable.innerHTML = "";
 
-    history.forEach(function (item) {
+    const search = historySearch.value.toLowerCase().trim();
+
+    const filteredHistory = history.filter(item => {
+
+        if (search === "") return true;
+
+        return (
+            (item.action ?? "").toLowerCase().includes(search) ||
+            (item.userName ?? "").toLowerCase().includes(search) ||
+            (item.product ?? "").toLowerCase().includes(search) ||
+            (item.color ?? "").toLowerCase().includes(search) ||
+            String(item.caseNumber ?? "").toLowerCase().includes(search)
+        );
+
+    });
+
+    filteredHistory.forEach(function (item) {
+
         const row = historyTable.insertRow();
 
         row.insertCell(0).innerHTML = item.date + " " + item.time;
-       row.insertCell(1).innerHTML = item.action;
-       row.insertCell(2).innerHTML = item.userName ?? "";
-     row.insertCell(3).innerHTML = item.product;
-     row.insertCell(4).innerHTML = item.color;
-     row.insertCell(5).innerHTML = item.caseNumber;
-     row.insertCell(6).innerHTML = item.beforeQty ?? "";
-     row.insertCell(7).innerHTML = item.quantity ?? "";
-     row.insertCell(8).innerHTML = item.afterQty ?? "";
-     });
+        row.insertCell(1).innerHTML = item.action;
+        row.insertCell(2).innerHTML = item.userName ?? "";
+        row.insertCell(3).innerHTML = item.product;
+        row.insertCell(4).innerHTML = item.color;
+        row.insertCell(5).innerHTML = item.caseNumber;
+        row.insertCell(6).innerHTML = item.beforeQty ?? "";
+        row.insertCell(7).innerHTML = item.quantity ?? "";
+        row.insertCell(8).innerHTML = item.afterQty ?? "";
+
+    });
+
 }
 function getStatusBadge(status) {
     if (status === "Available") {
@@ -532,4 +553,5 @@ async function loadInventoryFromSupabase() {
     renderInventory();
     updateDashboard();
 }
+historySearch.addEventListener("input", renderHistory);
 
