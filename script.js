@@ -258,7 +258,14 @@ await loadHistoryFromSupabase();
     updateDashboard();
 }
 function openProductHistory(item) {
-    alert("Product History: " + item.product);
+
+    document.getElementById("historyProductName").textContent = item.product;
+    document.getElementById("historyProductColor").textContent = item.color;
+    document.getElementById("historyProductCase").textContent = item.caseNumber;
+    document.getElementById("historyProductQty").textContent = item.quantity;
+
+    document.getElementById("productHistoryModal").style.display = "block";
+
 }
 function openEditModal(index) {
     editingIndex = index;
