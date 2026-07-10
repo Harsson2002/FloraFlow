@@ -220,3 +220,14 @@ tr:nth-child(even) {
         grid-template-columns: 1fr 1fr;
     }
 }
+#pullToRefresh {
+    display: none;
+    position: sticky;
+    top: 0;
+    z-index: 9999;
+    text-align: center;
+    padding: 12px;
+    background: #ffffff;
+    font-weight: bold;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}

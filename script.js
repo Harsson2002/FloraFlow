@@ -718,4 +718,60 @@ async function loadInventoryFromSupabase() {
     updateDashboard();
 }
 historySearch.addEventListener("input", renderHistory);
+let pullStartY = 0;
+let pullDistance = 0;
+let isPulling = false;
+
+const pullToRefresh = document.getElementById("pullToRefresh");
+
+document.addEventListener("touchstart", function (event) {
+    if (window.scrollY === 0) {
+        pullStartY = event.touches[0].clientY;
+        isPulling = true;
+    }
+});
+
+document.addEventListener("touchmove", function (event) {
+    if (!isPulling) return;
+
+    const currentY = event.touches[0].clientY;
+    pullDistance = currentY - pullStartY;
+
+    if (pullDistance > 0 && window.scrollY === 0) {
+        pullToRefresh.style.display = "block";
+
+        if (pullDistance > 90) {
+            pullToRefresh.textContent = "↻ Release to refresh";
+        } else {
+            pullToRefresh.textContent = "↓ Pull to refresh";
+        }
+    }
+});
+
+document.addEventListener("touchend", async function () {
+    if (!isPulling) return;
+
+    if (pullDistance > 90) {
+        pullToRefresh.textContent = "Refreshing...";
+
+        await loadInventoryFromSupabase();
+        await loadHistoryFromSupabase();
+
+        renderInventory();
+        renderHistory();
+        updateDashboard();
+
+        pullToRefresh.textContent = "✓ FloraFlow updated";
+
+        setTimeout(function () {
+            pullToRefresh.style.display = "none";
+        }, 1200);
+    } else {
+        pullToRefresh.style.display = "none";
+    }
+
+    pullStartY = 0;
+    pullDistance = 0;
+    isPulling = false;
+});
 
