@@ -135,6 +135,16 @@ addBtn.addEventListener("click", async function () {
         quantity: data.quantity,
         afterQty: data.quantity
     });
+    await addHistory(
+    data.id,
+    "ADD",
+    data.product,
+    data.color,
+    data.case_number,
+    "-",
+    data.quantity,
+    data.quantity
+);
 
     renderInventory();
     renderHistory();
