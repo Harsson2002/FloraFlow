@@ -725,6 +725,8 @@ let isPulling = false;
 const pullToRefresh = document.getElementById("pullToRefresh");
 
 document.addEventListener("touchstart", function (event) {
+    console.log("Touch started");
+    
     if (window.scrollY === 0) {
         pullStartY = event.touches[0].clientY;
         isPulling = true;
