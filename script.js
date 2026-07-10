@@ -1,3 +1,4 @@
+
 const productsCatalog = [
     "ACHILLEA",
     "AGAPANTHUS",
@@ -46,7 +47,7 @@ const productsCatalog = [
     "VERONICA",
     "WAXFLOWER"
 ];
-document.addEventListener("DOMContentLoaded", function () {
+
     new TomSelect("#product", {
         options: productsCatalog.map(function (product) {
             return {
@@ -74,7 +75,7 @@ document.addEventListener("DOMContentLoaded", function () {
             }
         }
     });
-});
+
 
 const addBtn = document.getElementById("addBtn");
 const todayBtn = document.getElementById("todayBtn");
