@@ -318,24 +318,61 @@ const itemHistory = history
                     break;
             }
 
-            card.innerHTML = `
-                <div style="border-left:6px solid ${color};padding:12px;margin-bottom:10px;background:white;border-radius:8px;box-shadow:0 2px 6px rgba(0,0,0,.08);">
+card.innerHTML = `
+<div style="
+    border-left:6px solid ${color};
+    padding:15px;
+    margin-bottom:12px;
+    background:white;
+    border-radius:10px;
+    box-shadow:0 2px 6px rgba(0,0,0,.08);
+">
 
-                    <h3 style="margin:0;">
-                        ${icon} ${record.action}
-                    </h3>
+    <h3 style="margin:0 0 10px 0;">
+        ${icon} ${record.action}
+    </h3>
 
-                    <p>👤 ${record.userName || "Unknown"}</p>
+    <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:15px;">
 
-                    <p>📅 ${record.date || ""} ${record.time || ""}</p>
+        <span>👤 ${record.userName || "Unknown"}</span>
 
-                    <strong>${description}</strong>
+        <span>🕒 ${record.date || ""} ${record.time || ""}</span>
 
-                </div>
-            `;
+    </div>
 
-            timeline.appendChild(card);
+    <div style="text-align:center;">
 
+        <div style="font-size:20px;font-weight:bold;">
+            ${record.beforeQty ?? record.quantity ?? 0} stems
+        </div>
+
+        <div style="
+            font-size:28px;
+            color:${color};
+            line-height:22px;
+            margin:8px 0;
+        ">
+            │<br>▼
+        </div>
+
+        <div style="
+            font-size:20px;
+            font-weight:bold;
+            color:${color};
+        ">
+            ${
+                record.action === "ADD"
+                ? "Entered Inventory"
+                : (record.afterQty ?? 0) + " stems"
+            }
+        </div>
+
+    </div>
+
+</div>
+`;
+
+timeline.appendChild(card);
             if(index < itemHistory.length-1){
 
                 const arrow = document.createElement("div");
