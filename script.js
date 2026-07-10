@@ -11,6 +11,7 @@ const closeModal = document.getElementById("closeModal");
 
 const editModal = document.getElementById("editModal");
 const closeEditModal = document.getElementById("closeEditModal");
+const closeProductHistoryModal = document.getElementById("closeProductHistoryModal");
 const saveEditBtn = document.getElementById("saveEditBtn");
 
 const exportInventoryBtn = document.getElementById("exportInventoryBtn");
@@ -67,6 +68,10 @@ closeModal.addEventListener("click", function () {
 
 closeEditModal.addEventListener("click", function () {
     editModal.style.display = "none";
+});
+
+closeProductHistoryModal.addEventListener("click", function () {
+    document.getElementById("productHistoryModal").style.display = "none";
 });
 
 todayBtn.addEventListener("click", function () {
