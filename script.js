@@ -718,15 +718,13 @@ async function loadInventoryFromSupabase() {
     updateDashboard();
 }
 historySearch.addEventListener("input", renderHistory);
-let pullStartY = 0;
 let pullDistance = 0;
 let isPulling = false;
 
-const pullToRefresh = document.getElementById("pullToRefresh");
 
 document.addEventListener("touchstart", function (event) {
     console.log("Touch started");
-    
+
     if (window.scrollY === 0) {
         pullStartY = event.touches[0].clientY;
         isPulling = true;
@@ -740,6 +738,8 @@ document.addEventListener("touchmove", function (event) {
     pullDistance = currentY - pullStartY;
 
     if (pullDistance > 0 && window.scrollY === 0) {
+        event.preventDefault();
+
         pullToRefresh.style.display = "block";
 
         if (pullDistance > 90) {
@@ -748,32 +748,49 @@ document.addEventListener("touchmove", function (event) {
             pullToRefresh.textContent = "↓ Pull to refresh";
         }
     }
-});
+}, { passive: false });
+if (typeof PullToRefresh !== "undefined") {
 
-document.addEventListener("touchend", async function () {
-    if (!isPulling) return;
+    PullToRefresh.init({
 
-    if (pullDistance > 90) {
-        pullToRefresh.textContent = "Refreshing...";
+        mainElement: "body",
 
-        await loadInventoryFromSupabase();
-        await loadHistoryFromSupabase();
+        instructionsPullToRefresh: "↓ Pull to refresh",
+        instructionsReleaseToRefresh: "↻ Release to refresh",
+        instructionsRefreshing: "Refreshing FloraFlow...",
 
-        renderInventory();
-        renderHistory();
-        updateDashboard();
+        distThreshold: 70,
+        distMax: 100,
+        distReload: 60,
 
-        pullToRefresh.textContent = "✓ FloraFlow updated";
+        shouldPullToRefresh: function () {
+            return window.scrollY === 0;
+        },
 
-        setTimeout(function () {
-            pullToRefresh.style.display = "none";
-        }, 1200);
-    } else {
-        pullToRefresh.style.display = "none";
-    }
+        onRefresh: async function () {
 
-    pullStartY = 0;
-    pullDistance = 0;
-    isPulling = false;
-});
+            try {
+
+                await loadInventoryFromSupabase();
+                await loadHistoryFromSupabase();
+
+                renderInventory();
+                renderHistory();
+                updateDashboard();
+
+                console.log("FloraFlow refreshed!");
+
+            } catch (error) {
+
+                console.error(error);
+
+            }
+
+        }
+
+    });
+
+}
+
+
 
