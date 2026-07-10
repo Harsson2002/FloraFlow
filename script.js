@@ -164,7 +164,17 @@ function renderInventory() {
             row.classList.add("removed-row");
         }
 
-        row.insertCell(0).innerHTML = item.product;
+        const productCell = row.insertCell(0);
+
+const productLink = document.createElement("button");
+productLink.innerHTML = item.product;
+productLink.className = "product-history-link";
+
+productLink.onclick = function () {
+    openProductHistory(item);
+};
+
+productCell.appendChild(productLink);
         row.insertCell(1).innerHTML = item.color;
         row.insertCell(2).innerHTML = item.quantity;
         row.insertCell(3).innerHTML = item.caseNumber;
@@ -246,6 +256,9 @@ await loadHistoryFromSupabase();
     renderInventory();
     renderHistory();
     updateDashboard();
+}
+function openProductHistory(item) {
+    alert("Product History: " + item.product);
 }
 function openEditModal(index) {
     editingIndex = index;
