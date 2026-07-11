@@ -842,6 +842,8 @@ function renderHistory() {
         activityTimeline.appendChild(card);
 
 
+    });
+
 }
 function getStatusBadge(status) {
     if (status === "Available") {
