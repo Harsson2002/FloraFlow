@@ -841,25 +841,6 @@ function renderHistory() {
 
         activityTimeline.appendChild(card);
 
-        if (index < filteredHistory.length - 1) {
-
-            const arrow = document.createElement("div");
-
-            arrow.innerHTML = `
-                <div style="
-                    text-align:center;
-                    color:#aaa;
-                    font-size:24px;
-                    margin:-2px 0 10px 0;
-                ">
-                    │<br>▼
-                </div>
-            `;
-
-            activityTimeline.appendChild(arrow);
-        }
-
-    });
 
 }
 function getStatusBadge(status) {
