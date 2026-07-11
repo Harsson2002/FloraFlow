@@ -811,31 +811,55 @@ function renderHistory() {
                 </div>
 
                 ${
-                    item.details && item.details !== item.action
-                    ? `
-                        <div style="
-                            background:#f8f9fa;
-                            border-radius:8px;
-                            padding:10px;
-                            margin-bottom:12px;
-                            line-height:1.6;
-                            white-space:pre-line;
-                        ">
-                            ${item.details.split(" | ").join("<br>")}
-                        </div>
-                    `
-                    : ""
-                }
-
+${
+    item.action === "EDIT" &&
+    item.details &&
+    item.details !== "EDIT"
+        ? `
+            <div style="
+                background:#fff9e6;
+                border:1px solid #f1c40f;
+                border-radius:10px;
+                padding:12px;
+                margin-bottom:12px;
+                font-size:14px;
+                line-height:1.7;
+            ">
                 <div style="
-                    text-align:center;
-                    font-size:18px;
                     font-weight:bold;
-                    color:${color};
+                    margin-bottom:6px;
+                    color:#8a6d00;
                 ">
-                    ${quantityText}
+                    ✏️ Changes
                 </div>
 
+                ${item.details
+                    .split(" | ")
+                    .map(function (change) {
+                        return `<div>• ${change}</div>`;
+                    })
+                    .join("")}
+            </div>
+        `
+        : ""
+}
+
+${
+    item.action !== "EDIT" ||
+    !item.details ||
+    item.details === "EDIT"
+        ? `
+            <div style="
+                text-align:center;
+                font-size:18px;
+                font-weight:bold;
+                color:${color};
+            ">
+                ${quantityText}
+            </div>
+        `
+        : ""
+}
             </div>
         `;
 
