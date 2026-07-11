@@ -373,7 +373,42 @@ const itemHistory = history
     } else {
 
         itemHistory.forEach(function(record, index){
+let detailsHtml = "";
 
+if (
+    item.action === "EDIT" &&
+    item.details &&
+    item.details !== "EDIT"
+) {
+    const changesList = item.details
+        .split(" | ")
+        .map(function (change) {
+            return "<div>• " + change + "</div>";
+        })
+        .join("");
+
+    detailsHtml = `
+        <div style="
+            background:#fff9e6;
+            border:1px solid #f1c40f;
+            border-radius:10px;
+            padding:12px;
+            margin-bottom:12px;
+            font-size:14px;
+            line-height:1.7;
+        ">
+            <div style="
+                font-weight:bold;
+                margin-bottom:6px;
+                color:#8a6d00;
+            ">
+                ✏️ Changes
+            </div>
+
+            ${changesList}
+        </div>
+    `;
+}
             const card = document.createElement("div");
             card.className = "timeline-card";
 
@@ -810,7 +845,7 @@ function renderHistory() {
 
                 </div>
 
-                ${
+                
 ${
     item.action === "EDIT" &&
     item.details &&
