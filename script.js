@@ -48,7 +48,7 @@ const productsCatalog = [
     "WAXFLOWER"
 ];
 
-    new TomSelect("#product", {
+    const productSelect = new TomSelect("#product", {
         options: productsCatalog.map(function (product) {
             return {
                 value: product,
@@ -158,17 +158,28 @@ todayBtn.addEventListener("click", function () {
 });
 
 addBtn.addEventListener("click", async function () {
-    const product = document.getElementById("product").value;
+    const product = productSelect.getValue();
     const color = document.getElementById("color").value;
     const quantity = document.getElementById("quantity").value;
     const caseNumber = document.getElementById("case").value;
     const date = document.getElementById("date").value;
     const notes = document.getElementById("notes").value;
 
-    if (product === "" || color === "" || quantity === "") {
-        alert("Please enter Product, Color and Quantity.");
-        return;
-    }
+   if (!product || !productsCatalog.includes(product)) {
+    alert("Please select a valid product from the list.");
+    productSelect.focus();
+    return;
+}
+
+if (color.trim() === "" || quantity === "") {
+    alert("Please enter Color and Quantity.");
+    return;
+}
+
+if (Number(quantity) <= 0) {
+    alert("Quantity must be greater than 0.");
+    return;
+}
 
     const leftoverCode = "LO-" + Date.now();
 
