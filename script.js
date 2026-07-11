@@ -80,7 +80,7 @@ const productsCatalog = [
 const addBtn = document.getElementById("addBtn");
 const todayBtn = document.getElementById("todayBtn");
 const table = document.getElementById("inventoryTable");
-const historyTable = document.getElementById("historyTable");
+const activityTimeline = document.getElementById("activityTimeline");
 const historySearch = document.getElementById("historySearch");
 const searchInput = document.getElementById("search");
 
@@ -430,6 +430,23 @@ card.innerHTML = `
 
     </div>
 
+    ${
+    record.details && record.details !== record.action
+    ? `
+    <div style="
+        background:#f8f9fa;
+        border-radius:8px;
+        padding:10px;
+        margin-bottom:15px;
+        font-size:14px;
+        line-height:1.5;
+        white-space:pre-line;
+    ">
+        ${record.details.split(" | ").join("<br>")}
+    </div>
+    `
+    : ""
+}
     <div style="text-align:center;">
 
         <div style="font-size:20px;font-weight:bold;">
@@ -511,6 +528,11 @@ saveEditBtn.addEventListener("click", async function () {
 
     const item = inventory[editingIndex];
     const oldQty = item.quantity;
+    const oldProduct = item.product;
+    const oldColor = item.color;
+    const oldCase = item.caseNumber;
+    const oldDate = item.date;
+    const oldNotes = item.notes;
 
     const updatedProduct = document.getElementById("editProduct").value;
     const updatedColor = document.getElementById("editColor").value;
@@ -518,6 +540,35 @@ saveEditBtn.addEventListener("click", async function () {
     const updatedCase = document.getElementById("editCase").value;
     const updatedDate = document.getElementById("editDate").value;
     const updatedNotes = document.getElementById("editNotes").value;
+const changes = [];
+
+if (oldProduct !== updatedProduct) {
+    changes.push(`Product: ${oldProduct} → ${updatedProduct}`);
+}
+
+if (oldColor !== updatedColor) {
+    changes.push(`Color: ${oldColor} → ${updatedColor}`);
+}
+
+if (Number(oldQty) !== updatedQuantity) {
+    changes.push(`Quantity: ${oldQty} → ${updatedQuantity}`);
+}
+
+if (oldCase !== updatedCase) {
+    changes.push(`Case: ${oldCase || "(empty)"} → ${updatedCase || "(empty)"}`);
+}
+
+if (oldDate !== updatedDate) {
+    changes.push(`Date: ${oldDate || "(empty)"} → ${updatedDate || "(empty)"}`);
+}
+
+if (oldNotes !== updatedNotes) {
+    changes.push(`Notes: ${oldNotes || "(empty)"} → ${updatedNotes || "(empty)"}`);
+}
+
+const editDetails = changes.length > 0
+    ? changes.join(" | ")
+    : "No changes detected";
 
     const newStatus = updatedQuantity === 0
         ? "Removed from Inventory"
@@ -550,16 +601,17 @@ saveEditBtn.addEventListener("click", async function () {
     item.notes = updatedNotes;
     item.status = newStatus;
 
-    await addHistory(
-        item.id,
-        "EDIT",
-        item.product,
-        item.color,
-        item.caseNumber,
-        oldQty,
-        "-",
-        updatedQuantity
-    );
+await addHistory(
+    item.id,
+    "EDIT",
+    item.product,
+    item.color,
+    item.caseNumber,
+    oldQty,
+    "-",
+    updatedQuantity,
+    editDetails
+);
     await loadHistoryFromSupabase();
 
     renderInventory();
@@ -570,7 +622,17 @@ saveEditBtn.addEventListener("click", async function () {
     editingIndex = null;
 
 });
-async function addHistory(id, action, product, color, caseNumber, beforeQty, quantity, afterQty) {
+async function addHistory(
+    id,
+    action,
+    product,
+    color,
+    caseNumber,
+    beforeQty,
+    quantity,
+    afterQty,
+    details = action
+) {
     const { data, error } = await supabaseClient
         .from("activity")
         .insert([
@@ -584,7 +646,7 @@ async function addHistory(id, action, product, color, caseNumber, beforeQty, qua
                 quantity_used: quantity === "-" ? null : quantity,
                 after_qty: afterQty === "-" ? null : afterQty,
                 user_name: document.getElementById("userSelect").value || "Harsson",
-               details: action
+                details: details
             }
         ])
         .select()
@@ -626,20 +688,20 @@ async function loadHistoryFromSupabase() {
         caseNumber: item.case_number,
         beforeQty: item.before_qty,
         quantity: item.quantity_used,
-        afterQty: item.after_qty
+        afterQty: item.after_qty,
+        details: item.details
     }));
 
     renderHistory();
     updateDashboard();
 }
-
 function renderHistory() {
 
-    historyTable.innerHTML = "";
+    activityTimeline.innerHTML = "";
 
     const search = historySearch.value.toLowerCase().trim();
 
-    const filteredHistory = history.filter(item => {
+    const filteredHistory = history.filter(function (item) {
 
         if (search === "") return true;
 
@@ -648,24 +710,154 @@ function renderHistory() {
             (item.userName ?? "").toLowerCase().includes(search) ||
             (item.product ?? "").toLowerCase().includes(search) ||
             (item.color ?? "").toLowerCase().includes(search) ||
-            String(item.caseNumber ?? "").toLowerCase().includes(search)
+            String(item.caseNumber ?? "").toLowerCase().includes(search) ||
+            (item.details ?? "").toLowerCase().includes(search)
         );
 
     });
 
-    filteredHistory.forEach(function (item) {
+    if (filteredHistory.length === 0) {
 
-        const row = historyTable.insertRow();
+        activityTimeline.innerHTML = `
+            <p style="
+                text-align:center;
+                color:#777;
+                padding:25px;
+            ">
+                No activity found.
+            </p>
+        `;
 
-        row.insertCell(0).innerHTML = item.date + " " + item.time;
-        row.insertCell(1).innerHTML = item.action;
-        row.insertCell(2).innerHTML = item.userName ?? "";
-        row.insertCell(3).innerHTML = item.product;
-        row.insertCell(4).innerHTML = item.color;
-        row.insertCell(5).innerHTML = item.caseNumber;
-        row.insertCell(6).innerHTML = item.beforeQty ?? "";
-        row.insertCell(7).innerHTML = item.quantity ?? "";
-        row.insertCell(8).innerHTML = item.afterQty ?? "";
+        return;
+    }
+
+    filteredHistory.forEach(function (item, index) {
+
+        let icon = "⚪";
+        let color = "#999";
+        let quantityText = "";
+
+        switch (item.action) {
+
+            case "ADD":
+                icon = "🟢";
+                color = "#2ecc71";
+                quantityText = `${item.quantity ?? item.afterQty ?? 0} stems added`;
+                break;
+
+            case "EDIT":
+                icon = "🟡";
+                color = "#f1c40f";
+                quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
+                break;
+
+            case "ROTATE":
+                icon = "🔵";
+                color = "#3498db";
+                quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
+                break;
+
+            case "REMOVE":
+                icon = "🔴";
+                color = "#e74c3c";
+                quantityText = "Removed from Inventory";
+                break;
+        }
+
+        const card = document.createElement("div");
+
+        card.innerHTML = `
+            <div style="
+                background:white;
+                border-left:6px solid ${color};
+                border-radius:12px;
+                padding:16px;
+                margin-bottom:12px;
+                box-shadow:0 2px 8px rgba(0,0,0,.08);
+            ">
+
+                <div style="
+                    display:flex;
+                    justify-content:space-between;
+                    align-items:center;
+                    margin-bottom:12px;
+                ">
+                    <h3 style="margin:0;">
+                        ${icon} ${item.action}
+                    </h3>
+
+                    <span style="
+                        font-size:13px;
+                        color:#777;
+                    ">
+                        ${item.date} ${item.time}
+                    </span>
+
+                </div>
+
+                <div style="
+                    display:grid;
+                    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+                    gap:8px;
+                    margin-bottom:12px;
+                    font-size:14px;
+                ">
+
+                    <div><strong>👤 User:</strong> ${item.userName || "Unknown"}</div>
+                    <div><strong>🌸 Product:</strong> ${item.product}</div>
+                    <div><strong>🎨 Color:</strong> ${item.color}</div>
+                    <div><strong>📦 Case:</strong> ${item.caseNumber}</div>
+
+                </div>
+
+                ${
+                    item.details && item.details !== item.action
+                    ? `
+                        <div style="
+                            background:#f8f9fa;
+                            border-radius:8px;
+                            padding:10px;
+                            margin-bottom:12px;
+                            line-height:1.6;
+                            white-space:pre-line;
+                        ">
+                            ${item.details.split(" | ").join("<br>")}
+                        </div>
+                    `
+                    : ""
+                }
+
+                <div style="
+                    text-align:center;
+                    font-size:18px;
+                    font-weight:bold;
+                    color:${color};
+                ">
+                    ${quantityText}
+                </div>
+
+            </div>
+        `;
+
+        activityTimeline.appendChild(card);
+
+        if (index < filteredHistory.length - 1) {
+
+            const arrow = document.createElement("div");
+
+            arrow.innerHTML = `
+                <div style="
+                    text-align:center;
+                    color:#aaa;
+                    font-size:24px;
+                    margin:-2px 0 10px 0;
+                ">
+                    │<br>▼
+                </div>
+            `;
+
+            activityTimeline.appendChild(arrow);
+        }
 
     });
 
