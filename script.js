@@ -97,11 +97,13 @@ const saveEditBtn = document.getElementById("saveEditBtn");
 
 const exportInventoryBtn = document.getElementById("exportInventoryBtn");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
+const toggleRemovedBtn = document.getElementById("toggleRemovedBtn");
 
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
+let showRemoved = false;
 
 const users = [
     "Harsson",
@@ -142,7 +144,15 @@ loadHistoryFromSupabase();
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
+toggleRemovedBtn.addEventListener("click", function () {
+    showRemoved = !showRemoved;
 
+    toggleRemovedBtn.textContent = showRemoved
+        ? "Hide Removed"
+        : "Show Removed";
+
+    renderInventory();
+});
 closeModal.addEventListener("click", function () {
     activityModal.style.display = "none";
 });
@@ -259,7 +269,15 @@ setTimeout(function () {
 function renderInventory() {
     table.innerHTML = "";
 
-    inventory.forEach(function (item, index) {
+    const visibleInventory = inventory.filter(function (item) {
+    return showRemoved || item.status !== "Removed from Inventory";
+});
+
+visibleInventory.forEach(function (item) {
+
+    const index = inventory.findIndex(function (inventoryItem) {
+        return inventoryItem.id === item.id;
+    });
         const row = table.insertRow();
 
         if (item.status === "Removed from Inventory") {
