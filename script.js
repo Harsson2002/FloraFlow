@@ -268,9 +268,22 @@ setTimeout(function () {
 
 function renderInventory() {
     table.innerHTML = "";
+const inventorySearch = searchInput.value.toLowerCase().trim();
 
-    const visibleInventory = inventory.filter(function (item) {
-    return showRemoved || item.status !== "Removed from Inventory";
+const visibleInventory = inventory.filter(function (item) {
+
+    const matchesRemoved =
+        showRemoved || item.status !== "Removed from Inventory";
+
+    const matchesSearch =
+        inventorySearch === "" ||
+        (item.product ?? "").toLowerCase().includes(inventorySearch) ||
+        (item.color ?? "").toLowerCase().includes(inventorySearch) ||
+        String(item.caseNumber ?? "").toLowerCase().includes(inventorySearch) ||
+        (item.notes ?? "").toLowerCase().includes(inventorySearch) ||
+        (item.status ?? "").toLowerCase().includes(inventorySearch);
+
+    return matchesRemoved && matchesSearch;
 });
 
 visibleInventory.forEach(function (item) {
@@ -949,16 +962,7 @@ function getTime() {
     });
 }
 
-searchInput.addEventListener("keyup", function () {
-    const searchValue = searchInput.value.toLowerCase();
-    const rows = table.getElementsByTagName("tr");
-
-    for (let i = 0; i < rows.length; i++) {
-        const rowText = rows[i].innerText.toLowerCase();
-        rows[i].style.display = rowText.includes(searchValue) ? "" : "none";
-    }
-});
-
+searchInput.addEventListener("input", renderInventory);
 exportInventoryBtn.addEventListener("click", function () {
     exportToCSV(inventory, "FloraFlow_Inventory.csv");
 });
