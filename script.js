@@ -908,7 +908,6 @@ function saveData() {
     localStorage.setItem("history", JSON.stringify(history));
     localStorage.setItem("nextId", nextId);
 }
-
 function clearForm() {
 
     productSelect.clear();
@@ -917,6 +916,8 @@ function clearForm() {
     document.getElementById("quantity").value = "";
     document.getElementById("case").value = "";
     document.getElementById("notes").value = "";
+
+    productSelect.focus();
 
 }
 function getToday() {
