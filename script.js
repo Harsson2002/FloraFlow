@@ -63,7 +63,7 @@ const productsCatalog = [
         create: false,
         maxItems: 1,
         closeAfterSelect: true,
-        placeholder: "Search Product",
+        placeholder: "Add Product",
 
         render: {
             option: function (data, escape) {
@@ -75,6 +75,8 @@ const productsCatalog = [
             }
         }
     });
+    productSelect.settings.placeholder = "Add Product";
+productSelect.updatePlaceholder();
 
 
 const addBtn = document.getElementById("addBtn");
