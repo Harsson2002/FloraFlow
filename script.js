@@ -799,21 +799,20 @@ function renderHistory() {
 
                 </div>
 
-                <div style="
-                    display:grid;
-                    grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
-                    gap:8px;
-                    margin-bottom:12px;
-                    font-size:14px;
-                ">
-
-                    <div><strong>👤 User:</strong> ${item.userName || "Unknown"}</div>
-                    <div><strong>🌸 Product:</strong> ${item.product}</div>
-                    <div><strong>🎨 Color:</strong> ${item.color}</div>
-                    <div><strong>📦 Case:</strong> ${item.caseNumber}</div>
-
-                </div>
-
+<div style="
+    font-size:14px;
+    color:#555;
+    margin-bottom:12px;
+    line-height:1.7;
+">
+    👤 <strong>${item.userName || "Unknown"}</strong>
+    &nbsp;•&nbsp;
+    🌸 <strong>${item.product || ""}</strong>
+    &nbsp;•&nbsp;
+    🎨 ${item.color || ""}
+    &nbsp;•&nbsp;
+    📦 ${item.caseNumber || ""}
+</div>
                 
 ${
     item.action === "EDIT" &&
