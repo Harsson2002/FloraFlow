@@ -247,8 +247,13 @@ if (Number(quantity) <= 0) {
     renderHistory();
     updateDashboard();
     clearForm();
+const successMessage = document.getElementById("successMessage");
 
-    alert("Leftover saved to Supabase!");
+successMessage.style.display = "block";
+
+setTimeout(function () {
+    successMessage.style.display = "none";
+}, 2500);
 });
 
 function renderInventory() {
