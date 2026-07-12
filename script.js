@@ -1063,7 +1063,11 @@ async function loadInventoryFromSupabase() {
 }
 historySearch.addEventListener("input", renderHistory);
 historyDate.addEventListener("change", renderHistory);
+const colorInput = document.getElementById("color");
 
+colorInput.addEventListener("blur", function () {
+    this.value = toTitleCase(this.value.trim());
+});
 historyTodayBtn.addEventListener("click", function () {
     historyDate.value = getToday();
     renderHistory();
