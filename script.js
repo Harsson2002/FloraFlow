@@ -23,6 +23,7 @@ const productsCatalog = [
     "HELIANTHUS",
     "HYPERICUM",
     "HYDRANGEA",
+    "MINI GREEN",
     "IRIS",
     "LEPIDIUM",
     "LEUCADENDRON",
