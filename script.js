@@ -948,7 +948,6 @@ function clearForm() {
 
     document.getElementById("color").value = "";
     document.getElementById("quantity").value = "";
-    document.getElementById("case").value = "";
     document.getElementById("notes").value = "";
 
     productSelect.focus();
