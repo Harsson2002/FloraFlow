@@ -172,7 +172,9 @@ todayBtn.addEventListener("click", function () {
 
 addBtn.addEventListener("click", async function () {
     const product = productSelect.getValue();
-    const color = toTitleCase(document.getElementById("color").value.trim());
+    const color = toTitleCase(
+    document.getElementById("color").value.trim()
+);
     const quantity = document.getElementById("quantity").value;
     const caseNumber = document.getElementById("case").value;
     const date = document.getElementById("date").value;
@@ -953,19 +955,16 @@ function clearForm() {
 
 }
 function toTitleCase(text) {
-
     if (!text) return "";
 
     return text
         .toLowerCase()
-        .split(" ")
+        .split(/\s+/)
         .map(function (word) {
             return word.charAt(0).toUpperCase() + word.slice(1);
         })
         .join(" ");
-
-}
-function getToday() {
+}function getToday() {
     return new Date().toISOString().split("T")[0];
 }
 
