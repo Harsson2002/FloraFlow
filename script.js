@@ -859,7 +859,11 @@ ${
                 font-weight:bold;
                 color:${color};
             ">
-                ${quantityText}
+${
+    item.action === "EDIT" && item.details && item.details !== "EDIT"
+        ? item.details.split(" | ").join("<br>• ")
+        : quantityText
+}
             </div>
         `
         : ""
