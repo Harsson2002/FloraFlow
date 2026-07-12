@@ -81,6 +81,7 @@ const productsCatalog = [
 const addBtn = document.getElementById("addBtn");
 const todayBtn = document.getElementById("todayBtn");
 const table = document.getElementById("inventoryTable");
+const mobileInventoryList = document.getElementById("mobileInventoryList");
 const activityTimeline = document.getElementById("activityTimeline");
 const historySearch = document.getElementById("historySearch");
 const historyDate = document.getElementById("historyDate");
@@ -271,6 +272,7 @@ setTimeout(function () {
 
 function renderInventory() {
     table.innerHTML = "";
+    mobileInventoryList.innerHTML = "";
 const inventorySearch = searchInput.value.toLowerCase().trim();
 
 const visibleInventory = inventory.filter(function (item) {
@@ -337,6 +339,54 @@ productCell.appendChild(productLink);
         };
 
         actionsCell.appendChild(editBtn);
+        const mobileCard = document.createElement("div");
+mobileCard.className = "mobile-inventory-card";
+
+mobileCard.innerHTML = `
+    <button class="mobile-product-title">
+        🌸 ${item.product || ""}
+    </button>
+
+    <div class="mobile-product-details">
+        <span>🎨 ${item.color || ""}</span>
+        <span>📦 Case ${item.caseNumber || ""}</span>
+        <span>🌿 ${item.quantity ?? 0} stems</span>
+        <span>📅 ${item.date || ""}</span>
+    </div>
+
+    <div class="mobile-product-status">
+        ${getStatusBadge(item.status)}
+    </div>
+`;
+
+mobileCard
+    .querySelector(".mobile-product-title")
+    .addEventListener("click", function () {
+        openProductHistory(item);
+    });
+
+const mobileActions = document.createElement("div");
+mobileActions.className = "mobile-inventory-actions";
+
+if (item.status !== "Removed from Inventory") {
+    const mobileRotateBtn = document.createElement("button");
+    mobileRotateBtn.textContent = "🔄 Rotate";
+    mobileRotateBtn.addEventListener("click", function () {
+        rotateProduct(index);
+    });
+
+    mobileActions.appendChild(mobileRotateBtn);
+}
+
+const mobileEditBtn = document.createElement("button");
+mobileEditBtn.textContent = "✏️ Edit";
+mobileEditBtn.addEventListener("click", function () {
+    openEditModal(index);
+});
+
+mobileActions.appendChild(mobileEditBtn);
+mobileCard.appendChild(mobileActions);
+mobileInventoryList.appendChild(mobileCard);
     });
 }
 
