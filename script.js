@@ -905,14 +905,15 @@ function saveData() {
 }
 
 function clearForm() {
-    document.getElementById("product").value = "";
+
+    productSelect.clear();
+
     document.getElementById("color").value = "";
     document.getElementById("quantity").value = "";
     document.getElementById("case").value = "";
-    document.getElementById("date").value = "";
     document.getElementById("notes").value = "";
-}
 
+}
 function getToday() {
     return new Date().toISOString().split("T")[0];
 }
