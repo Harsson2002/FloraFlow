@@ -20,7 +20,6 @@ const productsCatalog = [
     "FREESIA",
     "GERBERA",
     "GYPSOPHILA",
-    "HELIANTHUS",
     "HYPERICUM",
     "HYDRANGEA",
     "MINI GREEN",
@@ -43,7 +42,6 @@ const productsCatalog = [
     "SPRAY CARNATION",
     "SPRAY ROSE",
     "STOCK",
-    "TAGETES",
     "TULIP",
     "VERONICA",
     "WAXFLOWER"
