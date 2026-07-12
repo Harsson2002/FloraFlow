@@ -373,42 +373,6 @@ const itemHistory = history
     } else {
 
         itemHistory.forEach(function(record, index){
-let detailsHtml = "";
-
-if (
-    item.action === "EDIT" &&
-    item.details &&
-    item.details !== "EDIT"
-) {
-    const changesList = item.details
-        .split(" | ")
-        .map(function (change) {
-            return "<div>• " + change + "</div>";
-        })
-        .join("");
-
-    detailsHtml = `
-        <div style="
-            background:#fff9e6;
-            border:1px solid #f1c40f;
-            border-radius:10px;
-            padding:12px;
-            margin-bottom:12px;
-            font-size:14px;
-            line-height:1.7;
-        ">
-            <div style="
-                font-weight:bold;
-                margin-bottom:6px;
-                color:#8a6d00;
-            ">
-                ✏️ Changes
-            </div>
-
-            ${changesList}
-        </div>
-    `;
-}
             const card = document.createElement("div");
             card.className = "timeline-card";
 
@@ -781,11 +745,16 @@ function renderHistory() {
                 break;
 
             case "EDIT":
-                icon = "🟡";
-                color = "#f1c40f";
-                quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
-                break;
+    icon = "🟡";
+    color = "#f1c40f";
 
+    if (item.details && item.details !== "EDIT") {
+        quantityText = "✏️ Changes made";
+    } else {
+        quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
+    }
+
+    break;
             case "ROTATE":
                 icon = "🔵";
                 color = "#3498db";
