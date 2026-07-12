@@ -75,8 +75,8 @@ const productsCatalog = [
             }
         }
     });
-    productSelect.settings.placeholder = "Add Product";
-productSelect.updatePlaceholder();
+    
+
 
 
 const addBtn = document.getElementById("addBtn");
