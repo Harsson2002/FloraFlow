@@ -343,6 +343,9 @@ productCell.appendChild(productLink);
 mobileCard.className = "mobile-inventory-card";
 
 mobileCard.innerHTML = `
+    <button class="mobile-copy-btn" title="Copy product information">
+        📋
+    </button>
     <button class="mobile-product-title">
         🌸 ${item.product || ""}
     </button>
@@ -358,6 +361,31 @@ mobileCard.innerHTML = `
         ${getStatusBadge(item.status)}
     </div>
 `;
+mobileCard
+    .querySelector(".mobile-copy-btn")
+    .addEventListener("click", async function () {
+        const productText =
+`🌸 ${item.product || ""}
+🎨 ${item.color || ""}
+📦 Case ${item.caseNumber || ""}
+🌿 ${item.quantity ?? 0} stems
+📅 ${item.date || ""}
+Status: ${item.status || ""}`;
+
+        try {
+            await navigator.clipboard.writeText(productText);
+
+            const copyBtn = mobileCard.querySelector(".mobile-copy-btn");
+            copyBtn.textContent = "✓";
+
+            setTimeout(function () {
+                copyBtn.textContent = "📋";
+            }, 1200);
+
+        } catch (error) {
+            alert("Could not copy the product information.");
+        }
+    });
 
 mobileCard
     .querySelector(".mobile-product-title")
