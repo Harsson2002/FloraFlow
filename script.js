@@ -82,6 +82,8 @@ const todayBtn = document.getElementById("todayBtn");
 const table = document.getElementById("inventoryTable");
 const activityTimeline = document.getElementById("activityTimeline");
 const historySearch = document.getElementById("historySearch");
+const historyDate = document.getElementById("historyDate");
+const historyTodayBtn = document.getElementById("historyTodayBtn");
 const searchInput = document.getElementById("search");
 
 const activityBtn = document.getElementById("activityBtn");
@@ -699,20 +701,24 @@ function renderHistory() {
     activityTimeline.innerHTML = "";
 
     const search = historySearch.value.toLowerCase().trim();
+    const selectedDate = historyDate.value;
 
     const filteredHistory = history.filter(function (item) {
 
-        if (search === "") return true;
+const matchesSearch =
+    search === "" ||
+    (item.action ?? "").toLowerCase().includes(search) ||
+    (item.userName ?? "").toLowerCase().includes(search) ||
+    (item.product ?? "").toLowerCase().includes(search) ||
+    (item.color ?? "").toLowerCase().includes(search) ||
+    String(item.caseNumber ?? "").toLowerCase().includes(search) ||
+    (item.details ?? "").toLowerCase().includes(search);
 
-        return (
-            (item.action ?? "").toLowerCase().includes(search) ||
-            (item.userName ?? "").toLowerCase().includes(search) ||
-            (item.product ?? "").toLowerCase().includes(search) ||
-            (item.color ?? "").toLowerCase().includes(search) ||
-            String(item.caseNumber ?? "").toLowerCase().includes(search) ||
-            (item.details ?? "").toLowerCase().includes(search)
-        );
+const matchesDate =
+    selectedDate === "" ||
+    item.date === selectedDate;
 
+return matchesSearch && matchesDate;
     });
 
     if (filteredHistory.length === 0) {
@@ -1014,6 +1020,12 @@ async function loadInventoryFromSupabase() {
     updateDashboard();
 }
 historySearch.addEventListener("input", renderHistory);
+historyDate.addEventListener("change", renderHistory);
+
+historyTodayBtn.addEventListener("click", function () {
+    historyDate.value = getToday();
+    renderHistory();
+});
 let pullDistance = 0;
 let isPulling = false;
 
