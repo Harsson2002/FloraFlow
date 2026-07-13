@@ -1254,14 +1254,13 @@ function getTime() {
 }
 
 searchInput.addEventListener("input", renderInventory);
-exportInventoryBtn.addEventListener("click", function () {
+exportInventorySettingsBtn.addEventListener("click", function () {
     exportToCSV(inventory, "FloraFlow_Inventory.csv");
 });
 
-exportHistoryBtn.addEventListener("click", function () {
+exportActivitySettingsBtn.addEventListener("click", function () {
     exportToCSV(history, "FloraFlow_Activity.csv");
 });
-
 function exportToCSV(data, filename) {
     if (data.length === 0) {
         alert("No data to export.");
