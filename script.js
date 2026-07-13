@@ -1708,8 +1708,6 @@ function getConfidenceLevel(score) {
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
-    console.log("Production products:", products);
-    console.log("Current inventory:", inventory);
 
     if (
         !Array.isArray(products) ||
@@ -1717,6 +1715,8 @@ function findInventoryMatches(products) {
     ) {
         return [];
     }
+
+    const catalog = buildProductCatalogFromInventory();
 
     const availableInventory = inventory.filter(function (item) {
 
@@ -1731,78 +1731,27 @@ function findInventoryMatches(products) {
 
     return products.map(function (productionProduct) {
 
-        const requestedName = normalizeMatchText(
-            [
-                productionProduct.product,
-                productionProduct.variety
-            ]
-                .filter(Boolean)
-                .join(" ")
+        const catalogResult = findBestCatalogProduct(
+            productionProduct,
+            catalog
         );
 
-        const originalLine = normalizeMatchText(
-            productionProduct.original
-        );
-
-        const searchName = requestedName || originalLine;
-
-        if (!searchName) {
-            return {
-                product: "UNRECOGNIZED PRODUCT",
-                color: productionProduct.color || "",
-                confidence: 0,
-                confidenceLevel: "REVIEW",
-                inventoryFound: false,
-                needsReview: true,
-                originalOcrLine:
-                    productionProduct.original || "",
-                alternatives: []
-            };
-        }
-
-        const candidates = availableInventory
-            .map(function (inventoryItem) {
-
-                const score = calculateInventoryMatchScore(
-                    {
-                        product: searchName,
-                        variety: "",
-                        color: productionProduct.color || ""
-                    },
-                    inventoryItem
-                );
-
-                return {
-                    inventoryItem: inventoryItem,
-                    inventoryIndex:
-                        inventory.indexOf(inventoryItem),
-                    score: score
-                };
-            })
-            .sort(function (a, b) {
-                return b.score - a.score;
-            });
-
-        const bestCandidate = candidates[0];
-
-        if (!bestCandidate || bestCandidate.score < 45) {
-
+        if (
+            !catalogResult ||
+            !catalogResult.best ||
+            catalogResult.best.score < 45
+        ) {
             return {
                 product:
                     productionProduct.product ||
                     productionProduct.original ||
                     "UNRECOGNIZED PRODUCT",
 
-                variety:
-                    productionProduct.variety || "",
-
                 color:
                     productionProduct.color || "",
 
                 confidence:
-                    bestCandidate
-                        ? bestCandidate.score
-                        : 0,
+                    catalogResult?.best?.score || 0,
 
                 confidenceLevel: "REVIEW",
                 inventoryFound: false,
@@ -1811,60 +1760,95 @@ function findInventoryMatches(products) {
                 originalOcrLine:
                     productionProduct.original || "",
 
-                alternatives: candidates
-                    .slice(0, 3)
-                    .map(function (candidate) {
+                alternatives:
+                    catalogResult
+                        ? catalogResult.alternatives.map(function (item) {
+                            return {
+                                product: item.product,
+                                color: "",
+                                quantity: "",
+                                caseNumber: "",
+                                confidence: item.score
+                            };
+                        })
+                        : []
+            };
+        }
 
+        const recognizedProduct =
+            catalogResult.best.product;
+
+        const requestedColor = normalizeMatchText(
+            productionProduct.color
+        );
+
+        const matchingInventory = availableInventory
+            .filter(function (item) {
+                return (
+                    normalizeMatchText(item.product) ===
+                    recognizedProduct
+                );
+            })
+            .map(function (item) {
+
+                let colorScore = 100;
+
+                if (requestedColor) {
+                    colorScore = calculateStringSimilarity(
+                        requestedColor,
+                        item.color
+                    );
+                }
+
+                return {
+                    item: item,
+                    colorScore: colorScore
+                };
+            })
+            .sort(function (a, b) {
+                return b.colorScore - a.colorScore;
+            });
+
+        const bestInventoryMatch =
+            matchingInventory[0];
+
+        if (!bestInventoryMatch) {
+            return {
+                product: recognizedProduct,
+                color: productionProduct.color || "",
+                confidence: catalogResult.best.score,
+
+                confidenceLevel:
+                    getConfidenceLevel(
+                        catalogResult.best.score
+                    ),
+
+                inventoryFound: false,
+                needsReview: true,
+
+                originalOcrLine:
+                    productionProduct.original || "",
+
+                alternatives:
+                    catalogResult.alternatives.map(function (item) {
                         return {
-                            product:
-                                candidate.inventoryItem.product,
-
-                            color:
-                                candidate.inventoryItem.color,
-
-                            quantity:
-                                candidate.inventoryItem.quantity,
-
-                            caseNumber:
-                                candidate.inventoryItem.caseNumber,
-
-                            confidence:
-                                candidate.score
+                            product: item.product,
+                            color: "",
+                            quantity: "",
+                            caseNumber: "",
+                            confidence: item.score
                         };
                     })
             };
         }
 
-        const bestItem = bestCandidate.inventoryItem;
-
-        const alternatives = candidates
-            .slice(1, 4)
-            .map(function (candidate) {
-
-                return {
-                    product:
-                        candidate.inventoryItem.product,
-
-                    color:
-                        candidate.inventoryItem.color,
-
-                    quantity:
-                        candidate.inventoryItem.quantity,
-
-                    caseNumber:
-                        candidate.inventoryItem.caseNumber,
-
-                    confidence:
-                        candidate.score
-                };
-            });
+        const bestItem = bestInventoryMatch.item;
 
         return {
             inventoryIndex:
-                bestCandidate.inventoryIndex,
+                inventory.indexOf(bestItem),
 
             id: bestItem.id,
-
             product: bestItem.product,
             color: bestItem.color,
             quantity: bestItem.quantity,
@@ -1884,84 +1868,30 @@ function findInventoryMatches(products) {
                 productionProduct.original || "",
 
             confidence:
-                bestCandidate.score,
+                catalogResult.best.score,
 
             confidenceLevel:
                 getConfidenceLevel(
-                    bestCandidate.score
+                    catalogResult.best.score
                 ),
 
             inventoryFound: true,
 
             needsReview:
-                bestCandidate.score < 90,
+                catalogResult.best.score < 90,
 
-            alternatives: alternatives
+            alternatives:
+                catalogResult.alternatives.map(function (item) {
+                    return {
+                        product: item.product,
+                        color: "",
+                        quantity: "",
+                        caseNumber: "",
+                        confidence: item.score
+                    };
+                })
         };
     });
-}
-function showProductionRecommendations(matches) {
-
-    console.log("Displaying recommendations...");
-    console.table(matches);
-
-    if (!Array.isArray(matches) || matches.length === 0) {
-        alert("No production products were detected.");
-        return;
-    }
-
-    const summary = matches
-        .map(function (item, index) {
-
-            const detectedLine =
-                item.originalOcrLine ||
-                item.requestedProduct ||
-                "UNKNOWN";
-
-            if (!item.inventoryFound) {
-
-                return (
-                    `${index + 1}. OCR: ${detectedLine}\n` +
-                    `No leftover candidates available.\n`
-                );
-            }
-
-            let result =
-                `${index + 1}. OCR: ${detectedLine}\n` +
-                `Creo que este es el producto más probable:\n` +
-                `${item.product || "UNKNOWN"} ` +
-                `${item.color || ""}\n` +
-                `Confidence: ${item.confidence}%\n` +
-                `Case: ${item.caseNumber || "N/A"}\n` +
-                `Qty: ${item.quantity || 0} stems\n`;
-
-            if (
-                item.needsReview &&
-                Array.isArray(item.alternatives) &&
-                item.alternatives.length > 0
-            ) {
-                result += `Possible alternatives:\n`;
-
-                item.alternatives.forEach(function (
-                    alternative,
-                    alternativeIndex
-                ) {
-                    result +=
-                        `${alternativeIndex + 1}. ` +
-                        `${alternative.product || "UNKNOWN"} ` +
-                        `${alternative.color || ""} ` +
-                        `(${alternative.confidence}%)\n`;
-                });
-            }
-
-            return result;
-        })
-        .join("\n--------------------------\n\n");
-
-    alert(
-        "Production recommendations:\n\n" +
-        summary
-    );
 }
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
 
