@@ -1390,9 +1390,9 @@ async function readProductionScreenshot() {
     const lotCanvas = document.createElement("canvas");
     const lotCtx = lotCanvas.getContext("2d");
 
-    const lotX = img.width * 0.285;
+    const lotX = img.width * 0.255;
     const lotY = img.height * 0.175;
-    const lotWidth = img.width * 0.055;
+    const lotWidth = img.width * 0.075;
     const lotHeight = img.height * 0.035;
 
     lotCanvas.width = lotWidth;
