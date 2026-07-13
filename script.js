@@ -1376,10 +1376,11 @@ async function readProductionScreenshot() {
     const lotCanvas = document.createElement("canvas");
     const lotCtx = lotCanvas.getContext("2d");
 
-    const articleX = img.width * 0.295;
-    const articleY = img.height * 0.255;
-    const articleWidth = img.width * 0.085;
-    const articleHeight = img.height * 0.30;
+    const lotX = img.width * 0.285;
+    const lotY = img.height * 0.175;
+    const lotWidth = img.width * 0.18;
+    const lotHeight = img.height * 0.035;
+
     lotCanvas.width = lotWidth;
     lotCanvas.height = lotHeight;
 
@@ -1405,7 +1406,7 @@ async function readProductionScreenshot() {
     const articleX = img.width * 0.295;
     const articleY = img.height * 0.255;
     const articleWidth = img.width * 0.085;
-    const articleHeight = img.height * 0.19;
+    const articleHeight = img.height * 0.30;
 
     articleCanvas.width = articleWidth;
     articleCanvas.height = articleHeight;
