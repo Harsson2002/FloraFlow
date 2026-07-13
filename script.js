@@ -1414,66 +1414,26 @@ function showProductionRecommendations(matches) {
                 </div>
             `;
 
-        } else {
+} else {
 
-            const alternatives =
-                Array.isArray(match.alternatives)
-                    ? match.alternatives
-                    : [];
+    card.innerHTML = `
+        <div style="
+            font-size:18px;
+            font-weight:bold;
+            margin-bottom:8px;
+            color:#b45309;
+        ">
+            ⚠️ ${match.product || "Unrecognized product"}
+        </div>
 
-            const alternativesHtml = alternatives.length
-                ? alternatives.map(function (alternative) {
-                    return `
-                        <div style="
-                            background:#f8f9fa;
-                            border-radius:7px;
-                            padding:8px;
-                            margin-top:7px;
-                        ">
-                            ${alternative.product || ""}
-                            — ${alternative.confidence ?? 0}%
-                        </div>
-                    `;
-                }).join("")
-                : `
-                    <div style="
-                        margin-top:10px;
-                        color:#777;
-                    ">
-                        No leftover candidates available.
-                    </div>
-                `;
-
-            card.innerHTML = `
-                <div style="
-                    font-size:18px;
-                    font-weight:bold;
-                    margin-bottom:10px;
-                    color:#b45309;
-                ">
-                    ⚠️ ${match.product || "Unrecognized product"}
-                </div>
-
-                <div style="
-                    line-height:1.8;
-                    font-size:14px;
-                ">
-                    🔎 OCR: ${match.originalOcrLine || ""}<br>
-                    📊 Confidence: ${match.confidence ?? 0}%<br>
-                    Status: Review required
-                </div>
-
-                <div style="
-                    margin-top:12px;
-                    font-weight:bold;
-                ">
-                    Possible products:
-                </div>
-
-                ${alternativesHtml}
-            `;
-        }
-
+        <div style="
+            font-size:14px;
+            color:#777;
+        ">
+            No leftover found
+        </div>
+    `;
+}
         resultsContainer.appendChild(card);
     });
 }
@@ -2164,11 +2124,23 @@ function cleanProductionLine(line) {
 
     return line
         .toUpperCase()
+
+        // Remove packaging words
+        .replace(/\bCLEAR\b/g, "")
+        .replace(/\bSLEEVE\b/g, "")
+        .replace(/\bBUNCH(?:ES)?\b/g, "")
+        .replace(/\bSTEMS?\b/g, "")
+        .replace(/\bPCS\b/g, "")
+        .replace(/\bBOX\b/g, "")
+        .replace(/\bCASE\b/g, "")
+
+        // Remove measurements
         .replace(/\b\d+(?:-\d+)?\s*CM\b/g, "")
         .replace(/\b\d+\s*GR(?:AM|AMS)?\b/g, "")
+
+        // Clean punctuation
         .replace(/[.,;:()[\]{}]/g, " ")
         .replace(/\s+/g, " ")
         .trim();
 
 }
-
