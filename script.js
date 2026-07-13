@@ -1324,13 +1324,14 @@ async function startProductionAnalysis() {
     console.log("Production Lot:", lotNumber);
     console.log("Article Text:", ocrResult.articleText);
 
-    alert(
-        "LOT:\n" +
-        (lotNumber || "NOT FOUND") +
-        "\n\nARTICLES:\n" +
-        ocrResult.articleText
-    );
-
+alert(
+    "RAW LOT OCR:\n" +
+    ocrResult.lotText +
+    "\n\nLOT DETECTED:\n" +
+    (lotNumber || "NOT FOUND") +
+    "\n\nARTICLES:\n" +
+    ocrResult.articleText
+);
     const products = normalizeProductionText(
         ocrResult.articleText
     );
