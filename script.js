@@ -1705,6 +1705,116 @@ function getConfidenceLevel(score) {
 
     return "REVIEW";
 }
+function buildProductCatalogFromInventory() {
+
+    if (!Array.isArray(inventory)) {
+        return [];
+    }
+
+    const catalogMap = new Map();
+
+    inventory.forEach(function (item) {
+
+        const product = normalizeMatchText(item.product);
+        const color = normalizeMatchText(item.color);
+
+        if (!product) {
+            return;
+        }
+
+        if (!catalogMap.has(product)) {
+            catalogMap.set(product, {
+                product: product,
+                colors: new Set(),
+                examples: []
+            });
+        }
+
+        const catalogItem = catalogMap.get(product);
+
+        if (color) {
+            catalogItem.colors.add(color);
+        }
+
+        catalogItem.examples.push({
+            product: item.product || "",
+            color: item.color || "",
+            caseNumber: item.caseNumber || "",
+            quantity: Number(item.quantity || 0),
+            status: item.status || ""
+        });
+    });
+
+    return Array.from(catalogMap.values()).map(function (item) {
+        return {
+            product: item.product,
+            colors: Array.from(item.colors),
+            examples: item.examples
+        };
+    });
+}
+
+function findBestCatalogProduct(productionProduct, catalog) {
+
+    const parsedName = normalizeMatchText(
+        [
+            productionProduct.product,
+            productionProduct.variety
+        ]
+            .filter(Boolean)
+            .join(" ")
+    );
+
+    const originalName = normalizeMatchText(
+        productionProduct.original
+    );
+
+    const searchName = parsedName || originalName;
+
+    if (!searchName || !Array.isArray(catalog)) {
+        return null;
+    }
+
+    const candidates = catalog
+        .map(function (catalogItem) {
+
+            const directScore = calculateStringSimilarity(
+                searchName,
+                catalogItem.product
+            );
+
+            const tokenScore = calculateTokenSimilarity(
+                searchName,
+                catalogItem.product
+            );
+
+            let score =
+                directScore * 0.4 +
+                tokenScore * 0.6;
+
+            if (
+                searchName.includes(catalogItem.product) ||
+                catalogItem.product.includes(searchName)
+            ) {
+                score += 15;
+            }
+
+            return {
+                product: catalogItem.product,
+                colors: catalogItem.colors,
+                examples: catalogItem.examples,
+                score: Math.min(100, Math.round(score))
+            };
+        })
+        .sort(function (a, b) {
+            return b.score - a.score;
+        });
+
+    return {
+        best: candidates[0] || null,
+        alternatives: candidates.slice(1, 4)
+    };
+}
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
