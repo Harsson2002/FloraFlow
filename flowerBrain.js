@@ -1,4 +1,185 @@
 window.flowerBrain = {
+        productFamilies: [
+        {
+            product: "SUNFLOWER",
+            aliases: [
+                "SUNFLOWER",
+                "SUNFL",
+                "SUN",
+                "SUNE",
+                "SUNF",
+                "VINCENT"
+            ]
+        },
+
+        {
+            product: "SPRAY ROSE",
+            aliases: [
+                "SPRAY ROSE",
+                "ROSE SPRAY",
+                "SPRAY",
+                "SPRY ROSE",
+                "SPRAI ROSE"
+            ]
+        },
+
+        {
+            product: "SOLIDAGO",
+            aliases: [
+                "SOLIDAGO",
+                "SOLI",
+                "GOLDEN GLORY",
+                "SOLIDAGO GOLDEN GLORY"
+            ]
+        },
+
+        {
+            product: "STOCK",
+            aliases: [
+                "STOCK",
+                "STOC",
+                "STOCK PURPLE",
+                "STOCK WHITE",
+                "STOCK PINK"
+            ]
+        },
+
+        {
+            product: "PISTACIA",
+            aliases: [
+                "PISTACIA",
+                "PISTACHIA",
+                "PISTACIA SOM",
+                "PISTACIA",
+                "PIST"
+            ]
+        },
+
+        {
+            product: "CURLY WILLOW",
+            aliases: [
+                "CURLY WILLOW",
+                "CURLY WILOW",
+                "CURLY",
+                "WILLOW"
+            ]
+        },
+
+        {
+            product: "HYPERICUM",
+            aliases: [
+                "HYPERICUM",
+                "HYPER",
+                "HYP",
+                "HYPERIC"
+            ]
+        },
+
+        {
+            product: "DELPHINIUM",
+            aliases: [
+                "DELPHINIUM",
+                "DELPH",
+                "DELP",
+                "DELPH EN DONA"
+            ]
+        },
+
+        {
+            product: "EUCALYPTUS",
+            aliases: [
+                "EUCALYPTUS",
+                "ECA",
+                "ECA CINEREA",
+                "CINEREA",
+                "EUCAL"
+            ]
+        },
+
+        {
+            product: "ROBELINI",
+            aliases: [
+                "ROBELINI",
+                "ROBELIN",
+                "ROBELIN PHOENIX",
+                "PHOENIX"
+            ]
+        },
+
+        {
+            product: "BUTTON POM",
+            aliases: [
+                "BUTTON POM",
+                "POM BUTTON",
+                "POM BUTTON GREEN"
+            ]
+        },
+
+        {
+            product: "CUSHION POM",
+            aliases: [
+                "CUSHION POM",
+                "POM CUSHION",
+                "POM CUSHION WHITE"
+            ]
+        },
+
+        {
+            product: "MINI HYDRANGEA",
+            aliases: [
+                "MINI HYDRANGEA",
+                "HYDR MINI",
+                "HYOR MINI",
+                "HYDRANGEA MINI"
+            ]
+        },
+
+        {
+            product: "MINI CALLA",
+            aliases: [
+                "MINI CALLA",
+                "CALLA MINI"
+            ]
+        },
+
+        {
+            product: "ERYNGIUM",
+            aliases: [
+                "ERYNGIUM",
+                "ERYNG",
+                "ERG",
+                "ERG BLUE"
+            ]
+        },
+
+        {
+            product: "SCABIOSA",
+            aliases: [
+                "SCABIOSA",
+                "SCAB",
+                "SCABIOSA WHITE"
+            ]
+        },
+
+        {
+            product: "TWEEDIA",
+            aliases: [
+                "TWEEDIA",
+                "TWEEDA",
+                "TWEEDIA OON",
+                "TWEEDA OON"
+            ]
+        },
+
+        {
+            product: "AGAPANTHUS",
+            aliases: [
+                "AGAPANTHUS",
+                "AGAPANTUS",
+                "AGAPANTHUS BLUE"
+            ]
+        }
+    ],
 
     productAliases: {
         HYDR: "HYDRANGEA",
