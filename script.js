@@ -1313,15 +1313,49 @@ async function readProductionScreenshot() {
 
     console.log("Reading production screenshot...");
 
-    return "";
+    return `
+        HYDR WHT 60CM
+        SOLI YEL 50CM
+        RUSCUS GREEN
+    `;
 
-}
-function normalizeProductionText(text) {
+}function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
 
-    return [];
+    const lines = text
+        .split("\n")
+        .map(cleanProductionLine)
+        .filter(line => line !== "");
 
+    return lines.map(normalizeProductionLine);
+}
+function normalizeProductionLine(line) {
+
+    const words = line.split(" ");
+
+    let product = "";
+    let color = "";
+
+    for (let i = 0; i < words.length; i++) {
+
+        const word = words[i];
+
+        if (!product && window.flowerBrain.productAliases[word]) {
+            product = window.flowerBrain.productAliases[word];
+            continue;
+        }
+
+        if (!color && window.flowerBrain.colorAliases[word]) {
+            color = window.flowerBrain.colorAliases[word];
+        }
+    }
+
+    return {
+        original: line,
+        product: product,
+        color: color
+    };
 }
 function findInventoryMatches(products) {
 
