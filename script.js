@@ -215,12 +215,11 @@ closeSettingsModal.addEventListener("click", function () {
     settingsModal.style.display = "none";
 
 });
-catalogBtn.addEventListener("click", function () {
+settingsBtn.addEventListener("click", function () {
 
-    catalogModal.style.display = "block";
+    settingsModal.style.display = "block";
 
 });
-
 closeSettingsModal.addEventListener("click", function () {
 
     settingsModal.style.display = "none";
