@@ -1292,15 +1292,11 @@ document.addEventListener("touchmove", function (event) {
 async function analyzeProduction() {
 
     if (!productionPreview.src) {
-
         alert("Please paste a production screenshot first.");
-
         return;
-
     }
 
-    startProductionAnalysis();
-
+    await startProductionAnalysis();
 }
 async function startProductionAnalysis() {
 
