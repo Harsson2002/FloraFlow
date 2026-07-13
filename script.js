@@ -107,7 +107,7 @@ const productionPreview = document.getElementById("productionPreview");
 const productionPlaceholder = document.getElementById("productionPlaceholder");
 const productionDropZone = document.getElementById("productionDropZone");
 const clearProductionImageBtn = document.getElementById("clearProductionImageBtn");
-
+let productionImageScale = 1;
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
@@ -161,6 +161,7 @@ closeTodayProductionModal.addEventListener("click", function () {
     todayProductionModal.style.display = "none";
 });
 clearProductionImageBtn.addEventListener("click", function () {
+    
 
     productionPreview.src = "";
     productionPreview.style.display = "none";
@@ -168,6 +169,8 @@ clearProductionImageBtn.addEventListener("click", function () {
     productionPlaceholder.style.display = "block";
 
     clearProductionImageBtn.style.display = "none";
+    productionImageScale = 1;
+productionPreview.style.transform = "scale(1)";
 
 });
 document.addEventListener("paste", function (event) {
@@ -201,6 +204,22 @@ document.addEventListener("paste", function (event) {
     }
 
     alert("No image was found in the clipboard. Press Prt Sc first.");
+});
+productionPreview.addEventListener("wheel", function (event) {
+
+    event.preventDefault();
+
+    if (event.deltaY < 0) {
+        productionImageScale += 0.1;
+    } else {
+        productionImageScale -= 0.1;
+    }
+
+    productionImageScale = Math.max(0.5, Math.min(5, productionImageScale));
+
+    productionPreview.style.transform = `scale(${productionImageScale})`;
+    productionPreview.style.transformOrigin = "center center";
+
 });
 toggleRemovedBtn.addEventListener("click", function () {
     showRemoved = !showRemoved;
