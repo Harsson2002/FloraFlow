@@ -1879,27 +1879,64 @@ function showProductionRecommendations(matches) {
     console.log("Displaying recommendations...");
     console.table(matches);
 
-    if (!matches || matches.length === 0) {
-        alert(
-            "No inventory matches were found.\n\n" +
-            "The OCR may be working, but findInventoryMatches() is still returning an empty list."
-        );
-
+    if (!Array.isArray(matches) || matches.length === 0) {
+        alert("No production products were detected.");
         return;
     }
 
     const summary = matches
-        .map(function (item) {
-            return `${item.product || "UNKNOWN"} | ${item.color || "UNKNOWN"}`;
+        .map(function (item, index) {
+
+            const detectedLine =
+                item.originalOcrLine ||
+                item.requestedProduct ||
+                "UNKNOWN";
+
+            if (!item.inventoryFound) {
+
+                return (
+                    `${index + 1}. OCR: ${detectedLine}\n` +
+                    `No leftover candidates available.\n`
+                );
+            }
+
+            let result =
+                `${index + 1}. OCR: ${detectedLine}\n` +
+                `Creo que este es el producto más probable:\n` +
+                `${item.product || "UNKNOWN"} ` +
+                `${item.color || ""}\n` +
+                `Confidence: ${item.confidence}%\n` +
+                `Case: ${item.caseNumber || "N/A"}\n` +
+                `Qty: ${item.quantity || 0} stems\n`;
+
+            if (
+                item.needsReview &&
+                Array.isArray(item.alternatives) &&
+                item.alternatives.length > 0
+            ) {
+                result += `Possible alternatives:\n`;
+
+                item.alternatives.forEach(function (
+                    alternative,
+                    alternativeIndex
+                ) {
+                    result +=
+                        `${alternativeIndex + 1}. ` +
+                        `${alternative.product || "UNKNOWN"} ` +
+                        `${alternative.color || ""} ` +
+                        `(${alternative.confidence}%)\n`;
+                });
+            }
+
+            return result;
         })
-        .join("\n");
+        .join("\n--------------------------\n\n");
 
     alert(
-        "Inventory matches:\n\n" +
+        "Production recommendations:\n\n" +
         summary
     );
 }
-
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
 
     const sourceName = axerrioName.trim().toUpperCase();
