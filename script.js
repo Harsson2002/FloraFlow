@@ -111,12 +111,15 @@ const clearProductionImageBtn = document.getElementById("clearProductionImageBtn
 const productionLoaded = document.getElementById("productionLoaded");
 const viewProductionImageBtn = document.getElementById("viewProductionImageBtn");
 const productionPreviewViewport = document.getElementById("productionPreviewViewport");
+const analyzeProductionBtn = document.getElementById("analyzeProductionBtn");
 let productionImageScale = 1;
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
 let showRemoved = false;
+let learnedProductAliases =
+    JSON.parse(localStorage.getItem("learnedProductAliases")) || {};
 
 const users = [
     "Harsson",
@@ -229,6 +232,11 @@ viewProductionImageBtn.addEventListener("click", function () {
         viewProductionImageBtn.textContent = "👁 View Screenshot";
 
     }
+
+});
+analyzeProductionBtn.addEventListener("click", async function () {
+
+    await analyzeProduction();
 
 });
 productionPreview.addEventListener("wheel", function (event) {
@@ -1281,6 +1289,86 @@ document.addEventListener("touchmove", function (event) {
         }
     }
 }, { passive: false });
+async function analyzeProduction() {
 
+    if (!productionPreview.src) {
 
+        alert("Please paste a production screenshot first.");
+
+        return;
+
+    }
+
+    startProductionAnalysis();
+
+}
+async function startProductionAnalysis() {
+
+    const rawText = await readProductionScreenshot();
+
+    const products = normalizeProductionText(rawText);
+
+    const matches = findInventoryMatches(products);
+
+    showProductionRecommendations(matches);
+
+}
+async function readProductionScreenshot() {
+
+    console.log("Reading production screenshot...");
+
+    return "";
+
+}
+function normalizeProductionText(text) {
+
+    console.log("Normalizing production text...");
+
+    return [];
+
+}
+function findInventoryMatches(products) {
+
+    console.log("Searching inventory matches...");
+
+    return [];
+
+}
+function showProductionRecommendations(matches) {
+
+    console.log("Displaying recommendations...");
+
+    console.log(matches);
+
+}
+function saveLearnedProductAlias(axerrioName, floraFlowName) {
+
+    const sourceName = axerrioName.trim().toUpperCase();
+    const targetName = floraFlowName.trim().toUpperCase();
+
+    if (!sourceName || !targetName) {
+        return;
+    }
+
+    learnedProductAliases[sourceName] = targetName;
+
+    localStorage.setItem(
+        "learnedProductAliases",
+        JSON.stringify(learnedProductAliases)
+    );
+
+}
+function getLearnedProductAlias(axerrioName) {
+
+    const sourceName = axerrioName.trim().toUpperCase();
+
+    return learnedProductAliases[sourceName] || null;
+
+}
+saveLearnedProductAlias("HYDR", "HYDRANGEA");
+
+console.log(
+    "Learned alias test:",
+    getLearnedProductAlias("HYDR")
+);
 
