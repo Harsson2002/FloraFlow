@@ -110,6 +110,7 @@ const productionDropZone = document.getElementById("productionDropZone");
 const clearProductionImageBtn = document.getElementById("clearProductionImageBtn");
 const productionLoaded = document.getElementById("productionLoaded");
 const viewProductionImageBtn = document.getElementById("viewProductionImageBtn");
+const viewOcrCropBtn = document.getElementById("viewOcrCropBtn");
 const productionPreviewViewport = document.getElementById("productionPreviewViewport");
 const analyzeProductionBtn = document.getElementById("analyzeProductionBtn");
 let productionImageScale = 1;
@@ -234,6 +235,20 @@ viewProductionImageBtn.addEventListener("click", function () {
     }
 
 });
+viewOcrCropBtn.addEventListener("click", function () {
+
+    if (!window.lastOcrCrop) {
+        alert("No OCR crop available yet.");
+        return;
+    }
+
+    productionPreview.src = window.lastOcrCrop;
+
+    productionPreviewViewport.style.display = "block";
+    productionPreview.style.display = "block";
+
+});
+
 analyzeProductionBtn.addEventListener("click", async function () {
 
     await analyzeProduction();
@@ -1370,6 +1385,7 @@ async function readProductionScreenshot() {
     );
     document.getElementById("productionPreview").src = canvas.toDataURL();
 document.getElementById("productionPreviewViewport").style.display = "block";
+window.lastOcrCrop = canvas.toDataURL();
 
     // OCR
     const result = await Tesseract.recognize(
