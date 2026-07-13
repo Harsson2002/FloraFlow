@@ -1290,6 +1290,7 @@ document.addEventListener("touchmove", function (event) {
     }
 }, { passive: false });
 async function analyzeProduction() {
+    console.log("FlowerBrain:", flowerBrain);
 
     if (!productionPreview.src) {
 
