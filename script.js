@@ -1705,7 +1705,6 @@ function getConfidenceLevel(score) {
 
     return "REVIEW";
 }
-
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
@@ -1719,20 +1718,16 @@ function findInventoryMatches(products) {
         return [];
     }
 
-    const availableInventory = inventory.filter(
-        function (item) {
+    const availableInventory = inventory.filter(function (item) {
 
-            const status = normalizeMatchText(
-                item.status
-            );
+        const status = normalizeMatchText(item.status);
 
-            return (
-                Number(item.quantity || 0) > 0 &&
-                status !== "REMOVED FROM INVENTORY" &&
-                status !== "REMOVED"
-            );
-        }
-    );
+        return (
+            Number(item.quantity || 0) > 0 &&
+            status !== "REMOVED FROM INVENTORY" &&
+            status !== "REMOVED"
+        );
+    });
 
     return products.map(function (productionProduct) {
 
@@ -1745,16 +1740,16 @@ function findInventoryMatches(products) {
                 .join(" ")
         );
 
-        if (!requestedName) {
+        const originalLine = normalizeMatchText(
+            productionProduct.original
+        );
 
+        const searchName = requestedName || originalLine;
+
+        if (!searchName) {
             return {
-                product:
-                    productionProduct.original ||
-                    "UNRECOGNIZED PRODUCT",
-
-                color:
-                    productionProduct.color || "",
-
+                product: "UNRECOGNIZED PRODUCT",
+                color: productionProduct.color || "",
                 confidence: 0,
                 confidenceLevel: "REVIEW",
                 inventoryFound: false,
@@ -1766,17 +1761,22 @@ function findInventoryMatches(products) {
         }
 
         const candidates = availableInventory
-            .map(function (inventoryItem, index) {
+            .map(function (inventoryItem) {
+
+                const score = calculateInventoryMatchScore(
+                    {
+                        product: searchName,
+                        variety: "",
+                        color: productionProduct.color || ""
+                    },
+                    inventoryItem
+                );
 
                 return {
                     inventoryItem: inventoryItem,
                     inventoryIndex:
                         inventory.indexOf(inventoryItem),
-
-                    score: calculateInventoryMatchScore(
-                        productionProduct,
-                        inventoryItem
-                    )
+                    score: score
                 };
             })
             .sort(function (a, b) {
@@ -1785,12 +1785,13 @@ function findInventoryMatches(products) {
 
         const bestCandidate = candidates[0];
 
-        if (!bestCandidate) {
+        if (!bestCandidate || bestCandidate.score < 45) {
 
             return {
                 product:
                     productionProduct.product ||
-                    productionProduct.original,
+                    productionProduct.original ||
+                    "UNRECOGNIZED PRODUCT",
 
                 variety:
                     productionProduct.variety || "",
@@ -1798,18 +1799,43 @@ function findInventoryMatches(products) {
                 color:
                     productionProduct.color || "",
 
-                confidence: 0,
+                confidence:
+                    bestCandidate
+                        ? bestCandidate.score
+                        : 0,
+
                 confidenceLevel: "REVIEW",
                 inventoryFound: false,
                 needsReview: true,
+
                 originalOcrLine:
                     productionProduct.original || "",
-                alternatives: []
+
+                alternatives: candidates
+                    .slice(0, 3)
+                    .map(function (candidate) {
+
+                        return {
+                            product:
+                                candidate.inventoryItem.product,
+
+                            color:
+                                candidate.inventoryItem.color,
+
+                            quantity:
+                                candidate.inventoryItem.quantity,
+
+                            caseNumber:
+                                candidate.inventoryItem.caseNumber,
+
+                            confidence:
+                                candidate.score
+                        };
+                    })
             };
         }
 
-        const bestItem =
-            bestCandidate.inventoryItem;
+        const bestItem = bestCandidate.inventoryItem;
 
         const alternatives = candidates
             .slice(1, 4)
