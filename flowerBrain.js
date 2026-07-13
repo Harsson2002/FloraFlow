@@ -1,4 +1,4 @@
-const flowerBrain = {
+window.flowerBrain = {
 
     productAliases: {
         HYDR: "HYDRANGEA",
