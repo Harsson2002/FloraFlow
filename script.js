@@ -1367,10 +1367,10 @@ async function readProductionScreenshot() {
 
     // ===== RECORTE =====
     // Ajustaremos estos valores con tu captura
-    const cropX = img.width * 0.04;
-    const cropY = img.height * 0.14;
-    const cropWidth = img.width * 0.22;
-    const cropHeight = img.height * 0.28;
+    const cropX = img.width * 0.28;
+    const cropY = img.height * 0.18;
+    const cropWidth = img.width * 0.42;
+    const cropHeight = img.height * 0.32;
     canvas.width = cropWidth;
     canvas.height = cropHeight;
 
