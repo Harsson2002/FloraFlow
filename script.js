@@ -1441,16 +1441,17 @@ async function readProductionScreenshot() {
     window.lastOcrCrop = articleCanvas.toDataURL();
 
 
-    const lotResult = await Tesseract.recognize(
-        lotCanvas,
-        "eng",
-        {
-            logger: function (m) {
-                console.log("LOT OCR:", m);
-            }
-        }
-    );
-
+const lotResult = await Tesseract.recognize(
+    lotCanvas,
+    "eng",
+    {
+        logger: function (m) {
+            console.log("LOT OCR:", m);
+        },
+        tessedit_char_whitelist: "0123456789",
+        tessedit_pageseg_mode: 7
+    }
+);
     const articleResult = await Tesseract.recognize(
         articleCanvas,
         "eng",
