@@ -1316,18 +1316,29 @@ async function startProductionAnalysis() {
     showProductionRecommendations(matches);
 
 }
-
 async function readProductionScreenshot() {
 
     console.log("Reading production screenshot...");
 
-    return `
-        HYDR WHT 60CM
-        SOLI YEL 50CM
-        RUSCUS GREEN
-    `;
+    if (!productionPreview.src) {
+        return "";
+    }
 
-}function normalizeProductionText(text) {
+    const result = await Tesseract.recognize(
+        productionPreview.src,
+        "eng",
+        {
+            logger: function (m) {
+                console.log(m);
+            }
+        }
+    );
+
+    return result.data.text;
+
+}
+
+function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
 
