@@ -1370,7 +1370,7 @@ function showProductionRecommendations(matches) {
     console.table(matches);
 
     const summary = matches
-        .map(item => {
+        .map(function (item) {
             return `${item.product || "UNKNOWN"} | ${item.color || "UNKNOWN"}`;
         })
         .join("\n");
@@ -1389,7 +1389,7 @@ function showProductionRecommendations(matches) {
         "The next step is to connect the OCR engine."
     );
 
-}
+
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
 
     const sourceName = axerrioName.trim().toUpperCase();
