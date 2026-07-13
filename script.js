@@ -1344,6 +1344,139 @@ alert(
 
     showProductionRecommendations(matches);
 }
+function showProductionRecommendations(matches) {
+
+    let resultsContainer =
+        document.getElementById("productionRecommendations");
+
+    if (!resultsContainer) {
+
+        resultsContainer = document.createElement("div");
+        resultsContainer.id = "productionRecommendations";
+
+        resultsContainer.style.marginTop = "20px";
+        resultsContainer.style.padding = "15px";
+        resultsContainer.style.background = "#f8f9fa";
+        resultsContainer.style.borderRadius = "12px";
+        resultsContainer.style.maxHeight = "450px";
+        resultsContainer.style.overflowY = "auto";
+
+        todayProductionModal.appendChild(resultsContainer);
+    }
+
+    resultsContainer.innerHTML = "";
+
+    if (!Array.isArray(matches) || matches.length === 0) {
+
+        resultsContainer.innerHTML = `
+            <div style="
+                text-align:center;
+                padding:20px;
+                color:#777;
+            ">
+                No production products were detected.
+            </div>
+        `;
+
+        return;
+    }
+
+    matches.forEach(function (match) {
+
+        const card = document.createElement("div");
+
+        card.style.background = "white";
+        card.style.borderRadius = "10px";
+        card.style.padding = "15px";
+        card.style.marginBottom = "12px";
+        card.style.boxShadow = "0 2px 6px rgba(0,0,0,.08)";
+
+        if (match.inventoryFound) {
+
+            card.innerHTML = `
+                <div style="
+                    font-size:18px;
+                    font-weight:bold;
+                    margin-bottom:10px;
+                ">
+                    🌸 ${match.product || ""}
+                </div>
+
+                <div style="
+                    line-height:1.8;
+                    font-size:14px;
+                ">
+                    🎨 Color: ${match.color || "Not specified"}<br>
+                    📦 Case: ${match.caseNumber || "Not specified"}<br>
+                    🌿 Available: ${match.quantity ?? 0} stems<br>
+                    📊 Confidence: ${match.confidence ?? 0}%<br>
+                    🔎 OCR: ${match.originalOcrLine || ""}
+                </div>
+            `;
+
+        } else {
+
+            const alternatives =
+                Array.isArray(match.alternatives)
+                    ? match.alternatives
+                    : [];
+
+            const alternativesHtml = alternatives.length
+                ? alternatives.map(function (alternative) {
+                    return `
+                        <div style="
+                            background:#f8f9fa;
+                            border-radius:7px;
+                            padding:8px;
+                            margin-top:7px;
+                        ">
+                            ${alternative.product || ""}
+                            — ${alternative.confidence ?? 0}%
+                        </div>
+                    `;
+                }).join("")
+                : `
+                    <div style="
+                        margin-top:10px;
+                        color:#777;
+                    ">
+                        No leftover candidates available.
+                    </div>
+                `;
+
+            card.innerHTML = `
+                <div style="
+                    font-size:18px;
+                    font-weight:bold;
+                    margin-bottom:10px;
+                    color:#b45309;
+                ">
+                    ⚠️ ${match.product || "Unrecognized product"}
+                </div>
+
+                <div style="
+                    line-height:1.8;
+                    font-size:14px;
+                ">
+                    🔎 OCR: ${match.originalOcrLine || ""}<br>
+                    📊 Confidence: ${match.confidence ?? 0}%<br>
+                    Status: Review required
+                </div>
+
+                <div style="
+                    margin-top:12px;
+                    font-weight:bold;
+                ">
+                    Possible products:
+                </div>
+
+                ${alternativesHtml}
+            `;
+        }
+
+        resultsContainer.appendChild(card);
+    });
+}
 function extractProductionLot(text) {
 
     if (!text) {
