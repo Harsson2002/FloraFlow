@@ -1333,8 +1333,12 @@ function findInventoryMatches(products) {
 function showProductionRecommendations(matches) {
 
     console.log("Displaying recommendations...");
-
     console.log(matches);
+
+    alert(
+        "✅ Production analysis flow is working.\n\n" +
+        "The next step is to connect the OCR engine."
+    );
 
 }
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
