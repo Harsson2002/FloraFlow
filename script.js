@@ -1304,7 +1304,7 @@ async function startProductionAnalysis() {
 
     const lotNumber = extractProductionLot(rawText);
 
-    alert("LOT: " + (lotNumber || "NOT FOUND"));
+    console.log("Production Lot:", lotNumber);
 
     const products = normalizeProductionText(rawText);
 
