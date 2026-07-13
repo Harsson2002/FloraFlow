@@ -1497,86 +1497,382 @@ function normalizeProductionLine(line) {
 
     return window.flowerBrain.parseLine(line);
 }
+function normalizeMatchText(value) {
+
+    return String(value || "")
+        .toUpperCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^A-Z0-9 ]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+}
+
+function getMatchTokens(value) {
+
+    return normalizeMatchText(value)
+        .split(" ")
+        .filter(function (word) {
+            return word.length > 1;
+        });
+}
+
+function levenshteinDistance(first, second) {
+
+    const a = normalizeMatchText(first);
+    const b = normalizeMatchText(second);
+
+    const matrix = [];
+
+    for (let i = 0; i <= b.length; i++) {
+        matrix[i] = [i];
+    }
+
+    for (let j = 0; j <= a.length; j++) {
+        matrix[0][j] = j;
+    }
+
+    for (let i = 1; i <= b.length; i++) {
+
+        for (let j = 1; j <= a.length; j++) {
+
+            if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                matrix[i][j] = matrix[i - 1][j - 1];
+            } else {
+                matrix[i][j] = Math.min(
+                    matrix[i - 1][j - 1] + 1,
+                    matrix[i][j - 1] + 1,
+                    matrix[i - 1][j] + 1
+                );
+            }
+        }
+    }
+
+    return matrix[b.length][a.length];
+}
+
+function calculateStringSimilarity(first, second) {
+
+    const a = normalizeMatchText(first);
+    const b = normalizeMatchText(second);
+
+    if (!a || !b) {
+        return 0;
+    }
+
+    if (a === b) {
+        return 100;
+    }
+
+    const longestLength = Math.max(a.length, b.length);
+
+    if (longestLength === 0) {
+        return 100;
+    }
+
+    const distance = levenshteinDistance(a, b);
+
+    return Math.max(
+        0,
+        Math.round(
+            (1 - distance / longestLength) * 100
+        )
+    );
+}
+
+function calculateTokenSimilarity(first, second) {
+
+    const firstTokens = getMatchTokens(first);
+    const secondTokens = getMatchTokens(second);
+
+    if (
+        firstTokens.length === 0 ||
+        secondTokens.length === 0
+    ) {
+        return 0;
+    }
+
+    let matchedTokens = 0;
+
+    firstTokens.forEach(function (firstToken) {
+
+        const tokenMatched = secondTokens.some(function (secondToken) {
+
+            if (firstToken === secondToken) {
+                return true;
+            }
+
+            const similarity = calculateStringSimilarity(
+                firstToken,
+                secondToken
+            );
+
+            return similarity >= 70;
+        });
+
+        if (tokenMatched) {
+            matchedTokens++;
+        }
+    });
+
+    return Math.round(
+        matchedTokens /
+        Math.max(firstTokens.length, secondTokens.length) *
+        100
+    );
+}
+
+function calculateInventoryMatchScore(
+    productionProduct,
+    inventoryItem
+) {
+
+    const requestedName = normalizeMatchText(
+        [
+            productionProduct.product,
+            productionProduct.variety
+        ]
+            .filter(Boolean)
+            .join(" ")
+    );
+
+    const inventoryName = normalizeMatchText(
+        inventoryItem.product
+    );
+
+    const requestedColor = normalizeMatchText(
+        productionProduct.color
+    );
+
+    const inventoryColor = normalizeMatchText(
+        inventoryItem.color
+    );
+
+    const directSimilarity = calculateStringSimilarity(
+        requestedName,
+        inventoryName
+    );
+
+    const tokenSimilarity = calculateTokenSimilarity(
+        requestedName,
+        inventoryName
+    );
+
+    let score =
+        directSimilarity * 0.45 +
+        tokenSimilarity * 0.55;
+
+    if (
+        requestedName &&
+        inventoryName &&
+        (
+            requestedName.includes(inventoryName) ||
+            inventoryName.includes(requestedName)
+        )
+    ) {
+        score += 12;
+    }
+
+    if (requestedColor) {
+
+        if (requestedColor === inventoryColor) {
+            score += 18;
+        } else if (
+            inventoryColor.includes(requestedColor) ||
+            requestedColor.includes(inventoryColor)
+        ) {
+            score += 10;
+        } else {
+            score -= 12;
+        }
+    }
+
+    return Math.max(
+        0,
+        Math.min(100, Math.round(score))
+    );
+}
+
+function getConfidenceLevel(score) {
+
+    if (score >= 90) {
+        return "HIGH";
+    }
+
+    if (score >= 75) {
+        return "PROBABLE";
+    }
+
+    return "REVIEW";
+}
+
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
     console.log("Production products:", products);
     console.log("Current inventory:", inventory);
 
-    if (!Array.isArray(products) || !Array.isArray(inventory)) {
+    if (
+        !Array.isArray(products) ||
+        !Array.isArray(inventory)
+    ) {
         return [];
     }
 
-    const matches = [];
+    const availableInventory = inventory.filter(
+        function (item) {
 
-    products.forEach(function (productionProduct) {
+            const status = normalizeMatchText(
+                item.status
+            );
 
-        const wantedProduct = String(
-            productionProduct.product || ""
-        ).trim().toUpperCase();
+            return (
+                Number(item.quantity || 0) > 0 &&
+                status !== "REMOVED FROM INVENTORY" &&
+                status !== "REMOVED"
+            );
+        }
+    );
 
-        const wantedColor = String(
-            productionProduct.color || ""
-        ).trim().toUpperCase();
+    return products.map(function (productionProduct) {
 
-        if (!wantedProduct) {
-            return;
+        const requestedName = normalizeMatchText(
+            [
+                productionProduct.product,
+                productionProduct.variety
+            ]
+                .filter(Boolean)
+                .join(" ")
+        );
+
+        if (!requestedName) {
+
+            return {
+                product:
+                    productionProduct.original ||
+                    "UNRECOGNIZED PRODUCT",
+
+                color:
+                    productionProduct.color || "",
+
+                confidence: 0,
+                confidenceLevel: "REVIEW",
+                inventoryFound: false,
+                needsReview: true,
+                originalOcrLine:
+                    productionProduct.original || "",
+                alternatives: []
+            };
         }
 
-        inventory.forEach(function (inventoryItem, index) {
+        const candidates = availableInventory
+            .map(function (inventoryItem, index) {
 
-            const inventoryProduct = String(
-                inventoryItem.product || ""
-            ).trim().toUpperCase();
+                return {
+                    inventoryItem: inventoryItem,
+                    inventoryIndex:
+                        inventory.indexOf(inventoryItem),
 
-            const inventoryColor = String(
-                inventoryItem.color || ""
-            ).trim().toUpperCase();
+                    score: calculateInventoryMatchScore(
+                        productionProduct,
+                        inventoryItem
+                    )
+                };
+            })
+            .sort(function (a, b) {
+                return b.score - a.score;
+            });
 
-            const inventoryStatus = String(
-                inventoryItem.status || ""
-            ).trim().toUpperCase();
+        const bestCandidate = candidates[0];
 
-            const productMatches =
-                inventoryProduct === wantedProduct ||
-                inventoryProduct.includes(wantedProduct) ||
-                wantedProduct.includes(inventoryProduct);
+        if (!bestCandidate) {
 
-            const colorMatches =
-                !wantedColor ||
-                inventoryColor === wantedColor ||
-                inventoryColor.includes(wantedColor) ||
-                wantedColor.includes(inventoryColor);
+            return {
+                product:
+                    productionProduct.product ||
+                    productionProduct.original,
 
-            const isAvailable =
-                inventoryStatus !== "REMOVED FROM INVENTORY" &&
-                Number(inventoryItem.quantity || 0) > 0;
+                variety:
+                    productionProduct.variety || "",
 
-            if (productMatches && colorMatches && isAvailable) {
+                color:
+                    productionProduct.color || "",
 
-                matches.push({
-                    inventoryIndex: index,
-                    id: inventoryItem.id,
-                    product: inventoryItem.product,
-                    color: inventoryItem.color,
-                    quantity: inventoryItem.quantity,
+                confidence: 0,
+                confidenceLevel: "REVIEW",
+                inventoryFound: false,
+                needsReview: true,
+                originalOcrLine:
+                    productionProduct.original || "",
+                alternatives: []
+            };
+        }
+
+        const bestItem =
+            bestCandidate.inventoryItem;
+
+        const alternatives = candidates
+            .slice(1, 4)
+            .map(function (candidate) {
+
+                return {
+                    product:
+                        candidate.inventoryItem.product,
+
+                    color:
+                        candidate.inventoryItem.color,
+
+                    quantity:
+                        candidate.inventoryItem.quantity,
+
                     caseNumber:
-                        inventoryItem.caseNumber ||
-                        inventoryItem.case_number ||
-                        "",
-                    status: inventoryItem.status,
-                    requestedProduct: productionProduct.product,
-                    requestedColor: productionProduct.color,
-                    originalOcrLine: productionProduct.original || ""
-                });
-            }
-        });
+                        candidate.inventoryItem.caseNumber,
+
+                    confidence:
+                        candidate.score
+                };
+            });
+
+        return {
+            inventoryIndex:
+                bestCandidate.inventoryIndex,
+
+            id: bestItem.id,
+
+            product: bestItem.product,
+            color: bestItem.color,
+            quantity: bestItem.quantity,
+            caseNumber: bestItem.caseNumber,
+            status: bestItem.status,
+
+            requestedProduct:
+                productionProduct.product || "",
+
+            requestedVariety:
+                productionProduct.variety || "",
+
+            requestedColor:
+                productionProduct.color || "",
+
+            originalOcrLine:
+                productionProduct.original || "",
+
+            confidence:
+                bestCandidate.score,
+
+            confidenceLevel:
+                getConfidenceLevel(
+                    bestCandidate.score
+                ),
+
+            inventoryFound: true,
+
+            needsReview:
+                bestCandidate.score < 90,
+
+            alternatives: alternatives
+        };
     });
-
-    console.log("Inventory matches found:", matches);
-    console.table(matches);
-
-    return matches;
 }
 function showProductionRecommendations(matches) {
 
