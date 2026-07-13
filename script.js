@@ -1399,4 +1399,15 @@ function getLearnedProductAlias(axerrioName) {
     return learnedProductAliases[sourceName] || null;
 
 }
+function cleanProductionLine(line) {
+
+    return line
+        .toUpperCase()
+        .replace(/\b\d+(?:-\d+)?\s*CM\b/g, "")
+        .replace(/\b\d+\s*GR(?:AM|AMS)?\b/g, "")
+        .replace(/[.,;:()[\]{}]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+}
 
