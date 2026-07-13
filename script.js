@@ -159,6 +159,37 @@ todayProductionBtn.addEventListener("click", function () {
 closeTodayProductionModal.addEventListener("click", function () {
     todayProductionModal.style.display = "none";
 });
+document.addEventListener("paste", function (event) {
+    if (todayProductionModal.style.display !== "block") {
+        return;
+    }
+
+    const items = event.clipboardData?.items;
+
+    if (!items) {
+        return;
+    }
+
+    for (const item of items) {
+        if (item.type.startsWith("image/")) {
+            const imageFile = item.getAsFile();
+
+            if (!imageFile) {
+                return;
+            }
+
+            const imageUrl = URL.createObjectURL(imageFile);
+
+            productionPreview.src = imageUrl;
+            productionPreview.style.display = "block";
+            productionPlaceholder.style.display = "none";
+
+            return;
+        }
+    }
+
+    alert("No image was found in the clipboard. Press Prt Sc first.");
+});
 toggleRemovedBtn.addEventListener("click", function () {
     showRemoved = !showRemoved;
 
