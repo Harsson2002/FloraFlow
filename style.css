@@ -443,3 +443,30 @@ tr:nth-child(even) {
 .mobile-product-title {
     padding-right: 45px;
 }
+/* Today's Production */
+
+.inventory-toolbar {
+    display: flex;
+    justify-content: flex-end;
+    margin-bottom: 12px;
+}
+
+#todayProductionBtn {
+    background: #1565c0;
+    color: white;
+    border: none;
+    border-radius: 8px;
+    padding: 10px 18px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+#todayProductionBtn:hover {
+    background: #0d47a1;
+}
+
+#todayProductionBtn:active {
+    transform: scale(0.98);
+}
