@@ -1301,13 +1301,14 @@ async function analyzeProduction() {
 async function startProductionAnalysis() {
 
     const rawText = await readProductionScreenshot();
+    throw new Error("STOP HERE");
 
     const lotNumber = extractProductionLot(rawText);
 
     console.log("Production Lot:", lotNumber);
 
     alert(rawText);
-    
+
     const products = normalizeProductionText(rawText);
 
     const matches = findInventoryMatches(products);
