@@ -1316,6 +1316,15 @@ async function startProductionAnalysis() {
     showProductionRecommendations(matches);
 
 }
+    const rawText = await readProductionScreenshot();
+
+    const products = normalizeProductionText(rawText);
+
+    const matches = findInventoryMatches(products);
+
+    showProductionRecommendations(matches);
+
+}
 async function readProductionScreenshot() {
 
     console.log("Reading production screenshot...");
@@ -1386,15 +1395,8 @@ function showProductionRecommendations(matches) {
         "Normalized production products:\n\n" +
         summary
     );
-
 }
     console.log("Displaying recommendations...");
-    console.log(matches);
-
-    alert(
-        "✅ Production analysis flow is working.\n\n" +
-        "The next step is to connect the OCR engine."
-    );
 
 
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
