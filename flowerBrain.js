@@ -377,7 +377,89 @@ window.flowerBrain = {
             original: original,
             product: product,
             variety: variety,
-            color: color,
+            color: color,        let bestFamily = null;
+        let bestFamilyScore = 0;
+
+        const cleanedForFamily = cleaned;
+
+        (this.productFamilies || []).forEach(function (family) {
+
+            (family.aliases || []).forEach(function (alias) {
+
+                const normalizedAlias = String(alias || "")
+                    .toUpperCase()
+                    .replace(/[^A-Z0-9 ]/g, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                if (!normalizedAlias) {
+                    return;
+                }
+
+                let score = 0;
+
+                if (cleanedForFamily === normalizedAlias) {
+                    score = 100;
+                } else if (
+                    cleanedForFamily.includes(normalizedAlias)
+                ) {
+                    score = 95;
+                } else {
+
+                    const aliasWords = normalizedAlias
+                        .split(" ")
+                        .filter(Boolean);
+
+                    const lineWords = cleanedForFamily
+                        .split(" ")
+                        .filter(Boolean);
+
+                    let matchedWords = 0;
+
+                    aliasWords.forEach(function (aliasWord) {
+
+                        const matched = lineWords.some(function (lineWord) {
+
+                            if (aliasWord === lineWord) {
+                                return true;
+                            }
+
+                            if (
+                                aliasWord.length >= 4 &&
+                                lineWord.length >= 4 &&
+                                (
+                                    aliasWord.includes(lineWord) ||
+                                    lineWord.includes(aliasWord)
+                                )
+                            ) {
+                                return true;
+                            }
+
+                            return false;
+                        });
+
+                        if (matched) {
+                            matchedWords++;
+                        }
+                    });
+
+                    score = Math.round(
+                        matchedWords /
+                        Math.max(aliasWords.length, 1) *
+                        100
+                    );
+                }
+
+                if (score > bestFamilyScore) {
+                    bestFamilyScore = score;
+                    bestFamily = family;
+                }
+            });
+        });
+
+        if (bestFamily && bestFamilyScore >= 60) {
+            product = bestFamily.product;
+        }
             length: length
         };
     }
