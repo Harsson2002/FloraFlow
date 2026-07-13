@@ -92,6 +92,113 @@ window.flowerBrain = {
         "SELECT",
         "SAMPLE",
         "ARTICLE"
-    ]
+    ],
+
+    parseLine: function (line) {
+
+        const original = String(line || "");
+
+        let cleaned = original
+            .toUpperCase()
+            .replace(/[\[\]\(\)\{\}|]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        const lengthMatch = cleaned.match(/(\d{2,3})\s*(CM|AM)?\b/);
+
+        const length = lengthMatch
+            ? Number(lengthMatch[1])
+            : null;
+
+        cleaned = cleaned
+            .replace(/\b\d{2,3}\s*(CM|AM)?\b/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        let product = "";
+        let variety = "";
+        let color = "";
+
+        const phraseEntries = Object.entries(
+            this.productPhrases || {}
+        ).sort(function (a, b) {
+            return b[0].length - a[0].length;
+        });
+
+        for (const [phrase, normalizedProduct] of phraseEntries) {
+
+            if (cleaned.includes(phrase)) {
+                product = normalizedProduct;
+
+                cleaned = cleaned
+                    .replace(phrase, " ")
+                    .replace(/\s+/g, " ")
+                    .trim();
+
+                break;
+            }
+        }
+
+        const words = cleaned
+            .split(" ")
+            .filter(Boolean);
+
+        if (!product) {
+
+            for (let i = 0; i < words.length; i++) {
+
+                const word = words[i];
+
+                if (this.productAliases[word]) {
+                    product = this.productAliases[word];
+                    words.splice(i, 1);
+                    break;
+                }
+            }
+        }
+
+        for (let i = 0; i < words.length; i++) {
+
+            const twoWordColor =
+                `${words[i]} ${words[i + 1] || ""}`.trim();
+
+            if (this.colorAliases[twoWordColor]) {
+                color = this.colorAliases[twoWordColor];
+                words.splice(i, 2);
+                break;
+            }
+
+            if (this.colorAliases[words[i]]) {
+                color = this.colorAliases[words[i]];
+                words.splice(i, 1);
+                break;
+            }
+        }
+
+        const remainingWords = words.filter(function (word) {
+
+            if (!word) {
+                return false;
+            }
+
+            if (
+                window.flowerBrain.ignoredWords.includes(word)
+            ) {
+                return false;
+            }
+
+            return true;
+        });
+
+        variety = remainingWords.join(" ").trim();
+
+        return {
+            original: original,
+            product: product,
+            variety: variety,
+            color: color,
+            length: length
+        };
+    }
 
 };

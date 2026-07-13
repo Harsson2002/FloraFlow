@@ -1480,52 +1480,22 @@ function normalizeProductionText(text) {
 }
 function normalizeProductionLine(line) {
 
-    const words = line.split(" ");
+    if (
+        !window.flowerBrain ||
+        typeof window.flowerBrain.parseLine !== "function"
+    ) {
+        console.error("FlowerBrain parser is not available.");
 
-    let product = "";
-    let color = "";
-
-    for (let i = 0; i < words.length; i++) {
-
-        const twoWordPhrase = `${words[i]} ${words[i + 1] || ""}`.trim();
-
-        if (
-            !product &&
-            window.flowerBrain.productPhrases[twoWordPhrase]
-        ) {
-            product =
-                window.flowerBrain.productPhrases[twoWordPhrase];
-
-            i++;
-            continue;
-        }
-
-        const word = words[i];
-
-        if (
-            !product &&
-            window.flowerBrain.productAliases[word]
-        ) {
-            product =
-                window.flowerBrain.productAliases[word];
-
-            continue;
-        }
-
-        if (
-            !color &&
-            window.flowerBrain.colorAliases[word]
-        ) {
-            color =
-                window.flowerBrain.colorAliases[word];
-        }
+        return {
+            original: line,
+            product: "",
+            variety: "",
+            color: "",
+            length: null
+        };
     }
 
-    return {
-        original: line,
-        product: product,
-        color: color
-    };
+    return window.flowerBrain.parseLine(line);
 }
 function findInventoryMatches(products) {
 
