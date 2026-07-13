@@ -1365,5 +1365,4 @@ function getLearnedProductAlias(axerrioName) {
     return learnedProductAliases[sourceName] || null;
 
 }
-console.log("FlowerBrain test:", flowerBrain.productAliases.HYDR);
 
