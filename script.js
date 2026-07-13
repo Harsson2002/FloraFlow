@@ -209,17 +209,6 @@ settingsBtn.addEventListener("click", function () {
     settingsModal.style.display = "block";
 
 });
-
-closeSettingsModal.addEventListener("click", function () {
-
-    settingsModal.style.display = "none";
-
-});
-settingsBtn.addEventListener("click", function () {
-
-    settingsModal.style.display = "block";
-
-});
 closeSettingsModal.addEventListener("click", function () {
 
     settingsModal.style.display = "none";
