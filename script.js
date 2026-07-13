@@ -106,6 +106,7 @@ const closeTodayProductionModal = document.getElementById("closeTodayProductionM
 const productionPreview = document.getElementById("productionPreview");
 const productionPlaceholder = document.getElementById("productionPlaceholder");
 const productionDropZone = document.getElementById("productionDropZone");
+const clearProductionImageBtn = document.getElementById("clearProductionImageBtn");
 
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
@@ -159,6 +160,16 @@ todayProductionBtn.addEventListener("click", function () {
 closeTodayProductionModal.addEventListener("click", function () {
     todayProductionModal.style.display = "none";
 });
+clearProductionImageBtn.addEventListener("click", function () {
+
+    productionPreview.src = "";
+    productionPreview.style.display = "none";
+
+    productionPlaceholder.style.display = "block";
+
+    clearProductionImageBtn.style.display = "none";
+
+});
 document.addEventListener("paste", function (event) {
     if (todayProductionModal.style.display !== "block") {
         return;
@@ -183,6 +194,7 @@ document.addEventListener("paste", function (event) {
             productionPreview.src = imageUrl;
             productionPreview.style.display = "block";
             productionPlaceholder.style.display = "none";
+            clearProductionImageBtn.style.display = "inline-block";
 
             return;
         }
