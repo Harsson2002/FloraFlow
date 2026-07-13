@@ -606,11 +606,13 @@ mobileCard.appendChild(mobileActions);
 mobileInventoryList.appendChild(mobileCard);
     });
 }
-
 async function rotateProduct(index) {
     const item = inventory[index];
     const currentQty = Number(item.quantity);
-    const rotatedQty = Number(prompt("How many stems are you rotating to production?"));
+
+    const rotatedQty = Number(
+        prompt("How many stems are you rotating?")
+    );
 
     if (!rotatedQty || rotatedQty <= 0) {
         alert("Please enter a valid quantity.");
@@ -622,10 +624,36 @@ async function rotateProduct(index) {
         return;
     }
 
+    const usageInput = prompt(
+        "What is this product being used for?\n\n" +
+        "1 - Production\n" +
+        "2 - Samples\n" +
+        "3 - OLD"
+    );
+
+    if (usageInput === null) {
+        return;
+    }
+
+    const usageOptions = {
+        "1": "Production",
+        "2": "Samples",
+        "3": "OLD"
+    };
+
+    const usageReason = usageOptions[usageInput.trim()];
+
+    if (!usageReason) {
+        alert("Please select 1, 2 or 3.");
+        return;
+    }
+
     const newQty = currentQty - rotatedQty;
-    const newStatus = (newQty === 0)
-        ? "Removed from Inventory"
-        : "Available";
+
+    const newStatus =
+        newQty === 0
+            ? "Removed from Inventory"
+            : "Available";
 
     const { error } = await supabaseClient
         .from("inventory")
@@ -644,18 +672,23 @@ async function rotateProduct(index) {
     item.quantity = newQty;
     item.status = newStatus;
 
-await addHistory(
-    item.id,
-    "ROTATE",
-    item.product,
-    item.color,
-    item.caseNumber,
-    currentQty,
-    rotatedQty,
-    newQty
-);
+    const rotationDetails =
+        "Used for: " + usageReason;
 
-await loadHistoryFromSupabase();
+    await addHistory(
+        item.id,
+        "ROTATE",
+        item.product,
+        item.color,
+        item.caseNumber,
+        currentQty,
+        rotatedQty,
+        newQty,
+        rotationDetails
+    );
+
+    await loadHistoryFromSupabase();
+
     renderInventory();
     renderHistory();
     updateDashboard();
