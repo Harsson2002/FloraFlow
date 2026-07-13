@@ -93,6 +93,7 @@ const activityBtn = document.getElementById("activityBtn");
 const rotateModal = document.getElementById("rotateModal");
 const closeRotateModal = document.getElementById("closeRotateModal");
 const confirmRotateBtn = document.getElementById("confirmRotateBtn");
+const rotateAllBtn = document.getElementById("rotateAllBtn");
 const settingsBtn =
     document.getElementById("settingsBtn");
 
@@ -638,6 +639,16 @@ async function rotateProduct(index) {
 
     rotateModal.style.display = "block";
 }
+rotateAllBtn.addEventListener("click", function () {
+    if (rotatingIndex === null) {
+        return;
+    }
+
+    const item = inventory[rotatingIndex];
+
+    document.getElementById("rotateQuantity").value =
+        Number(item.quantity);
+});
 closeRotateModal.addEventListener("click", function () {
     rotateModal.style.display = "none";
     rotatingIndex = null;
