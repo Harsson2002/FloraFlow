@@ -117,7 +117,6 @@ const logoutBtn =
     document.getElementById("logoutBtn");
 const activityModal = document.getElementById("activityModal");
 const closeModal = document.getElementById("closeModal");
-const catalogBtn = document.getElementById("catalogBtn");
 const catalogModal = document.getElementById("catalogModal");
 const closeCatalogModal = document.getElementById("closeCatalogModal");
 
