@@ -1531,14 +1531,97 @@ function normalizeProductionLine(line) {
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
+    console.log("Production products:", products);
+    console.log("Current inventory:", inventory);
 
-    return [];
+    if (!Array.isArray(products) || !Array.isArray(inventory)) {
+        return [];
+    }
 
+    const matches = [];
+
+    products.forEach(function (productionProduct) {
+
+        const wantedProduct = String(
+            productionProduct.product || ""
+        ).trim().toUpperCase();
+
+        const wantedColor = String(
+            productionProduct.color || ""
+        ).trim().toUpperCase();
+
+        if (!wantedProduct) {
+            return;
+        }
+
+        inventory.forEach(function (inventoryItem, index) {
+
+            const inventoryProduct = String(
+                inventoryItem.product || ""
+            ).trim().toUpperCase();
+
+            const inventoryColor = String(
+                inventoryItem.color || ""
+            ).trim().toUpperCase();
+
+            const inventoryStatus = String(
+                inventoryItem.status || ""
+            ).trim().toUpperCase();
+
+            const productMatches =
+                inventoryProduct === wantedProduct ||
+                inventoryProduct.includes(wantedProduct) ||
+                wantedProduct.includes(inventoryProduct);
+
+            const colorMatches =
+                !wantedColor ||
+                inventoryColor === wantedColor ||
+                inventoryColor.includes(wantedColor) ||
+                wantedColor.includes(inventoryColor);
+
+            const isAvailable =
+                inventoryStatus !== "REMOVED FROM INVENTORY" &&
+                Number(inventoryItem.quantity || 0) > 0;
+
+            if (productMatches && colorMatches && isAvailable) {
+
+                matches.push({
+                    inventoryIndex: index,
+                    id: inventoryItem.id,
+                    product: inventoryItem.product,
+                    color: inventoryItem.color,
+                    quantity: inventoryItem.quantity,
+                    caseNumber:
+                        inventoryItem.caseNumber ||
+                        inventoryItem.case_number ||
+                        "",
+                    status: inventoryItem.status,
+                    requestedProduct: productionProduct.product,
+                    requestedColor: productionProduct.color,
+                    originalOcrLine: productionProduct.original || ""
+                });
+            }
+        });
+    });
+
+    console.log("Inventory matches found:", matches);
+    console.table(matches);
+
+    return matches;
 }
 function showProductionRecommendations(matches) {
 
     console.log("Displaying recommendations...");
     console.table(matches);
+
+    if (!matches || matches.length === 0) {
+        alert(
+            "No inventory matches were found.\n\n" +
+            "The OCR may be working, but findInventoryMatches() is still returning an empty list."
+        );
+
+        return;
+    }
 
     const summary = matches
         .map(function (item) {
@@ -1547,11 +1630,10 @@ function showProductionRecommendations(matches) {
         .join("\n");
 
     alert(
-        "Normalized production products:\n\n" +
+        "Inventory matches:\n\n" +
         summary
     );
 }
-
 
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
 
