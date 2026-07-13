@@ -1306,6 +1306,8 @@ async function startProductionAnalysis() {
 
     console.log("Production Lot:", lotNumber);
 
+    alert(rawText);
+    
     const products = normalizeProductionText(rawText);
 
     const matches = findInventoryMatches(products);
