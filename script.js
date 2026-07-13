@@ -1396,7 +1396,6 @@ function showProductionRecommendations(matches) {
         summary
     );
 }
-    console.log("Displaying recommendations...");
 
 
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
