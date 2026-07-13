@@ -252,45 +252,39 @@
 
 
 
-        <div id="productionDropZone">
+<div id="productionDropZone">
 
+    <div id="productionPlaceholder">
 
+        <h3>📋 Paste your production screenshot</h3>
 
-            <div id="productionPlaceholder">
+        <p>Press <strong>Ctrl + V</strong></p>
 
-
-
-                <h3>📋 Paste your production screenshot</h3>
-
-
-
-                <p>Press <strong>Ctrl + V</strong></p>
-
-
-
-                <p>or drag & drop an image</p>
-
-
-
-            </div>
-
-
-
-            <div id="productionPreviewViewport">
-    <img id="productionPreview" style="display:none;">
-</div>
-            <button id="clearProductionImageBtn" style="display:none;">
-    🗑 Clear Screenshot
-</button>
-
-
-
-        </div>
-
-
+        <p>or drag & drop an image</p>
 
     </div>
 
+    <div id="productionLoaded" style="display:none;">
+
+        <p>✅ Production screenshot loaded.</p>
+
+        <button id="viewProductionImageBtn">
+            👁 View Screenshot
+        </button>
+
+        <button id="clearProductionImageBtn">
+            🗑 Clear Screenshot
+        </button>
+
+    </div>
+
+    <div id="productionPreviewViewport" style="display:none;">
+
+        <img id="productionPreview">
+
+    </div>
+
+</div>
 
 
 </div>

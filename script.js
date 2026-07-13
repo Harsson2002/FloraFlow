@@ -103,10 +103,14 @@ const toggleRemovedBtn = document.getElementById("toggleRemovedBtn");
 const todayProductionBtn = document.getElementById("todayProductionBtn");
 const todayProductionModal = document.getElementById("todayProductionModal");
 const closeTodayProductionModal = document.getElementById("closeTodayProductionModal");
+
 const productionPreview = document.getElementById("productionPreview");
 const productionPlaceholder = document.getElementById("productionPlaceholder");
 const productionDropZone = document.getElementById("productionDropZone");
 const clearProductionImageBtn = document.getElementById("clearProductionImageBtn");
+const productionLoaded = document.getElementById("productionLoaded");
+const viewProductionImageBtn = document.getElementById("viewProductionImageBtn");
+const productionPreviewViewport = document.getElementById("productionPreviewViewport");
 let productionImageScale = 1;
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
@@ -161,17 +165,19 @@ closeTodayProductionModal.addEventListener("click", function () {
     todayProductionModal.style.display = "none";
 });
 clearProductionImageBtn.addEventListener("click", function () {
-    
 
     productionPreview.src = "";
-    productionPreview.style.display = "none";
 
     productionPlaceholder.style.display = "block";
+    productionLoaded.style.display = "none";
 
-    clearProductionImageBtn.style.display = "none";
+    productionPreview.style.display = "none";
+    productionPreviewViewport.style.display = "none";
+
     productionImageScale = 1;
-productionPreview.style.transform = "scale(1)";
+    productionPreview.style.transform = "scale(1)";
 
+    viewProductionImageBtn.textContent = "👁 View Screenshot";
 });
 document.addEventListener("paste", function (event) {
     if (todayProductionModal.style.display !== "block") {
@@ -195,15 +201,35 @@ document.addEventListener("paste", function (event) {
             const imageUrl = URL.createObjectURL(imageFile);
 
             productionPreview.src = imageUrl;
-            productionPreview.style.display = "block";
             productionPlaceholder.style.display = "none";
-            clearProductionImageBtn.style.display = "inline-block";
+            productionLoaded.style.display = "block";
 
+            productionPreview.style.display = "none";
+            productionPreviewViewport.style.display = "none";
             return;
         }
     }
 
     alert("No image was found in the clipboard. Press Prt Sc first.");
+});
+viewProductionImageBtn.addEventListener("click", function () {
+
+    if (productionPreviewViewport.style.display === "none") {
+
+        productionPreviewViewport.style.display = "block";
+        productionPreview.style.display = "block";
+
+        viewProductionImageBtn.textContent = "🙈 Hide Screenshot";
+
+    } else {
+
+        productionPreviewViewport.style.display = "none";
+        productionPreview.style.display = "none";
+
+        viewProductionImageBtn.textContent = "👁 View Screenshot";
+
+    }
+
 });
 productionPreview.addEventListener("wheel", function (event) {
 
