@@ -91,6 +91,23 @@ const searchInput = document.getElementById("search");
 const activityBtn = document.getElementById("activityBtn");
 const activityModal = document.getElementById("activityModal");
 const closeModal = document.getElementById("closeModal");
+const catalogBtn = document.getElementById("catalogBtn");
+const catalogModal = document.getElementById("catalogModal");
+const closeCatalogModal = document.getElementById("closeCatalogModal");
+
+const catalogSearch = document.getElementById("catalogSearch");
+const catalogVariety = document.getElementById("catalogVariety");
+const catalogFamily = document.getElementById("catalogFamily");
+const catalogCode = document.getElementById("catalogCode");
+
+const saveCatalogArticleBtn =
+    document.getElementById("saveCatalogArticleBtn");
+
+const catalogList =
+    document.getElementById("catalogList");
+
+const catalogMessage =
+    document.getElementById("catalogMessage");
 
 const editModal = document.getElementById("editModal");
 const closeEditModal = document.getElementById("closeEditModal");
@@ -160,6 +177,27 @@ loadHistoryFromSupabase();
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
+});
+catalogBtn.addEventListener("click", function () {
+
+    catalogModal.style.display = "block";
+
+});
+
+closeCatalogModal.addEventListener("click", function () {
+
+    catalogModal.style.display = "none";
+
+});
+
+window.addEventListener("click", function (event) {
+
+    if (event.target === catalogModal) {
+
+        catalogModal.style.display = "none";
+
+    }
+
 });
 todayProductionBtn.addEventListener("click", function () {
     todayProductionModal.style.display = "block";
