@@ -218,7 +218,7 @@ productionPreview.addEventListener("wheel", function (event) {
     productionImageScale = Math.max(0.5, Math.min(5, productionImageScale));
 
     productionPreview.style.transform = `scale(${productionImageScale})`;
-    productionPreview.style.transformOrigin = "center center";
+    productionPreview.style.transformOrigin = "top left";
 
 });
 toggleRemovedBtn.addEventListener("click", function () {

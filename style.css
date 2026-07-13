@@ -470,3 +470,23 @@ tr:nth-child(even) {
 #todayProductionBtn:active {
     transform: scale(0.98);
 }
+#productionPreviewViewport {
+    width: 100%;
+    max-height: 65vh;
+    overflow: auto;
+    border: 1px solid #dddddd;
+    border-radius: 8px;
+    margin-top: 12px;
+    background: #f7f7f7;
+}
+
+#productionPreview {
+    display: block;
+    max-width: none;
+    transform-origin: top left;
+    cursor: grab;
+}
+
+#productionPreview:active {
+    cursor: grabbing;
+}
