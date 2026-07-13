@@ -22,22 +22,35 @@ window.flowerBrain = {
         ERYNG: "ERYNGIUM",
         ERYNGIUM: "ERYNGIUM",
 
+        DELPH: "DELPHINIUM",
+        DELPHINIUM: "DELPHINIUM",
+
+        ROBELIN: "ROBELINI",
+        ROBELINI: "ROBELINI",
+
+        ECA: "EUCALYPTUS",
+        EUCAL: "EUCALYPTUS",
+        EUCALYPTUS: "EUCALYPTUS",
+
         SCABIOSA: "SCABIOSA",
-
         TWEEDIA: "TWEEDIA",
-
-        RUSCUS: "RUSCUS",
-        EUCALYPTUS: "EUCALYPTUS"
+        RUSCUS: "RUSCUS"
     },
 
     productPhrases: {
         "POM BUTTON": "BUTTON POM",
         "BUTTON POM": "BUTTON POM",
+
         "MINI CALLA": "MINI CALLA",
+
         "ROSE SPRAY": "SPRAY ROSE",
         "SPRAY ROSE": "SPRAY ROSE",
+
         "POM DAISY": "DAISY POM",
-        "DAISY POM": "DAISY POM"
+        "DAISY POM": "DAISY POM",
+
+        "ROBELIN PHOENIX": "ROBELINI",
+        "ECA CINEREA": "EUCALYPTUS"
     },
 
     colorAliases: {
