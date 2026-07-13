@@ -1302,6 +1302,23 @@ async function startProductionAnalysis() {
 
     const rawText = await readProductionScreenshot();
 
+    alert("RAW TEXT:\n\n" + rawText);
+
+    const products = normalizeProductionText(rawText);
+
+    alert(
+        "NORMALIZED:\n\n" +
+        JSON.stringify(products, null, 2)
+    );
+
+    const matches = findInventoryMatches(products);
+
+    showProductionRecommendations(matches);
+
+}
+
+    const rawText = await readProductionScreenshot();
+
     const products = normalizeProductionText(rawText);
 
     const matches = findInventoryMatches(products);
