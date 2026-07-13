@@ -205,6 +205,8 @@ document.addEventListener("paste", function (event) {
             const imageUrl = URL.createObjectURL(imageFile);
 
             productionPreview.src = imageUrl;
+            window.originalProductionImage = imageUrl;
+
             productionPlaceholder.style.display = "none";
             productionLoaded.style.display = "block";
 
@@ -1353,7 +1355,7 @@ async function readProductionScreenshot() {
 
     // Crear imagen
     const img = new Image();
-    img.src = productionPreview.src;
+    img.src = window.originalProductionImage;
 
     await new Promise(resolve => {
         img.onload = resolve;
