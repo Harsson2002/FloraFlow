@@ -1368,6 +1368,8 @@ async function readProductionScreenshot() {
         cropWidth,
         cropHeight
     );
+    document.getElementById("productionPreview").src = canvas.toDataURL();
+document.getElementById("productionPreviewViewport").style.display = "block";
 
     // OCR
     const result = await Tesseract.recognize(
