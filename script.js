@@ -1332,20 +1332,52 @@ async function readProductionScreenshot() {
         return "";
     }
 
+    // Crear imagen
+    const img = new Image();
+    img.src = productionPreview.src;
+
+    await new Promise(resolve => {
+        img.onload = resolve;
+    });
+
+    // Canvas temporal
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    // ===== RECORTE =====
+    // Ajustaremos estos valores con tu captura
+    const cropX = img.width * 0.03;
+    const cropY = img.height * 0.15;
+    const cropWidth = img.width * 0.55;
+    const cropHeight = img.height * 0.50;
+
+    canvas.width = cropWidth;
+    canvas.height = cropHeight;
+
+    ctx.drawImage(
+        img,
+        cropX,
+        cropY,
+        cropWidth,
+        cropHeight,
+        0,
+        0,
+        cropWidth,
+        cropHeight
+    );
+
+    // OCR
     const result = await Tesseract.recognize(
-        productionPreview.src,
+        canvas,
         "eng",
         {
-            logger: function (m) {
-                console.log(m);
-            }
+            logger: m => console.log(m)
         }
     );
 
     return result.data.text;
 
 }
-
 function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
