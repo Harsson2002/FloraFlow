@@ -89,6 +89,10 @@ const historyTodayBtn = document.getElementById("historyTodayBtn");
 const searchInput = document.getElementById("search");
 
 const activityBtn = document.getElementById("activityBtn");
+
+const rotateModal = document.getElementById("rotateModal");
+const closeRotateModal = document.getElementById("closeRotateModal");
+const confirmRotateBtn = document.getElementById("confirmRotateBtn");
 const settingsBtn =
     document.getElementById("settingsBtn");
 
@@ -160,6 +164,7 @@ let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
+let rotatingIndex = null;
 let showRemoved = false;
 let learnedProductAliases =
     JSON.parse(localStorage.getItem("learnedProductAliases")) || {};

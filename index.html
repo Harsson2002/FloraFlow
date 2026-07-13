@@ -402,6 +402,98 @@
     </div>
 
 </div>
+<div id="rotateModal" class="modal">
+    <div class="modal-content">
+
+        <div class="modal-header">
+            <h2>🔄 Rotate Product</h2>
+
+            <button id="closeRotateModal" type="button">
+                ✕
+            </button>
+        </div>
+
+        <div id="rotateProductSummary">
+
+            <p>
+                <strong>Product:</strong>
+                <span id="rotateProductName"></span>
+            </p>
+
+            <p>
+                <strong>Color:</strong>
+                <span id="rotateProductColor"></span>
+            </p>
+
+            <p>
+                <strong>Case:</strong>
+                <span id="rotateProductCase"></span>
+            </p>
+
+            <p>
+                <strong>Available:</strong>
+                <span id="rotateAvailableQty"></span> stems
+            </p>
+
+        </div>
+
+        <div class="form-field">
+
+            <label for="rotateQuantity">
+                🌿 Quantity to rotate
+            </label>
+
+            <input
+                type="number"
+                id="rotateQuantity"
+                min="1"
+                placeholder="Enter quantity"
+            >
+
+        </div>
+
+        <div class="rotate-reason-group">
+
+            <p><strong>Used for:</strong></p>
+
+            <label class="rotate-option">
+                <input
+                    type="radio"
+                    name="rotateReason"
+                    value="Production"
+                >
+                🏭 Production
+            </label>
+
+            <label class="rotate-option">
+                <input
+                    type="radio"
+                    name="rotateReason"
+                    value="Samples"
+                >
+                🧪 Samples
+            </label>
+
+            <label class="rotate-option">
+                <input
+                    type="radio"
+                    name="rotateReason"
+                    value="OLD"
+                >
+                📦 OLD
+            </label>
+
+        </div>
+
+        <button
+            id="confirmRotateBtn"
+            type="button"
+        >
+            🔄 Confirm Rotation
+        </button>
+
+    </div>
+</div>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.2/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js"></script>
 <script src="flowerBrain.js"></script>
