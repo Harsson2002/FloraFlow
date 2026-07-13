@@ -89,6 +89,32 @@ const historyTodayBtn = document.getElementById("historyTodayBtn");
 const searchInput = document.getElementById("search");
 
 const activityBtn = document.getElementById("activityBtn");
+const settingsBtn =
+    document.getElementById("settingsBtn");
+
+const settingsModal =
+    document.getElementById("settingsModal");
+
+const closeSettingsModal =
+    document.getElementById("closeSettingsModal");
+
+const usersBtn =
+    document.getElementById("usersBtn");
+
+const productsBtn =
+    document.getElementById("productsBtn");
+
+const articlesBtn =
+    document.getElementById("articlesBtn");
+
+const exportInventorySettingsBtn =
+    document.getElementById("exportInventorySettingsBtn");
+
+const exportActivitySettingsBtn =
+    document.getElementById("exportActivitySettingsBtn");
+
+const logoutBtn =
+    document.getElementById("logoutBtn");
 const activityModal = document.getElementById("activityModal");
 const closeModal = document.getElementById("closeModal");
 const catalogBtn = document.getElementById("catalogBtn");
@@ -178,27 +204,39 @@ loadHistoryFromSupabase();
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
+settingsBtn.addEventListener("click", function () {
+
+    settingsModal.style.display = "block";
+
+});
+
+closeSettingsModal.addEventListener("click", function () {
+
+    settingsModal.style.display = "none";
+
+});
 catalogBtn.addEventListener("click", function () {
 
     catalogModal.style.display = "block";
 
 });
 
-closeCatalogModal.addEventListener("click", function () {
+closeSettingsModal.addEventListener("click", function () {
 
-    catalogModal.style.display = "none";
+    settingsModal.style.display = "none";
 
 });
 
 window.addEventListener("click", function (event) {
 
-    if (event.target === catalogModal) {
+    if (event.target === settingsModal) {
 
-        catalogModal.style.display = "none";
+        settingsModal.style.display = "none";
 
     }
 
 });
+
 todayProductionBtn.addEventListener("click", function () {
     todayProductionModal.style.display = "block";
 });
