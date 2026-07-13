@@ -1301,7 +1301,8 @@ async function analyzeProduction() {
 async function startProductionAnalysis() {
 
     const rawText = await readProductionScreenshot();
-    throw new Error("STOP HERE");
+    console.log(rawText);
+alert(rawText || "OCR returned empty text");
 
     const lotNumber = extractProductionLot(rawText);
 
