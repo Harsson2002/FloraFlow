@@ -490,3 +490,31 @@ tr:nth-child(even) {
 #productionPreview:active {
     cursor: grabbing;
 }
+.settings-gear {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    width: 46px;
+    height: 46px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    font-size: 25px;
+    cursor: pointer;
+    z-index: 1000;
+    box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+}
+
+.settings-gear:hover {
+    transform: rotate(25deg);
+}
+
+@media (max-width: 768px) {
+    .settings-gear {
+        top: 10px;
+        left: 10px;
+        width: 44px;
+        height: 44px;
+        font-size: 24px;
+    }
+}
