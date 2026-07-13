@@ -45,7 +45,13 @@
 <button id="activityBtn">
     📊 Activity Center
 </button>
-<button id="settingsBtn" class="settings-gear" title="Settings">
+<button
+    id="settingsBtn"
+    class="settings-gear"
+    type="button"
+    title="Settings"
+    onclick="document.getElementById('settingsModal').style.display='block'"
+>
     ⚙️
 </button>
 </div>
@@ -356,10 +362,13 @@
 
         <div class="modal-header">
             <h2>⚙️ Settings</h2>
-
-            <button id="closeSettingsModal">
-                X
-            </button>
+         <button
+    id="closeSettingsModal"
+    type="button"
+    onclick="document.getElementById('settingsModal').style.display='none'"
+>
+    X
+</button>
         </div>
 
         <div class="settings-menu">
