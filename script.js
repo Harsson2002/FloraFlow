@@ -613,10 +613,50 @@ mobileInventoryList.appendChild(mobileCard);
 }
 async function rotateProduct(index) {
     const item = inventory[index];
+
+    rotatingIndex = index;
+
+    document.getElementById("rotateProductName").textContent =
+        item.product || "";
+
+    document.getElementById("rotateProductColor").textContent =
+        item.color || "";
+
+    document.getElementById("rotateProductCase").textContent =
+        item.caseNumber || "";
+
+    document.getElementById("rotateAvailableQty").textContent =
+        item.quantity || 0;
+
+    document.getElementById("rotateQuantity").value = "";
+
+    document
+        .querySelectorAll('input[name="rotateReason"]')
+        .forEach(function (option) {
+            option.checked = false;
+        });
+
+    rotateModal.style.display = "block";
+}
+closeRotateModal.addEventListener("click", function () {
+    rotateModal.style.display = "none";
+    rotatingIndex = null;
+});
+confirmRotateBtn.addEventListener("click", async function () {
+    if (rotatingIndex === null) {
+        alert("No product selected.");
+        return;
+    }
+
+    const item = inventory[rotatingIndex];
     const currentQty = Number(item.quantity);
 
     const rotatedQty = Number(
-        prompt("How many stems are you rotating?")
+        document.getElementById("rotateQuantity").value
+    );
+
+    const selectedReason = document.querySelector(
+        'input[name="rotateReason"]:checked'
     );
 
     if (!rotatedQty || rotatedQty <= 0) {
@@ -629,30 +669,12 @@ async function rotateProduct(index) {
         return;
     }
 
-    const usageInput = prompt(
-        "What is this product being used for?\n\n" +
-        "1 - Production\n" +
-        "2 - Samples\n" +
-        "3 - OLD"
-    );
-
-    if (usageInput === null) {
+    if (!selectedReason) {
+        alert("Please select Production, Samples or OLD.");
         return;
     }
 
-    const usageOptions = {
-        "1": "Production",
-        "2": "Samples",
-        "3": "OLD"
-    };
-
-    const usageReason = usageOptions[usageInput.trim()];
-
-    if (!usageReason) {
-        alert("Please select 1, 2 or 3.");
-        return;
-    }
-
+    const usageReason = selectedReason.value;
     const newQty = currentQty - rotatedQty;
 
     const newStatus =
@@ -694,10 +716,14 @@ async function rotateProduct(index) {
 
     await loadHistoryFromSupabase();
 
+    rotateModal.style.display = "none";
+    rotatingIndex = null;
+
     renderInventory();
     renderHistory();
     updateDashboard();
-}
+});
+
 function openProductHistory(item) {
 
     document.getElementById("historyProductName").textContent = item.product || "";
