@@ -100,6 +100,12 @@ const saveEditBtn = document.getElementById("saveEditBtn");
 const exportInventoryBtn = document.getElementById("exportInventoryBtn");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
 const toggleRemovedBtn = document.getElementById("toggleRemovedBtn");
+const todayProductionBtn = document.getElementById("todayProductionBtn");
+const todayProductionModal = document.getElementById("todayProductionModal");
+const closeTodayProductionModal = document.getElementById("closeTodayProductionModal");
+const productionPreview = document.getElementById("productionPreview");
+const productionPlaceholder = document.getElementById("productionPlaceholder");
+const productionDropZone = document.getElementById("productionDropZone");
 
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
@@ -145,6 +151,13 @@ loadHistoryFromSupabase();
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
+});
+todayProductionBtn.addEventListener("click", function () {
+    todayProductionModal.style.display = "block";
+});
+
+closeTodayProductionModal.addEventListener("click", function () {
+    todayProductionModal.style.display = "none";
 });
 toggleRemovedBtn.addEventListener("click", function () {
     showRemoved = !showRemoved;

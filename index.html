@@ -245,6 +245,32 @@ if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js");
 }
 </script>
+<div id="todayProductionModal" class="modal">
 
+    <div class="modal-content">
+
+        <span id="closeTodayProductionModal" class="close">&times;</span>
+
+        <h2>🌅 Today's Production</h2>
+
+        <div id="productionDropZone">
+
+            <div id="productionPlaceholder">
+
+                <h3>📋 Paste your production screenshot</h3>
+
+                <p>Press <strong>Ctrl + V</strong></p>
+
+                <p>or drag & drop an image</p>
+
+            </div>
+
+            <img id="productionPreview" style="display:none;">
+
+        </div>
+
+    </div>
+
+</div>
 </body>
 </html>
