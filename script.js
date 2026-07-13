@@ -1335,6 +1335,10 @@ alert(
     const products = normalizeProductionText(
         ocrResult.articleText
     );
+    alert(
+    "NORMALIZED PRODUCTS:\n\n" +
+    JSON.stringify(products, null, 2)
+);
 
     const matches = findInventoryMatches(products);
 
