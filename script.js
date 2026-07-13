@@ -1367,6 +1367,21 @@ function findInventoryMatches(products) {
 function showProductionRecommendations(matches) {
 
     console.log("Displaying recommendations...");
+    console.table(matches);
+
+    const summary = matches
+        .map(item => {
+            return `${item.product || "UNKNOWN"} | ${item.color || "UNKNOWN"}`;
+        })
+        .join("\n");
+
+    alert(
+        "Normalized production products:\n\n" +
+        summary
+    );
+
+}
+    console.log("Displaying recommendations...");
     console.log(matches);
 
     alert(
