@@ -1317,22 +1317,27 @@ async function analyzeProduction() {
 }
 async function startProductionAnalysis() {
 
-    const rawText = await readProductionScreenshot();
-    console.log(rawText);
-alert(rawText || "OCR returned empty text");
+    const ocrResult = await readProductionScreenshot();
 
-    const lotNumber = extractProductionLot(rawText);
+    const lotNumber = extractProductionLot(ocrResult.lotText);
 
     console.log("Production Lot:", lotNumber);
+    console.log("Article Text:", ocrResult.articleText);
 
-    alert(rawText);
+    alert(
+        "LOT:\n" +
+        (lotNumber || "NOT FOUND") +
+        "\n\nARTICLES:\n" +
+        ocrResult.articleText
+    );
 
-    const products = normalizeProductionText(rawText);
+    const products = normalizeProductionText(
+        ocrResult.articleText
+    );
 
     const matches = findInventoryMatches(products);
 
     showProductionRecommendations(matches);
-
 }
 function extractProductionLot(text) {
 
@@ -1349,57 +1354,102 @@ async function readProductionScreenshot() {
 
     console.log("Reading production screenshot...");
 
-    if (!productionPreview.src) {
-        return "";
+    if (!window.originalProductionImage) {
+        return {
+            lotText: "",
+            articleText: ""
+        };
     }
 
-    // Crear imagen
     const img = new Image();
     img.src = window.originalProductionImage;
 
-    await new Promise(resolve => {
+    await new Promise(function (resolve, reject) {
         img.onload = resolve;
+        img.onerror = reject;
     });
 
-    // Canvas temporal
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d");
+    // =========================
+    // LOT CROP
+    // =========================
 
-    // ===== RECORTE =====
-    // Ajustaremos estos valores con tu captura
-    const cropX = img.width * 0.305;
-    const cropY = img.height * 0.215;
-    const cropWidth = img.width * 0.155;
-    const cropHeight = img.height * 0.245;
-    canvas.width = cropWidth;
-    canvas.height = cropHeight;
+    const lotCanvas = document.createElement("canvas");
+    const lotCtx = lotCanvas.getContext("2d");
 
-    ctx.drawImage(
+    const lotX = img.width * 0.285;
+    const lotY = img.height * 0.175;
+    const lotWidth = img.width * 0.18;
+    const lotHeight = img.height * 0.035;
+
+    lotCanvas.width = lotWidth;
+    lotCanvas.height = lotHeight;
+
+    lotCtx.drawImage(
         img,
-        cropX,
-        cropY,
-        cropWidth,
-        cropHeight,
+        lotX,
+        lotY,
+        lotWidth,
+        lotHeight,
         0,
         0,
-        cropWidth,
-        cropHeight
+        lotWidth,
+        lotHeight
     );
-    document.getElementById("productionPreview").src = canvas.toDataURL();
-document.getElementById("productionPreviewViewport").style.display = "block";
-window.lastOcrCrop = canvas.toDataURL();
 
-    // OCR
-    const result = await Tesseract.recognize(
-        canvas,
+    // =========================
+    // ARTICLE CROP
+    // =========================
+
+    const articleCanvas = document.createElement("canvas");
+    const articleCtx = articleCanvas.getContext("2d");
+
+    const articleX = img.width * 0.295;
+    const articleY = img.height * 0.255;
+    const articleWidth = img.width * 0.085;
+    const articleHeight = img.height * 0.19;
+
+    articleCanvas.width = articleWidth;
+    articleCanvas.height = articleHeight;
+
+    articleCtx.drawImage(
+        img,
+        articleX,
+        articleY,
+        articleWidth,
+        articleHeight,
+        0,
+        0,
+        articleWidth,
+        articleHeight
+    );
+
+    window.lastLotCrop = lotCanvas.toDataURL();
+    window.lastOcrCrop = articleCanvas.toDataURL();
+
+    const lotResult = await Tesseract.recognize(
+        lotCanvas,
         "eng",
         {
-            logger: m => console.log(m)
+            logger: function (m) {
+                console.log("LOT OCR:", m);
+            }
         }
     );
 
-    return result.data.text;
+    const articleResult = await Tesseract.recognize(
+        articleCanvas,
+        "eng",
+        {
+            logger: function (m) {
+                console.log("ARTICLE OCR:", m);
+            }
+        }
+    );
 
+    return {
+        lotText: lotResult.data.text,
+        articleText: articleResult.data.text
+    };
 }
 function normalizeProductionText(text) {
 
