@@ -1302,18 +1302,26 @@ async function startProductionAnalysis() {
 
     const rawText = await readProductionScreenshot();
 
-    alert("RAW TEXT:\n\n" + rawText);
+    const lotNumber = extractProductionLot(rawText);
+
+    alert("LOT: " + (lotNumber || "NOT FOUND"));
 
     const products = normalizeProductionText(rawText);
-
-    alert(
-        "NORMALIZED:\n\n" +
-        JSON.stringify(products, null, 2)
-    );
 
     const matches = findInventoryMatches(products);
 
     showProductionRecommendations(matches);
+
+}
+function extractProductionLot(text) {
+
+    const match = text.match(/\b\d{5,6}\b/);
+
+    if (match) {
+        return match[0];
+    }
+
+    return null;
 
 }
 async function readProductionScreenshot() {
