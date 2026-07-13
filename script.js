@@ -1426,6 +1426,13 @@ async function readProductionScreenshot() {
 
     window.lastLotCrop = lotCanvas.toDataURL();
     window.lastOcrCrop = articleCanvas.toDataURL();
+    
+    const debugWindow = window.open("");
+
+debugWindow.document.write(`
+<h3>LOT CROP</h3>
+<img src="${window.lastLotCrop}" style="width:600px;border:1px solid #000;">
+`);
 
     const lotResult = await Tesseract.recognize(
         lotCanvas,
