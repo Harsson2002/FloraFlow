@@ -2,6 +2,8 @@ window.flowerBrain = {
 
     productAliases: {
         HYDR: "HYDRANGEA",
+        HYOR: "HYDRANGEA",
+        HDR: "HYDRANGEA",
         HYDRANGEA: "HYDRANGEA",
 
         SOLI: "SOLIDAGO",
@@ -16,19 +18,40 @@ window.flowerBrain = {
         LIM: "LIMONIUM",
         LIMONIUM: "LIMONIUM",
 
+        ERG: "ERYNGIUM",
+        ERYNG: "ERYNGIUM",
+        ERYNGIUM: "ERYNGIUM",
+
+        SCABIOSA: "SCABIOSA",
+
+        TWEEDIA: "TWEEDIA",
+
         RUSCUS: "RUSCUS",
         EUCALYPTUS: "EUCALYPTUS"
+    },
+
+    productPhrases: {
+        "POM BUTTON": "BUTTON POM",
+        "BUTTON POM": "BUTTON POM",
+        "MINI CALLA": "MINI CALLA",
+        "ROSE SPRAY": "SPRAY ROSE",
+        "SPRAY ROSE": "SPRAY ROSE",
+        "POM DAISY": "DAISY POM",
+        "DAISY POM": "DAISY POM"
     },
 
     colorAliases: {
         WHT: "WHITE",
         WHIITE: "WHITE",
         WHITE: "WHITE",
+        WI: "WHITE",
 
         YEL: "YELLOW",
+        YLW: "YELLOW",
         YELLOW: "YELLOW",
 
         PNK: "PINK",
+        PK: "PINK",
         PINK: "PINK",
 
         HPNK: "HOT PINK",
@@ -39,9 +62,11 @@ window.flowerBrain = {
 
         BLU: "BLUE",
         BLUE: "BLUE",
+        BL: "BLUE",
 
         GRN: "GREEN",
         GREEN: "GREEN",
+        GR: "GREEN",
 
         RED: "RED"
     },
@@ -52,7 +77,8 @@ window.flowerBrain = {
         "BUNCH",
         "BUNCHES",
         "SELECT",
-        "SAMPLE"
+        "SAMPLE",
+        "ARTICLE"
     ]
 
 };

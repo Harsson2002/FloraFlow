@@ -1471,15 +1471,37 @@ function normalizeProductionLine(line) {
 
     for (let i = 0; i < words.length; i++) {
 
-        const word = words[i];
+        const twoWordPhrase = `${words[i]} ${words[i + 1] || ""}`.trim();
 
-        if (!product && window.flowerBrain.productAliases[word]) {
-            product = window.flowerBrain.productAliases[word];
+        if (
+            !product &&
+            window.flowerBrain.productPhrases[twoWordPhrase]
+        ) {
+            product =
+                window.flowerBrain.productPhrases[twoWordPhrase];
+
+            i++;
             continue;
         }
 
-        if (!color && window.flowerBrain.colorAliases[word]) {
-            color = window.flowerBrain.colorAliases[word];
+        const word = words[i];
+
+        if (
+            !product &&
+            window.flowerBrain.productAliases[word]
+        ) {
+            product =
+                window.flowerBrain.productAliases[word];
+
+            continue;
+        }
+
+        if (
+            !color &&
+            window.flowerBrain.colorAliases[word]
+        ) {
+            color =
+                window.flowerBrain.colorAliases[word];
         }
     }
 
