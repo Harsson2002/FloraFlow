@@ -461,37 +461,42 @@
 </div>
 <div class="rotate-reason-group">
 
-    <h3>Choose where this product will be used</h3>
+    <h3>Destination</h3>
 
-    <label class="rotate-option">
-        <input
-            type="radio"
-            name="rotateReason"
-            value="Production"
-        >
-        🏭 Production
-    </label>
+    <div class="rotate-destination-buttons">
 
-    <label class="rotate-option">
-        <input
-            type="radio"
-            name="rotateReason"
-            value="Samples"
-        >
-        🧪 Samples
-    </label>
+        <label class="rotate-destination-option production-option">
+            <input
+                type="radio"
+                name="rotateReason"
+                value="Production"
+                checked
+            >
+            <span>🏭 Production</span>
+        </label>
 
-    <label class="rotate-option">
-        <input
-            type="radio"
-            name="rotateReason"
-            value="OLD"
-        >
-        📦 OLD
-    </label>
+        <label class="rotate-destination-option samples-option">
+            <input
+                type="radio"
+                name="rotateReason"
+                value="Samples"
+            >
+            <span>🧪 Samples</span>
+        </label>
+
+        <label class="rotate-destination-option old-option">
+            <input
+                type="radio"
+                name="rotateReason"
+                value="OLD"
+            >
+            <span>📦 OLD</span>
+        </label>
+
+    </div>
 
 </div>
-        <button
+<button
             id="confirmRotateBtn"
             type="button"
         >
