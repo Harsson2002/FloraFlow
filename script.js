@@ -1342,14 +1342,23 @@ alert(
 }
 function extractProductionLot(text) {
 
-    const match = text.match(/\b\d{5,6}\b/);
+    if (!text) {
+        return null;
+    }
+
+    const cleanedText = text
+        .toUpperCase()
+        .replace(/O/g, "0")
+        .replace(/I/g, "1")
+        .replace(/L/g, "1");
+
+    const match = cleanedText.match(/\d{4,6}/);
 
     if (match) {
         return match[0];
     }
 
     return null;
-
 }
 async function readProductionScreenshot() {
 
@@ -1426,7 +1435,7 @@ async function readProductionScreenshot() {
 
     window.lastLotCrop = lotCanvas.toDataURL();
     window.lastOcrCrop = articleCanvas.toDataURL();
-    
+
     const debugWindow = window.open("");
 
 debugWindow.document.write(`
