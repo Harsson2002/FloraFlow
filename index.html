@@ -39,13 +39,26 @@
     </div>
 
 </div>
-
 <div class="top-bar">
 <input type="text" id="search" placeholder="🔍 Search product, color, case or notes...">
-<button id="activityBtn">📊 Activity Center</button>
-<button id="exportInventoryBtn">📤 Export Inventory</button>
-<button id="exportHistoryBtn">📤 Export Activity</button>
+
+<button id="activityBtn">
+    📊 Activity Center
+</button>
+
+<button id="catalogBtn">
+    📚 Lexiflor Catalog
+</button>
+
+<button id="exportInventoryBtn">
+    📤 Export Inventory
+</button>
+
+<button id="exportHistoryBtn">
+    📤 Export Activity
+</button>
 </div>
+
 <div class="form form-grid">
 
     <div class="form-field">
@@ -293,6 +306,57 @@
 
 </div>
 
+
+</div>
+<div id="catalogModal" class="modal">
+
+    <div class="modal-content">
+
+        <div class="modal-header">
+            <h2>📚 Lexiflor Article Catalog</h2>
+
+            <button id="closeCatalogModal">
+                X
+            </button>
+        </div>
+
+        <div class="form">
+
+            <input
+                type="text"
+                id="catalogSearch"
+                placeholder="🔍 Search article, family or code..."
+            >
+
+            <input
+                type="text"
+                id="catalogVariety"
+                placeholder="Official article name"
+            >
+
+            <input
+                type="text"
+                id="catalogFamily"
+                placeholder="Product family"
+            >
+
+            <input
+                type="text"
+                id="catalogCode"
+                placeholder="Article code (optional)"
+            >
+
+            <button id="saveCatalogArticleBtn">
+                ➕ Add Article
+            </button>
+
+        </div>
+
+        <div id="catalogMessage"></div>
+
+        <div id="catalogList"></div>
+
+    </div>
 
 </div>
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.2/dist/js/tom-select.complete.min.js"></script>
