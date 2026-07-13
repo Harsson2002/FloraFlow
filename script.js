@@ -1365,10 +1365,5 @@ function getLearnedProductAlias(axerrioName) {
     return learnedProductAliases[sourceName] || null;
 
 }
-saveLearnedProductAlias("HYDR", "HYDRANGEA");
-
-console.log(
-    "Learned alias test:",
-    getLearnedProductAlias("HYDR")
-);
+console.log("FlowerBrain test:", flowerBrain.productAliases.HYDR);
 
