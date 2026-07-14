@@ -1676,27 +1676,8 @@ async function startProductionAnalysis() {
     console.log("Article Text:", ocrResult.articleText);
     console.log("Color Text:", ocrResult.colorText);
 
-    alert(
-    "RAW LOT OCR:\n" +
-    ocrResult.lotText +
-    "\n\nLOT DETECTED:\n" +
-    (productionOrderNumber || "NOT FOUND") +
-    "\n\nARTICLES:\n" +
-    ocrResult.articleText +
-    "\n\nCOLORS:\n" +
-    ocrResult.colorText
-);
 console.log("RAW ARTICLE OCR:");
 console.log(ocrResult.articleText);
-
-alert("ANTES DE NORMALIZAR");
-    const products = normalizeProductionText(
-        ocrResult.articleText
-    );
-    alert(
-    "NORMALIZED PRODUCTS:\n\n" +
-    JSON.stringify(products, null, 2)
-);
 
     const matches = findInventoryMatches(products);
 
@@ -1859,18 +1840,6 @@ const fullOcrResult = await Tesseract.recognize(
 
 console.log("FULL SCREEN TEXT:", fullOcrResult.data.text);
 console.log("FULL SCREEN WORDS:", fullOcrResult.data.words);
-alert(
-    "FULL SCREEN WORDS:\n\n" +
-    (
-        Array.isArray(fullOcrResult.data.words)
-            ? JSON.stringify(
-                fullOcrResult.data.words.slice(0, 20),
-                null,
-                2
-            )
-            : String(fullOcrResult.data.words)
-    )
-);
 
     // =========================
     // LOT CROP
