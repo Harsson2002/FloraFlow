@@ -2639,7 +2639,16 @@ score =
         .sort(function (a, b) {
             return b.score - a.score;
         });
-
+console.table(
+    candidates.slice(0, 10).map(function(item) {
+        return {
+            Article: item.articleName,
+            Family: item.family,
+            Color: item.color,
+            Score: item.score
+        };
+    })
+);
     return {
         best: candidates[0] || null,
         alternatives: candidates.slice(1, 4)
