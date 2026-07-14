@@ -2543,13 +2543,17 @@ function getOperationalFamilyRules() {
             family: "DUSTY MILLER",
             names: ["DUSTY MILLER"]
         },
-        {
-            family: "MINI GREEN",
-            names: ["MINI GREEN"]
-        }
-    ];
+    {
+        family: "MINI HYDRANGEA",
+        names: [
+            "MINI HYDRANGEA",
+            "HYDRANGEA MINI",
+            "HYDR M",
+            "HYDR MINI"
+        ]
+    }
+];
 }
-
 function resolveOperationalFamily(articleName, proposedFamily) {
 
     const normalizedArticle = normalizeMatchText(articleName);
