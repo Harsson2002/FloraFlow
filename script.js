@@ -1652,7 +1652,7 @@ async function readProductionScreenshot() {
 
     const articleX = img.width * 0.180;
 const articleY = img.height * 0.255;
-const articleWidth = img.width * 0.175;
+const articleWidth = img.width * 0.185;
 const articleHeight = img.height * 0.30;
 
     articleCanvas.width = articleWidth;
