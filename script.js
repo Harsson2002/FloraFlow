@@ -1651,9 +1651,9 @@ async function readProductionScreenshot() {
     const articleCtx = articleCanvas.getContext("2d");
 
     const articleX = img.width * 0.185;
-    const articleY = img.height * 0.255;
-    const articleWidth = img.width * 0.175;
-    const articleHeight = img.height * 0.30;
+const articleY = img.height * 0.255;
+const articleWidth = img.width * 0.175;
+const articleHeight = img.height * 0.30;
 
     articleCanvas.width = articleWidth;
     articleCanvas.height = articleHeight;
