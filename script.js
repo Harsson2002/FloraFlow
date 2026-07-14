@@ -206,15 +206,6 @@ async function loadFlowerFamilies() {
         };
     });
 
-    alert(
-        "Flower families loaded:\n\n" +
-        flowerFamilies.length +
-        " families"
-    );
-    alert(
-    "CERAERA → " +
-    findFamilyFromAlias("CERAERA")
-);
 }
 
     let lexiflorCatalog = [];
@@ -1895,6 +1886,18 @@ function normalizeProductionLine(line) {
 
 line = colorInfo.articleText;
 line = window.flowerBrain.fixCommonOcrErrors(line);
+const words = line.split(/\s+/);
+
+for (let i = 0; i < words.length; i++) {
+
+    const family = findFamilyFromAlias(words[i]);
+
+    if (family) {
+        words[i] = family;
+    }
+}
+
+line = words.join(" ");
     if (
         !window.flowerBrain ||
         typeof window.flowerBrain.parseLine !== "function"
