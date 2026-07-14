@@ -207,12 +207,43 @@ async function loadFlowerFamilies() {
     });
 
 }
-let lexiflorCatalog = [];
-let lexiflorSearchCatalog = [];
-let lexiflorCatalogByFamily = new Map();
-let lexiflorFamilyProfiles = [];
+let lexiflorArticles = [];
+
+async function loadLexiflorArticles() {
+
+    const { data, error } = await supabaseClient
+        .from("lexiflor_articles")
+        .select(`
+            code,
+            article_name,
+            proposed_family,
+            proposed_color,
+            proposed_variety
+        `)
+        .order("article_name", { ascending: true });
+
+    if (error) {
+        alert(
+            "Error loading Lexiflor articles:\n" +
+            error.message
+        );
+        console.error(error);
+        return;
+    }
+
+    lexiflorArticles = data || [];
+
+    console.log(
+        "Lexiflor Articles Loaded:",
+        lexiflorArticles.length
+    );
+}
+
+    let lexiflorCatalog = [];
+    let lexiflorSearchCatalog = [];
 
 async function loadLexiflorCatalog() {
+    console.log("ENTERING loadLexiflorCatalog");
 
     const pageSize = 1000;
     let start = 0;
@@ -222,13 +253,7 @@ async function loadLexiflorCatalog() {
 
         const { data, error } = await supabaseClient
             .from("lexiflor_articles")
-            .select(`
-                code,
-                article_name,
-                proposed_family,
-                proposed_color,
-                proposed_variety
-            `)
+            .select("*")
             .range(start, start + pageSize - 1);
 
         if (error) {
@@ -254,46 +279,50 @@ async function loadLexiflorCatalog() {
     }
 
     lexiflorCatalog = allArticles;
+    lexiflorSearchCatalog = lexiflorCatalog
+    .map(function (item) {
 
-    lexiflorSearchCatalog = allArticles
-        .map(function (item) {
+        const articleName =
+            normalizeMatchText(item.article_name);
 
-            const articleName = normalizeMatchText(
-                item.article_name
-            );
+        if (!articleName) {
+            return null;
+        }
 
-            if (!articleName) {
-                return null;
-            }
+        return {
+            product: articleName,
+            articleName: articleName,
 
-            const proposedFamily = normalizeMatchText(
-                item.proposed_family
-            );
+            family:
+                normalizeMatchText(
+                    item.proposed_family
+                ),
 
-            const family = resolveOperationalFamily(
-                articleName,
-                proposedFamily
-            );
+            color:
+                normalizeMatchText(
+                    item.proposed_color
+                ),
 
-            return {
-                code: String(item.code || ""),
-                product: articleName,
-                articleName: articleName,
-                searchText: prepareArticleSearchText(articleName),
-                family: family,
-                color: normalizeMatchText(item.proposed_color),
-                variety: normalizeMatchText(item.proposed_variety)
-            };
-        })
-        .filter(Boolean);
+            variety:
+                normalizeMatchText(
+                    item.proposed_variety
+                )
+        };
+    })
+    .filter(Boolean);
 
-    buildLexiflorFamilyIndexes();
-
+console.log(
+    "SEARCH CATALOG READY:",
+    lexiflorSearchCatalog.length
+);
     console.log(
-        "FloraFlow catalog ready:",
-        lexiflorSearchCatalog.length,
-        "articles"
-    );
+    "CATALOG SIZE:",
+    lexiflorCatalog.length
+);
+
+    console.log("Catalog loaded:", allArticles.length);
+console.log(allArticles.slice(0,3));
+
 }
 
 const users = [
@@ -1765,6 +1794,8 @@ let isPulling = false;
 
 
 document.addEventListener("touchstart", function (event) {
+    console.log("Touch started");
+
     if (window.scrollY === 0) {
         pullStartY = event.touches[0].clientY;
         isPulling = true;
@@ -1799,53 +1830,56 @@ async function analyzeProduction() {
     await startProductionAnalysis();
 }
 async function startProductionAnalysis() {
+    console.log("Before loading:", lexiflorCatalog.length);
 
-    if (
-        !Array.isArray(lexiflorSearchCatalog) ||
-        lexiflorSearchCatalog.length === 0
-    ) {
-        await loadLexiflorCatalog();
-    }
+if (!lexiflorCatalog || lexiflorCatalog.length === 0) {
 
-    if (lexiflorSearchCatalog.length === 0) {
-        alert("The Lexiflor article catalog could not be loaded.");
-        return;
-    }
+    console.log("Loading catalog...");
 
-    analyzeProductionBtn.disabled = true;
-    const previousButtonText = analyzeProductionBtn.textContent;
-    analyzeProductionBtn.textContent = "Analyzing...";
+    await loadLexiflorCatalog();
 
-    try {
-        const ocrResult = await readProductionScreenshot();
-
-        const productionOrderNumber =
-            extractProductionLot(ocrResult.lotText) ||
-            extractProductionLot(ocrResult.articleText);
-
-        const products = normalizeProductionText(
-            ocrResult.articleText
-        );
-
-        const matches = findInventoryMatches(products);
-
-        showProductionRecommendations(
-            matches,
-            productionOrderNumber
-        );
-
-    } catch (error) {
-        console.error("Production analysis error:", error);
-        alert(
-            "Production analysis could not be completed. " +
-            (error?.message || String(error))
-        );
-    } finally {
-        analyzeProductionBtn.disabled = false;
-        analyzeProductionBtn.textContent = previousButtonText;
-    }
+    console.log(
+        "After loading:",
+        lexiflorCatalog.length
+    );
 }
+    alert("ANALYZE STARTED");
 
+    const ocrResult = await readProductionScreenshot();
+    alert("OCR FINISHED");
+
+    const productionOrderNumber =
+    extractProductionLot(ocrResult.lotText);
+    alert(
+    "ORDER DETECTED: " +
+    (productionOrderNumber || "NOT FOUND")
+);
+
+    console.log(
+    "Production Order:",
+    productionOrderNumber
+);
+    console.log("Article Text:", ocrResult.articleText);
+    console.log("Color Text:", ocrResult.colorText);
+
+console.log("RAW ARTICLE OCR:");
+console.log(ocrResult.articleText);
+const products = normalizeProductionText(
+    ocrResult.articleText
+);
+
+alert(
+    "PRODUCTS DETECTED: " +
+    products.length
+);
+
+    const matches = findInventoryMatches(products);
+
+    showProductionRecommendations(
+    matches,
+    productionOrderNumber
+);
+}
 function showProductionRecommendations(
     matches,
     productionOrderNumber
@@ -1939,9 +1973,6 @@ resultsContainer.appendChild(orderHeader);
 
 } else {
 
-    const recognizedArticle =
-        match.articleName || match.product || "";
-
     card.innerHTML = `
         <div style="
             font-size:18px;
@@ -1952,44 +1983,11 @@ resultsContainer.appendChild(orderHeader);
             ⚠️ ${match.product || "Unrecognized product"}
         </div>
 
-        ${
-            recognizedArticle &&
-            recognizedArticle !== match.product
-                ? `
-                    <div style="
-                        font-size:14px;
-                        color:#444;
-                        margin-bottom:5px;
-                    ">
-                        Article: ${recognizedArticle}
-                    </div>
-                `
-                : ""
-        }
-
-        ${
-            match.color
-                ? `
-                    <div style="
-                        font-size:14px;
-                        color:#444;
-                        margin-bottom:5px;
-                    ">
-                        Color: ${match.color}
-                    </div>
-                `
-                : ""
-        }
-
         <div style="
             font-size:14px;
             color:#777;
         ">
-            ${
-                match.needsReview
-                    ? "Product needs review"
-                    : "No leftover found"
-            }
+            No leftover found
         </div>
     `;
 }
@@ -1998,114 +1996,27 @@ resultsContainer.appendChild(orderHeader);
 }
 function extractProductionLot(text) {
 
-    const source = String(text || "").toUpperCase();
-
-    if (!source) {
+    if (!text) {
         return null;
     }
 
-    const normalizeDigits = function (value) {
-        return String(value || "")
-            .replace(/O/g, "0")
-            .replace(/[IL]/g, "1")
-            .replace(/[^0-9]/g, "");
-    };
+    const cleanedText = text
+        .toUpperCase()
+        .replace(/O/g, "0")
+        .replace(/I/g, "1")
+        .replace(/L/g, "1");
 
-    const nearOrder = source.match(
-        /([0-9OIL]{4,7})\s*[-:]?\s*PRODUCTION\s*ORDER/
-    );
+    const match = cleanedText.match(/\d{4,6}/);
 
-    if (nearOrder) {
-        const orderNumber = normalizeDigits(nearOrder[1]);
-
-        if (orderNumber.length >= 4) {
-            return orderNumber;
-        }
-    }
-
-    const possibleNumbers = source.match(/[0-9OIL]{4,7}/g) || [];
-
-    for (const possibleNumber of possibleNumbers) {
-        const orderNumber = normalizeDigits(possibleNumber);
-
-        if (orderNumber.length >= 4 && orderNumber.length <= 7) {
-            return orderNumber;
-        }
+    if (match) {
+        return match[0];
     }
 
     return null;
 }
-
-function createEnhancedOcrCanvas(
-    img,
-    sourceX,
-    sourceY,
-    sourceWidth,
-    sourceHeight,
-    scale
-) {
-    const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", {
-        willReadFrequently: true
-    });
-
-    const outputScale = Number(scale || 2.5);
-
-    canvas.width = Math.max(
-        1,
-        Math.round(sourceWidth * outputScale)
-    );
-
-    canvas.height = Math.max(
-        1,
-        Math.round(sourceHeight * outputScale)
-    );
-
-    ctx.imageSmoothingEnabled = false;
-
-    ctx.drawImage(
-        img,
-        sourceX,
-        sourceY,
-        sourceWidth,
-        sourceHeight,
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-    const imageData = ctx.getImageData(
-        0,
-        0,
-        canvas.width,
-        canvas.height
-    );
-
-    const pixels = imageData.data;
-
-    for (let index = 0; index < pixels.length; index += 4) {
-        const gray =
-            pixels[index] * 0.299 +
-            pixels[index + 1] * 0.587 +
-            pixels[index + 2] * 0.114;
-
-        const contrasted = Math.max(
-            0,
-            Math.min(255, (gray - 128) * 1.65 + 128)
-        );
-
-        pixels[index] = contrasted;
-        pixels[index + 1] = contrasted;
-        pixels[index + 2] = contrasted;
-    }
-
-    ctx.putImageData(imageData, 0, 0);
-
-    return canvas;
-}
-
 async function readProductionScreenshot() {
+
+    console.log("Reading production screenshot...");
 
     if (!window.originalProductionImage) {
         return {
@@ -2121,186 +2032,207 @@ async function readProductionScreenshot() {
         img.onload = resolve;
         img.onerror = reject;
     });
+    const fullCanvas = document.createElement("canvas");
+const fullCtx = fullCanvas.getContext("2d");
+
+fullCanvas.width = img.width;
+fullCanvas.height = img.height;
+
+fullCtx.drawImage(img, 0, 0);
+
+const fullOcrResult = await Tesseract.recognize(
+    fullCanvas,
+    "eng",
+    {
+        logger: function (m) {
+            console.log("FULL SCREEN OCR:", m);
+        }
+    }
+);
+
+console.log("FULL SCREEN TEXT:", fullOcrResult.data.text);
+console.log("FULL SCREEN WORDS:", fullOcrResult.data.words);
+
+    // =========================
+    // LOT CROP
+    // =========================
+
+    const lotCanvas = document.createElement("canvas");
+    const lotCtx = lotCanvas.getContext("2d");
 
     const lotX = img.width * 0.255;
     const lotY = img.height * 0.175;
     const lotWidth = img.width * 0.075;
     const lotHeight = img.height * 0.035;
 
-    const articleX = img.width * 0.180;
-    const articleY = img.height * 0.175;
-    const articleWidth = img.width * 0.185;
-    const articleHeight = img.height * 0.30;
+    lotCanvas.width = lotWidth;
+    lotCanvas.height = lotHeight;
 
-    const lotCanvas = createEnhancedOcrCanvas(
+    lotCtx.drawImage(
         img,
         lotX,
         lotY,
         lotWidth,
         lotHeight,
-        3
+        0,
+        0,
+        lotWidth,
+        lotHeight
     );
 
-    const articleCanvas = createEnhancedOcrCanvas(
+    // =========================
+    // ARTICLE CROP
+    // =========================
+
+    const articleCanvas = document.createElement("canvas");
+    const articleCtx = articleCanvas.getContext("2d");
+
+    const articleX = img.width * 0.180;
+const articleY = img.height * 0.175;
+const articleWidth = img.width * 0.185;
+const articleHeight = img.height * 0.30;
+
+    articleCanvas.width = articleWidth;
+    articleCanvas.height = articleHeight;
+
+    articleCtx.drawImage(
         img,
         articleX,
         articleY,
         articleWidth,
         articleHeight,
-        2.5
+        0,
+        0,
+        articleWidth,
+        articleHeight
     );
+    // =========================
+    // COLOR CROP
+    // =========================
+
 
     window.lastLotCrop = lotCanvas.toDataURL();
     window.lastOcrCrop = articleCanvas.toDataURL();
 
-    const lotResult = await Tesseract.recognize(
-        lotCanvas,
-        "eng",
-        {
-            tessedit_char_whitelist: "0123456789",
-            tessedit_pageseg_mode: 7
-        }
-    );
 
+const lotResult = await Tesseract.recognize(
+    lotCanvas,
+    "eng",
+    {
+        logger: function (m) {
+            console.log("LOT OCR:", m);
+        },
+        tessedit_char_whitelist: "0123456789",
+        tessedit_pageseg_mode: 7
+    }
+);
     const articleResult = await Tesseract.recognize(
         articleCanvas,
         "eng",
         {
-            preserve_interword_spaces: "1",
-            tessedit_pageseg_mode: 6
+            logger: function (m) {
+                console.log("ARTICLE OCR:", m);
+            }
         }
     );
-
     return {
-        lotText: lotResult.data.text || "",
-        articleText: articleResult.data.text || ""
-    };
+    lotText: lotResult.data.text,
+    articleText: articleResult.data.text
+};
 }
-
 function normalizeProductionText(text) {
 
-    const normalizedProducts = String(text || "")
+    console.log("Normalizing production text...");
+
+    const lines = String(text || "")
         .split("\n")
-        .map(function (rawLine) {
-            return {
-                raw: normalizeMatchText(rawLine),
-                cleaned: cleanProductionLine(rawLine)
-            };
-        })
-        .filter(function (lineInfo) {
+        .map(cleanProductionLine)
+        .filter(function (line) {
 
-            const cleanLine = normalizeMatchText(
-                lineInfo.cleaned
-            );
+            const cleanLine = normalizeMatchText(line);
 
-            if (!cleanLine || cleanLine.length < 4) {
+            if (!cleanLine) {
                 return false;
             }
 
-            if (
-                cleanLine.includes("PRODUCTION ORDER") ||
-                cleanLine.includes("BILL OF MATERIAL") ||
-                cleanLine.includes("GENERAL BILL")
-            ) {
+            if (cleanLine.includes("PRODUCTION ORDER")) {
                 return false;
             }
 
-            const preparedLine = prepareArticleSearchText(cleanLine);
-            const preparedTokens = getUsefulArticleTokens(preparedLine);
-
-            if (preparedTokens.length === 0) {
+            if (cleanLine.length < 5) {
                 return false;
             }
 
-            const hasRowSignal =
-                /\b\d{2,3}\s*(?:CM|MM|AM)\b/.test(
-                    lineInfo.raw
-                ) ||
-                Boolean(extractProductionColor(cleanLine)) ||
-                Boolean(detectBestCatalogFamily(preparedLine));
+            const hasKnownFamily = flowerFamilies.some(function (item) {
 
-            return hasRowSignal;
-        })
-        .map(function (lineInfo) {
-            return normalizeProductionLine(
-                lineInfo.cleaned
-            );
-        })
-        .filter(function (product) {
-            return Boolean(
-                product &&
-                prepareArticleSearchText(product.original)
+                const family = normalizeMatchText(item.family);
+
+                if (
+                    family &&
+                    cleanLine.includes(family)
+                ) {
+                    return true;
+                }
+
+                return item.aliases.some(function (alias) {
+
+                    const normalizedAlias =
+                        normalizeMatchText(alias);
+
+                    return (
+                        normalizedAlias &&
+                        cleanLine.includes(normalizedAlias)
+                    );
+                });
+            });
+
+            const hasMeasurement =
+                /\b\d{2,3}\s*CM\b/.test(cleanLine);
+
+            const hasKnownColor =
+                /\b(WHITE|YELLOW|PINK|RED|ORANGE|PURPLE|GREEN|BLUE|CREAM|LAVENDER|NOVELTY)\b/
+                    .test(cleanLine);
+
+            return (
+                hasKnownFamily ||
+                hasMeasurement ||
+                hasKnownColor
             );
         });
 
-    const uniqueProducts = [];
-    const seenLines = new Set();
-
-    normalizedProducts.forEach(function (product) {
-        const key = prepareArticleSearchText(product.original);
-
-        if (!key || seenLines.has(key)) {
-            return;
-        }
-
-        seenLines.add(key);
-        uniqueProducts.push(product);
-    });
-
-    return uniqueProducts;
+    return lines.map(normalizeProductionLine);
 }
-
 function normalizeProductionLine(line) {
+        line = window.flowerBrain.cleanOCRText(line);
+        const colorInfo =
+    window.flowerBrain.extractColorCode(line);
 
-    const cleanedOriginal = window.flowerBrain.cleanOCRText(
-        String(line || "")
-    );
+line = colorInfo.articleText;
+line = window.flowerBrain.fixCommonOcrErrors(line);
+line = replaceFamilyAliasesInLine(line);
+const detectedColor = extractProductionColor(line);
 
-    const colorInfo = window.flowerBrain.extractColorCode(
-        cleanedOriginal
-    );
-
-    let articleLine =
-        colorInfo.articleText || cleanedOriginal;
-
-    articleLine = window.flowerBrain.fixCommonOcrErrors(
-        articleLine
-    );
-
-    articleLine = replaceFamilyAliasesInLine(articleLine);
-
-    const detectedColor =
-        normalizeMatchText(
-            colorInfo.color ||
-            colorInfo.colorName ||
-            ""
-        ) ||
-        extractProductionColor(cleanedOriginal);
-
+console.log(
+    "FlowerBrain Color:",
+    detectedColor || "NONE"
+);
     if (
         !window.flowerBrain ||
         typeof window.flowerBrain.parseLine !== "function"
     ) {
+        console.error("FlowerBrain parser is not available.");
+
         return {
-            original: cleanedOriginal,
+            original: line,
             product: "",
-            variety: articleLine,
-            color: detectedColor,
+            variety: "",
+            color: "",
             length: null
         };
     }
 
-    const parsed = window.flowerBrain.parseLine(articleLine) || {};
-
-    return {
-        original: cleanedOriginal,
-        product: parsed.product || "",
-        variety: parsed.variety || articleLine,
-        color: parsed.color || detectedColor || "",
-        length: null
-    };
+    return window.flowerBrain.parseLine(line);
 }
-
 function normalizeMatchText(value) {
 
     return String(value || "")
@@ -2509,265 +2441,76 @@ function getConfidenceLevel(score) {
 
     return "REVIEW";
 }
-function getOperationalFamilyRules() {
-    return [
-        {
-            family: "CUSHION POM",
-            names: ["CUSHION POM", "POM CUSHION"]
-        },
-        {
-            family: "BUTTON POM",
-            names: ["BUTTON POM", "POM BUTTON"]
-        },
-        {
-            family: "MICRO POM",
-            names: ["MICRO POM", "POM MICRO"]
-        },
-        {
-            family: "DAISY POM",
-            names: ["DAISY POM", "POM DAISY"]
-        },
-        {
-            family: "SPRAY ROSE",
-            names: ["SPRAY ROSE", "ROSE SPRAY"]
-        },
-        {
-            family: "SPRAY CARNATION",
-            names: ["SPRAY CARNATION", "CARNATION SPRAY"]
-        },
-        {
-            family: "MINI HYDRANGEA",
-            names: ["MINI HYDRANGEA", "HYDRANGEA MINI"]
-        },
-        {
-            family: "DUSTY MILLER",
-            names: ["DUSTY MILLER"]
-        },
-        {
-            family: "MINI GREEN",
-            names: ["MINI GREEN"]
-        }
-    ];
+function buildProductCatalogFromLexiflor() {
+
+    if (!Array.isArray(lexiflorCatalog)) {
+        return [];
+    }
+
+    return lexiflorCatalog
+        .map(function (item) {
+
+            const articleName = normalizeMatchText(
+                item.article_name
+            );
+
+            const family = normalizeMatchText(
+                item.proposed_family
+            );
+
+            const color = normalizeMatchText(
+                item.proposed_color
+            );
+
+            const variety = normalizeMatchText(
+                item.proposed_variety
+            );
+
+            if (!articleName) {
+                return null;
+            }
+
+            return {
+                product: articleName,
+                articleName: articleName,
+                family: family,
+                color: color,
+                variety: variety
+            };
+        })
+        .filter(Boolean);
 }
+function calculateFuzzyTokenSimilarity(searchText, catalogText) {
 
-function resolveOperationalFamily(articleName, proposedFamily) {
+    function getUsefulTokens(text) {
 
-    const normalizedArticle = normalizeMatchText(articleName);
+        return normalizeMatchText(text)
+            .split(/\s+/)
+            .filter(function (token) {
 
-    const operationalRule = getOperationalFamilyRules()
-        .find(function (rule) {
-            return rule.names.some(function (name) {
-                return normalizedArticle.includes(name);
-            });
-        });
-
-    if (operationalRule) {
-        return operationalRule.family;
-    }
-
-    return normalizeMatchText(proposedFamily);
-}
-
-function isArticleMeasurementToken(token) {
-
-    const value = normalizeMatchText(token);
-
-    if (!value) {
-        return true;
-    }
-
-    if (/^\d{2,3}(?:CM|MM|AM)$/.test(value)) {
-        return true;
-    }
-
-    if (/^(?:CM|MM)$/.test(value)) {
-        return true;
-    }
-
-    if (/^(?:SOON|SOC|SOEM|S0CM|SOM|6OCM|8OCM)$/.test(value)) {
-        return true;
-    }
-
-    if (/^(?:30|35|40|45|50|55|60|65|70|75|80|85|90|100|110|120)$/.test(value)) {
-        return true;
-    }
-
+               // Ignorar longitudes y lecturas incorrectas de longitudes
+if (/^\d+$/.test(token)) {
     return false;
 }
 
-function normalizeArticleColorToken(token) {
-
-    const value = normalizeMatchText(token);
-
-    const colorAliases = {
-        YELLO: "YELLOW",
-        VELLOW: "YELLOW",
-        YELOW: "YELLOW",
-        YLLW: "YELLOW",
-        PURALE: "PURPLE",
-        PLRPLE: "PURPLE",
-        PRPLE: "PURPLE",
-        PURP: "PURPLE",
-        WIRTTE: "WHITE",
-        WHITTE: "WHITE",
-        WHIT: "WHITE",
-        WHT: "WHITE",
-        PNK: "PINK",
-        GRN: "GREEN",
-        ORNGE: "ORANGE",
-        ORG: "ORANGE",
-        LAV: "LAVENDER",
-        LAVNDR: "LAVENDER"
-    };
-
-    return colorAliases[value] || value;
+if (/^\d{2,3}(CM|AM|MM)$/.test(token)) {
+    return false;
 }
 
-function getArticleNoiseTokens() {
-    return new Set([
-        "PRODUCTION",
-        "ORDER",
-        "GENERAL",
-        "BILL",
-        "MATERIAL",
-        "MATERIALS",
-        "ARTICLE",
-        "REQUIRED",
-        "NUMBER",
-        "NEW",
-        "PROJ",
-        "PROJECT",
-        "STEM",
-        "STEMS",
-        "BUNCH",
-        "BUNCHES",
-        "BOX",
-        "BOXES",
-        "CASE",
-        "CASES",
-        "PCS",
-        "CLEAR",
-        "SLEEVE",
-        "LES",
-        "LOS",
-        "LQS",
-        "SE6",
-        "ITY",
-        "URE",
-        "FBI",
-        "NY",
-        "SER",
-        "HONWOVE"
-    ]);
+if (/^(CM|MM)$/.test(token)) {
+    return false;
 }
 
-function prepareArticleSearchText(value) {
+if (/^(SOON|SOC|SOEM|S0CM|SOM)$/.test(token)) {
+    return false;
+}
 
-    let normalized = normalizeMatchText(value)
-        .replace(/\b\d{2,3}\s*(?:CM|MM|AM)\b/g, " ")
-        .replace(/\b(?:SOON|SOC|SOEM|S0CM|SOM|6OCM|8OCM)\b/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
-
-    if (!normalized) {
-        return "";
+                return true;
+            });
     }
 
-    const noiseTokens = getArticleNoiseTokens();
-    const resultTokens = [];
-
-    normalized.split(/\s+/).forEach(function (rawToken) {
-
-        if (!rawToken || rawToken.length <= 1) {
-            return;
-        }
-
-        if (isArticleMeasurementToken(rawToken)) {
-            return;
-        }
-
-        if (/^(?=.*[A-Z])(?=.*\d)[A-Z0-9]+$/.test(rawToken)) {
-            return;
-        }
-
-        if (noiseTokens.has(rawToken)) {
-            return;
-        }
-
-        if (
-            /^(?:POMSUTRON|POMBUTTON|POMCUSHION|POMMICRO|POMDAISY)/.test(
-                rawToken
-            )
-        ) {
-            resultTokens.push("POM");
-            resultTokens.push(
-                normalizeArticleColorToken(rawToken.slice(3))
-            );
-            return;
-        }
-
-        if (rawToken.startsWith("RUSCUS")) {
-            resultTokens.push("RUSCUS");
-            return;
-        }
-
-        resultTokens.push(
-            normalizeArticleColorToken(rawToken)
-        );
-    });
-
-    return resultTokens
-        .filter(Boolean)
-        .join(" ")
-        .replace(/\s+/g, " ")
-        .trim();
-}
-
-function getUsefulArticleTokens(value) {
-    return prepareArticleSearchText(value)
-        .split(/\s+/)
-        .filter(function (token) {
-            return token && token.length > 1;
-        });
-}
-
-function getKnownArticleColors() {
-    return new Set([
-        "WHITE",
-        "YELLOW",
-        "PINK",
-        "RED",
-        "ORANGE",
-        "PURPLE",
-        "GREEN",
-        "BLUE",
-        "CREAM",
-        "LAVENDER",
-        "BRONZE",
-        "CORAL",
-        "PEACH",
-        "TINTED",
-        "NOVELTY",
-        "ASSORTED",
-        "MIXED"
-    ]);
-}
-
-function removeArticleColors(value) {
-
-    const colors = getKnownArticleColors();
-
-    return getUsefulArticleTokens(value)
-        .filter(function (token) {
-            return !colors.has(token);
-        })
-        .join(" ");
-}
-
-function calculateFuzzyTokenSimilarity(searchText, catalogText) {
-
-    const searchTokens = getUsefulArticleTokens(searchText);
-    const catalogTokens = getUsefulArticleTokens(catalogText);
+    const searchTokens = getUsefulTokens(searchText);
+    const catalogTokens = getUsefulTokens(catalogText);
 
     if (
         searchTokens.length === 0 ||
@@ -2776,7 +2519,7 @@ function calculateFuzzyTokenSimilarity(searchText, catalogText) {
         return 0;
     }
 
-    const searchCoverage = searchTokens.reduce(
+    const searchScore = searchTokens.reduce(
         function (total, searchToken) {
 
             const bestTokenScore = Math.max(
@@ -2793,7 +2536,7 @@ function calculateFuzzyTokenSimilarity(searchText, catalogText) {
         0
     ) / searchTokens.length;
 
-    const catalogCoverage = catalogTokens.reduce(
+    const catalogScore = catalogTokens.reduce(
         function (total, catalogToken) {
 
             const bestTokenScore = Math.max(
@@ -2811,264 +2554,13 @@ function calculateFuzzyTokenSimilarity(searchText, catalogText) {
     ) / catalogTokens.length;
 
     return Math.round(
-        searchCoverage * 0.35 +
-        catalogCoverage * 0.65
+        searchScore * 0.6 +
+        catalogScore * 0.4
     );
 }
-
-function buildLexiflorFamilyIndexes() {
-
-    lexiflorCatalogByFamily = new Map();
-
-    const profileMap = new Map();
-
-    lexiflorSearchCatalog.forEach(function (article) {
-
-        const family = normalizeMatchText(article.family);
-
-        if (!family) {
-            return;
-        }
-
-        if (!lexiflorCatalogByFamily.has(family)) {
-            lexiflorCatalogByFamily.set(family, []);
-        }
-
-        lexiflorCatalogByFamily.get(family).push(article);
-
-        if (!profileMap.has(family)) {
-            profileMap.set(family, {
-                family: family,
-                clues: new Set([family])
-            });
-        }
-
-        const profile = profileMap.get(family);
-        const identityTokens = getUsefulArticleTokens(
-            removeArticleColors(article.searchText)
-        );
-
-        if (
-            identityTokens[0] &&
-            identityTokens[0].length >= 4
-        ) {
-            profile.clues.add(identityTokens[0]);
-        }
-
-        if (identityTokens.length >= 2) {
-            profile.clues.add(
-                identityTokens.slice(0, 2).join(" ")
-            );
-        }
-    });
-
-    flowerFamilies.forEach(function (item) {
-
-        const family = normalizeMatchText(item.family);
-        const profile = profileMap.get(family);
-
-        if (!profile) {
-            return;
-        }
-
-        (item.aliases || []).forEach(function (alias) {
-            const normalizedAlias = prepareArticleSearchText(alias);
-
-            if (normalizedAlias.length >= 4) {
-                profile.clues.add(normalizedAlias);
-            }
-        });
-    });
-
-    getOperationalFamilyRules().forEach(function (rule) {
-
-        const profile = profileMap.get(rule.family);
-
-        if (!profile) {
-            return;
-        }
-
-        rule.names.forEach(function (name) {
-            profile.clues.add(name);
-        });
-    });
-
-    lexiflorFamilyProfiles = Array.from(profileMap.values())
-        .map(function (profile) {
-            return {
-                family: profile.family,
-                clues: Array.from(profile.clues)
-                    .filter(function (clue) {
-                        return (
-                            clue.includes(" ") ||
-                            clue.length >= 4
-                        );
-                    })
-                    .sort(function (a, b) {
-                        return b.length - a.length;
-                    })
-            };
-        });
-}
-
-function detectBestCatalogFamily(value) {
-
-    const identityText = removeArticleColors(
-        prepareArticleSearchText(value)
-    );
-
-    if (!identityText || lexiflorFamilyProfiles.length === 0) {
-        return null;
-    }
-
-    const results = lexiflorFamilyProfiles
-        .map(function (profile) {
-
-            let bestScore = 0;
-            let directMatch = false;
-
-            profile.clues.forEach(function (clue) {
-
-                const normalizedClue = prepareArticleSearchText(clue);
-
-                if (!normalizedClue) {
-                    return;
-                }
-
-                if (
-                    identityText === normalizedClue ||
-                    identityText.includes(normalizedClue)
-                ) {
-                    bestScore = Math.max(bestScore, 100);
-                    directMatch = true;
-                    return;
-                }
-
-                const fuzzyScore = calculateFuzzyTokenSimilarity(
-                    identityText,
-                    normalizedClue
-                );
-
-                const directScore = calculateStringSimilarity(
-                    identityText,
-                    normalizedClue
-                );
-
-                bestScore = Math.max(
-                    bestScore,
-                    fuzzyScore,
-                    Math.round(directScore * 0.9)
-                );
-            });
-
-            return {
-                family: profile.family,
-                score: bestScore,
-                directMatch: directMatch
-            };
-        })
-        .sort(function (a, b) {
-            return b.score - a.score;
-        });
-
-    const best = results[0];
-    const second = results[1];
-
-    if (!best) {
-        return null;
-    }
-
-    const margin = second
-        ? best.score - second.score
-        : best.score;
-
-    if (
-        best.directMatch ||
-        (best.score >= 74 && margin >= 4)
-    ) {
-        return best;
-    }
-
-    return null;
-}
-
-function calculateCatalogArticleScore(
-    searchName,
-    catalogItem,
-    detectedFamily
-) {
-
-    const articleName = catalogItem.searchText;
-
-    const searchIdentity = removeArticleColors(searchName);
-    const articleIdentity = removeArticleColors(articleName);
-
-    const identityScore = calculateFuzzyTokenSimilarity(
-        searchIdentity,
-        articleIdentity
-    );
-
-    const fullTokenScore = calculateFuzzyTokenSimilarity(
-        searchName,
-        articleName
-    );
-
-    const directScore = calculateStringSimilarity(
-        searchName,
-        articleName
-    );
-
-    const requestedColor = extractProductionColor(searchName);
-    const catalogColor = normalizeMatchText(catalogItem.color);
-
-    let colorScore = 60;
-
-    if (requestedColor) {
-        colorScore = catalogColor
-            ? calculateStringSimilarity(
-                requestedColor,
-                catalogColor
-            )
-            : calculateStringSimilarity(
-                requestedColor,
-                articleName
-            );
-    }
-
-    let score =
-        identityScore * 0.55 +
-        fullTokenScore * 0.25 +
-        directScore * 0.10 +
-        colorScore * 0.10;
-
-    if (
-        detectedFamily &&
-        catalogItem.family === detectedFamily.family
-    ) {
-        score += 10;
-    }
-
-    if (
-        searchName === articleName ||
-        searchName.includes(articleName) ||
-        articleName.includes(searchName)
-    ) {
-        score += 10;
-    }
-
-    if (!detectedFamily && identityScore < 65) {
-        score = Math.min(score, 34);
-    }
-
-    return Math.max(
-        0,
-        Math.min(100, Math.round(score))
-    );
-}
-
 function findBestCatalogProduct(productionProduct, catalog) {
 
-    const parsedName = prepareArticleSearchText(
+    const parsedName = normalizeMatchText(
         [
             productionProduct.product,
             productionProduct.variety,
@@ -3078,57 +2570,115 @@ function findBestCatalogProduct(productionProduct, catalog) {
             .join(" ")
     );
 
-    const originalName = prepareArticleSearchText(
+    const originalName = normalizeMatchText(
         productionProduct.original
     );
 
-    const parsedTokens = getUsefulArticleTokens(parsedName);
+    const searchName = originalName || parsedName;
 
-    const searchName = parsedTokens.length >= 2
-        ? parsedName
-        : originalName;
+    const detectedFamily = flowerFamilies
+    .map(function (item) {
+        return item.family;
+    })
+    .find(function (family) {
+
+        const normalizedFamily =
+            normalizeMatchText(family);
+
+        return (
+            normalizedFamily &&
+            searchName.includes(normalizedFamily)
+        );
+    });
 
     if (!searchName || !Array.isArray(catalog)) {
         return null;
     }
 
-    const detectedFamily = detectBestCatalogFamily(searchName);
-
     const familyCatalog = detectedFamily
-        ? (
-            lexiflorCatalogByFamily.get(
-                detectedFamily.family
-            ) || []
-        )
-        : catalog;
+    ? catalog.filter(function (item) {
+        return item.family === detectedFamily;
+    })
+    : catalog;
 
-    const candidates = familyCatalog
+const candidates = familyCatalog
         .map(function (catalogItem) {
+
+            const articleName = catalogItem.articleName;
+
+            let score = 0;
+
+            if (searchName === articleName) {
+
+                score = 100;
+
+            } else {
+
+                const directScore =
+                    calculateStringSimilarity(
+                        searchName,
+                        articleName
+                    );
+
+                const exactTokenScore =
+    calculateTokenSimilarity(
+        searchName,
+        articleName
+    );
+
+const fuzzyTokenScore =
+    calculateFuzzyTokenSimilarity(
+        searchName,
+        articleName
+    );
+
+score =
+    directScore * 0.15 +
+    exactTokenScore * 0.25 +
+    fuzzyTokenScore * 0.60;
+
+                if (
+                    searchName.includes(articleName) ||
+                    articleName.includes(searchName)
+                ) {
+                    score += 15;
+                }
+            }
+
             return {
-                product: catalogItem.articleName,
-                articleName: catalogItem.articleName,
+                product: articleName,
+                articleName: articleName,
                 family: catalogItem.family,
                 color: catalogItem.color,
                 variety: catalogItem.variety,
-                score: calculateCatalogArticleScore(
-                    searchName,
-                    catalogItem,
-                    detectedFamily
+                score: Math.min(
+                    100,
+                    Math.round(score)
                 )
             };
         })
         .sort(function (a, b) {
             return b.score - a.score;
         });
-
+console.table(
+    candidates.slice(0, 10).map(function(item) {
+        return {
+            Article: item.articleName,
+            Family: item.family,
+            Color: item.color,
+            Score: item.score
+        };
+    })
+);
     return {
-        detectedFamily: detectedFamily,
         best: candidates[0] || null,
         alternatives: candidates.slice(1, 4)
     };
 }
 
 function findInventoryMatches(products) {
+
+    console.log("Searching inventory matches...");
 
     if (
         !Array.isArray(products) ||
@@ -3138,6 +2688,12 @@ function findInventoryMatches(products) {
     }
 
     const catalog = lexiflorSearchCatalog;
+    console.log(
+    "CATALOG USED FOR SEARCH:",
+    catalog.length
+);
+    console.log("CATALOG OBJECTS:", catalog.length);
+console.log("FIRST CATALOG ITEM:", catalog[0]);
 
     const availableInventory = inventory.filter(function (item) {
 
@@ -3156,6 +2712,28 @@ function findInventoryMatches(products) {
             productionProduct,
             catalog
         );
+        console.log("OCR PRODUCT:", productionProduct);
+console.log("CATALOG RESULT:", catalogResult);
+
+console.log(
+    "BEST ARTICLE:",
+    catalogResult?.best?.articleName || "NONE"
+);
+
+console.log(
+    "BEST FAMILY:",
+    catalogResult?.best?.family || "NONE"
+);
+
+console.log(
+    "BEST COLOR:",
+    catalogResult?.best?.color || "NONE"
+);
+
+console.log(
+    "BEST SCORE:",
+    catalogResult?.best?.score || 0
+);
 
         if (
             !catalogResult ||
@@ -3165,46 +2743,129 @@ function findInventoryMatches(products) {
             return {
                 product:
                     productionProduct.product ||
-                    prepareArticleSearchText(
-                        productionProduct.original
-                    ) ||
+                    productionProduct.original ||
                     "UNRECOGNIZED PRODUCT",
-                articleName: "",
-                color: productionProduct.color || "",
-                confidence: catalogResult?.best?.score || 0,
+
+                color:
+                    productionProduct.color || "",
+
+                confidence:
+                    catalogResult?.best?.score || 0,
+
                 confidenceLevel: "REVIEW",
                 inventoryFound: false,
                 needsReview: true,
+
                 originalOcrLine:
                     productionProduct.original || "",
+
                 alternatives:
-                    catalogResult?.alternatives || []
+                    catalogResult
+                        ? catalogResult.alternatives.map(function (item) {
+                            return {
+                                product: item.product,
+                                color: "",
+                                quantity: "",
+                                caseNumber: "",
+                                confidence: item.score
+                            };
+                        })
+                        : []
             };
         }
 
         const recognizedArticle =
-            catalogResult.best.articleName;
+        catalogResult.best.articleName;
 
-        const recognizedFamily = resolveOperationalFamily(
-            recognizedArticle,
-            catalogResult.best.family
-        );
+        let recognizedFamily =
+    catalogResult.best.family;
 
-        const recognizedColor =
-            catalogResult.best.color ||
-            productionProduct.color ||
-            "";
+const recognizedArticleText =
+    normalizeMatchText(
+        catalogResult.best.articleName
+    );
 
+const operationalFamilyRules = [
+    {
+        family: "CUSHION POM",
+        names: ["CUSHION POM", "POM CUSHION"]
+    },
+    {
+        family: "MICRO POM",
+        names: ["MICRO POM", "POM MICRO"]
+    },
+    {
+        family: "DAISY POM",
+        names: ["DAISY POM", "POM DAISY"]
+    },
+    {
+        family: "SPRAY ROSE",
+        names: ["SPRAY ROSE", "ROSE SPRAY"]
+    },
+    {
+        family: "MINI HYDRANGEA",
+        names: ["MINI HYDRANGEA", "HYDRANGEA MINI"]
+    },
+    {
+        family: "DUSTY MILLER",
+        names: ["DUSTY MILLER"]
+    },
+    {
+        family: "MINI GREEN",
+        names: ["MINI GREEN"]
+    }
+];
+
+const operationalRule =
+    operationalFamilyRules.find(function (rule) {
+
+        return rule.names.some(function (name) {
+            return recognizedArticleText.includes(name);
+        });
+    });
+
+if (operationalRule) {
+    recognizedFamily = operationalRule.family;
+}
+
+
+         const recognizedColor =
+        catalogResult.best.color ||
+    productionProduct.color ||
+    "";
         const requestedColor = normalizeMatchText(
-            recognizedColor
-        );
-
+    recognizedColor
+);
+console.log(
+    "AVAILABLE INVENTORY PRODUCTS:",
+    availableInventory.map(function (item) {
+        return {
+            product: item.product,
+            normalized: normalizeMatchText(item.product),
+            color: item.color,
+            quantity: item.quantity,
+            status: item.status
+        };
+    })
+);
+console.log(
+    "AVAILABLE INVENTORY PRODUCTS:",
+    availableInventory.map(function (item) {
+        return {
+            product: item.product,
+            normalized: normalizeMatchText(item.product),
+            color: item.color,
+            quantity: item.quantity,
+            status: item.status
+        };
+    })
+);
         const matchingInventory = availableInventory
             .filter(function (item) {
                 return (
-                    normalizeMatchText(item.product) ===
-                    recognizedFamily
-                );
+    normalizeMatchText(item.product) ===
+    recognizedFamily
+);
             })
             .map(function (item) {
 
@@ -3226,58 +2887,95 @@ function findInventoryMatches(products) {
                 return b.colorScore - a.colorScore;
             });
 
-        const bestInventoryMatch = matchingInventory[0];
+console.log("RECOGNIZED ARTICLE:", recognizedArticle);
+console.log("RECOGNIZED FAMILY:", recognizedFamily);
+console.log("RECOGNIZED COLOR:", recognizedColor);
+console.log("INVENTORY MATCHES:", matchingInventory);
+        const bestInventoryMatch =
+            matchingInventory[0];
 
         if (!bestInventoryMatch) {
             return {
-                product:
-                    recognizedFamily || recognizedArticle,
-                articleName: recognizedArticle,
-                color: recognizedColor,
+                product: recognizedFamily || recognizedArticle,
+               color: recognizedColor,
+articleName: recognizedArticle,
                 confidence: catalogResult.best.score,
-                confidenceLevel: getConfidenceLevel(
-                    catalogResult.best.score
-                ),
+
+                confidenceLevel:
+                    getConfidenceLevel(
+                        catalogResult.best.score
+                    ),
+
                 inventoryFound: false,
-                needsReview: false,
+                needsReview: true,
+
                 originalOcrLine:
                     productionProduct.original || "",
+
                 alternatives:
-                    catalogResult.alternatives
+                    catalogResult.alternatives.map(function (item) {
+                        return {
+                            product: item.product,
+                            color: "",
+                            quantity: "",
+                            caseNumber: "",
+                            confidence: item.score
+                        };
+                    })
             };
         }
 
         const bestItem = bestInventoryMatch.item;
 
         return {
-            inventoryIndex: inventory.indexOf(bestItem),
+            inventoryIndex:
+                inventory.indexOf(bestItem),
+
             id: bestItem.id,
             product: bestItem.product,
             color: bestItem.color,
             quantity: bestItem.quantity,
             caseNumber: bestItem.caseNumber,
             status: bestItem.status,
-            articleName: recognizedArticle,
+
             requestedProduct:
                 productionProduct.product || "",
+
             requestedVariety:
                 productionProduct.variety || "",
-            requestedColor: recognizedColor,
+
+            requestedColor:
+                productionProduct.color || "",
+
             originalOcrLine:
                 productionProduct.original || "",
-            confidence: catalogResult.best.score,
-            confidenceLevel: getConfidenceLevel(
-                catalogResult.best.score
-            ),
+
+            confidence:
+                catalogResult.best.score,
+
+            confidenceLevel:
+                getConfidenceLevel(
+                    catalogResult.best.score
+                ),
+
             inventoryFound: true,
+
             needsReview:
-                catalogResult.best.score < 75,
+                catalogResult.best.score < 90,
+
             alternatives:
-                catalogResult.alternatives
+                catalogResult.alternatives.map(function (item) {
+                    return {
+                        product: item.product,
+                        color: "",
+                        quantity: "",
+                        caseNumber: "",
+                        confidence: item.score
+                    };
+                })
         };
     });
 }
-
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
 
     const sourceName = axerrioName.trim().toUpperCase();
