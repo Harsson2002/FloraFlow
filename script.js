@@ -1460,6 +1460,7 @@ async function startProductionAnalysis() {
 
     console.log("Production Lot:", lotNumber);
     console.log("Article Text:", ocrResult.articleText);
+    console.log("Color Text:", ocrResult.colorText);
 
 alert(
     "RAW LOT OCR:\n" +
