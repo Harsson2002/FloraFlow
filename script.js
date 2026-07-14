@@ -1619,6 +1619,26 @@ async function readProductionScreenshot() {
         img.onload = resolve;
         img.onerror = reject;
     });
+    const fullCanvas = document.createElement("canvas");
+const fullCtx = fullCanvas.getContext("2d");
+
+fullCanvas.width = img.width;
+fullCanvas.height = img.height;
+
+fullCtx.drawImage(img, 0, 0);
+
+const fullOcrResult = await Tesseract.recognize(
+    fullCanvas,
+    "eng",
+    {
+        logger: function (m) {
+            console.log("FULL SCREEN OCR:", m);
+        }
+    }
+);
+
+console.log("FULL SCREEN TEXT:", fullOcrResult.data.text);
+console.log("FULL SCREEN WORDS:", fullOcrResult.data.words);
 
     // =========================
     // LOT CROP
