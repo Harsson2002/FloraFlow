@@ -264,6 +264,26 @@ window.flowerBrain = {
 
         RED: "RED"
     },
+    colorCodes: {
+    AN: "ANTIQUE",
+    BL: "BLUE",
+    BP: "BLUE PURPLE",
+    BR: "BROWN",
+    BU: "BURGUNDY",
+    BZ: "BRONZE",
+    CR: "CREAM",
+    DPI: "DARK PINK",
+    GE: "YELLOW",
+    GO: "YELLOW ORANGE",
+    GOL: "GOLD",
+    GR: "GREEN",
+
+    // Códigos especiales
+    ASST: null,
+    GM: null,
+    DV: null,
+    "..": null
+},
 
     ignoredWords: [
         "STEM",
@@ -382,4 +402,15 @@ window.flowerBrain = {
         };
     }
 
+};
+
+window.flowerBrain.getColorFromCode = function (code) {
+
+    if (!code) {
+        return null;
+    }
+
+    const cleanCode = code.toUpperCase().trim();
+
+    return this.colorCodes[cleanCode] || null;
 };
