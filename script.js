@@ -2536,6 +2536,8 @@ function findInventoryMatches(products) {
     }
 
     const catalog = buildProductCatalogFromLexiflor();
+    console.log("CATALOG OBJECTS:", catalog.length);
+console.log("FIRST CATALOG ITEM:", catalog[0]);
 
     const availableInventory = inventory.filter(function (item) {
 
@@ -2554,6 +2556,8 @@ function findInventoryMatches(products) {
             productionProduct,
             catalog
         );
+        console.log("OCR PRODUCT:", productionProduct);
+console.log("CATALOG RESULT:", catalogResult);
 
         if (
             !catalogResult ||
