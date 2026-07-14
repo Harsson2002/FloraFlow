@@ -296,6 +296,33 @@ loadInventoryFromSupabase();
 loadHistoryFromSupabase();
 loadLexiflorCatalog();
 loadFlowerFamilies();
+setTimeout(function () {
+
+    alert(
+        "CERAERA → " +
+        findFamilyFromAlias("CERAERA")
+    );
+
+}, 1500);
+function findFamilyFromAlias(word) {
+
+    const search = String(word || "")
+        .trim()
+        .toUpperCase();
+
+    for (const family of flowerFamilies) {
+
+        if (family.family === search) {
+            return family.family;
+        }
+
+        if (family.aliases.includes(search)) {
+            return family.family;
+        }
+    }
+
+    return null;
+}
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
