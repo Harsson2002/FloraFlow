@@ -169,6 +169,51 @@ let rotatingIndex = null;
 let showRemoved = false;
 let learnedProductAliases =
     JSON.parse(localStorage.getItem("learnedProductAliases")) || {};
+    let lexiflorCatalog = [];
+
+async function loadLexiflorCatalog() {
+
+    const pageSize = 1000;
+    let start = 0;
+    let allArticles = [];
+
+    while (true) {
+
+        const { data, error } = await supabaseClient
+            .from("lexiflor_articles")
+            .select("*")
+            .range(start, start + pageSize - 1);
+
+        if (error) {
+            alert(
+                "Error loading Lexiflor catalog: " +
+                error.message
+            );
+            console.error(error);
+            return;
+        }
+
+        if (!data || data.length === 0) {
+            break;
+        }
+
+        allArticles = allArticles.concat(data);
+
+        if (data.length < pageSize) {
+            break;
+        }
+
+        start += pageSize;
+    }
+
+    lexiflorCatalog = allArticles;
+
+    alert(
+        "Lexiflor catalog loaded:\n\n" +
+        lexiflorCatalog.length +
+        " articles"
+    );
+}
 
 const users = [
     "Harsson",
@@ -205,6 +250,7 @@ userSelect.addEventListener("change", function () {
 
 loadInventoryFromSupabase();
 loadHistoryFromSupabase();
+loadLexiflorCatalog();
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
