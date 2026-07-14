@@ -2536,13 +2536,23 @@ function getOperationalFamilyRules() {
             names: ["SPRAY CARNATION", "CARNATION SPRAY"]
         },
         {
-            family: "MINI HYDRANGEA",
-            names: ["MINI HYDRANGEA", "HYDRANGEA MINI"]
-        },
-        {
             family: "DUSTY MILLER",
             names: ["DUSTY MILLER"]
         },
+        {
+    family: "EUCALYPTUS",
+    names: [
+        "EUCALYPTUS",
+        "EUCALYPTUS SILVER DOLLAR"
+    ]
+},
+{
+    family: "CUSHION POM",
+    names: [
+        "POM CUSHION",
+        "CUSHION POM"
+    ]
+},
     {
         family: "MINI HYDRANGEA",
         names: [
