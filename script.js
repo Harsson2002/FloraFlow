@@ -1639,6 +1639,18 @@ const fullOcrResult = await Tesseract.recognize(
 
 console.log("FULL SCREEN TEXT:", fullOcrResult.data.text);
 console.log("FULL SCREEN WORDS:", fullOcrResult.data.words);
+alert(
+    "FULL SCREEN WORDS:\n\n" +
+    (
+        Array.isArray(fullOcrResult.data.words)
+            ? JSON.stringify(
+                fullOcrResult.data.words.slice(0, 20),
+                null,
+                2
+            )
+            : String(fullOcrResult.data.words)
+    )
+);
 
     // =========================
     // LOT CROP
