@@ -470,9 +470,9 @@ window.flowerBrain.cleanOCRText = function (line) {
 
         // Errores frecuentes de medidas
         .replace(/\b60AM\b/g, "60CM")
+        .replace(/\b70AM\b/g, "70CM")
         .replace(/\b50EM\b/g, "50CM")
         .replace(/\b55EM\b/g, "55CM")
-        .replace(/\b70AM\b/g, "70CM")
 
         // Quitar caracteres basura del OCR
         .replace(/[\[\]{}|]/g, " ")
@@ -482,17 +482,20 @@ window.flowerBrain.cleanOCRText = function (line) {
         .replace(/\s+/g, " ")
         .trim();
 };
+
 window.flowerBrain.extractColorCode = function (line) {
 
     const cleanLine = String(line || "")
         .toUpperCase()
         .trim();
 
-    const words = cleanLine.split(/\s+/);
+    const words = cleanLine
+        .split(/\s+/)
+        .filter(Boolean);
 
     if (words.length === 0) {
         return {
-            articleText: cleanLine,
+            articleText: "",
             colorCode: null
         };
     }
@@ -519,51 +522,12 @@ window.flowerBrain.extractColorCode = function (line) {
         colorCode: null
     };
 };
-    window.flowerBrain.fixCommonOcrErrors = function (line) {
-
-    let text = String(line || "").toUpperCase();
-
-    // Medidas
-    text = text
-        .replace(/\b60AM\b/g, "60CM")
-        .replace(/\b70AM\b/g, "70CM")
-        .replace(/\b50EM\b/g, "50CM")
-        .replace(/\b55EM\b/g, "55CM");
-
-    // Errores reales detectados en FloraFlow
-    text = text
-        .replace(/\bJASTER\b/g, "ASTER")
-        .replace(/\bJPOM\b/g, "POM")
-        .replace(/\bPITOSPORUM\b/g, "PITTOSPORUM")
-        .replace(/\bPRRROSEORUM\b/g, "PITTOSPORUM");
-
-    return text;
-};
-
-    const possibleCode = words[words.length - 1];
-
-    if (
-        this.colorCodes &&
-        Object.prototype.hasOwnProperty.call(
-            this.colorCodes,
-            possibleCode
-        )
-    ) {
-        words.pop();
-
-        return {
-            articleText: words.join(" ").trim(),
-            colorCode: possibleCode
-        };
-    }
-        return {
-        articleText: cleanLine,
-        colorCode: null
-    };
 
 window.flowerBrain.fixCommonOcrErrors = function (line) {
 
-    let text = String(line || "").toUpperCase();
+    let text = String(line || "")
+        .toUpperCase()
+        .trim();
 
     text = text
         .replace(/\b60AM\b/g, "60CM")
