@@ -1775,6 +1775,12 @@ async function analyzeProduction() {
     await startProductionAnalysis();
 }
 async function startProductionAnalysis() {
+    alert(
+    "Catalog loaded: " +
+    (Array.isArray(lexiflorCatalog)
+        ? lexiflorCatalog.length
+        : 0)
+);
     alert("ANALYZE STARTED");
 
     const ocrResult = await readProductionScreenshot();
