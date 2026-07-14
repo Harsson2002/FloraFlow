@@ -463,3 +463,59 @@ window.flowerBrain.getColorFromOrder = function (articleName, colorCode) {
         source: "NO_COLOR"
     };
 };
+window.flowerBrain.cleanOCRText = function (line) {
+
+    return String(line || "")
+        .toUpperCase()
+
+        // Errores frecuentes de medidas
+        .replace(/\b60AM\b/g, "60CM")
+        .replace(/\b50EM\b/g, "50CM")
+        .replace(/\b55EM\b/g, "55CM")
+        .replace(/\b70AM\b/g, "70CM")
+
+        // Quitar caracteres basura del OCR
+        .replace(/[\[\]{}|]/g, " ")
+        .replace(/_/g, " ")
+
+        // Limpiar espacios
+        .replace(/\s+/g, " ")
+        .trim();
+};
+window.flowerBrain.extractColorCode = function (line) {
+
+    const cleanLine = String(line || "")
+        .toUpperCase()
+        .trim();
+
+    const words = cleanLine.split(/\s+/);
+
+    if (words.length === 0) {
+        return {
+            articleText: cleanLine,
+            colorCode: null
+        };
+    }
+
+    const possibleCode = words[words.length - 1];
+
+    if (
+        this.colorCodes &&
+        Object.prototype.hasOwnProperty.call(
+            this.colorCodes,
+            possibleCode
+        )
+    ) {
+        words.pop();
+
+        return {
+            articleText: words.join(" ").trim(),
+            colorCode: possibleCode
+        };
+    }
+
+    return {
+        articleText: cleanLine,
+        colorCode: null
+    };
+};

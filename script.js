@@ -1720,7 +1720,12 @@ function normalizeProductionText(text) {
     return lines.map(normalizeProductionLine);
 }
 function normalizeProductionLine(line) {
+        line = window.flowerBrain.cleanOCRText(line);
+        const colorInfo =
+    window.flowerBrain.extractColorCode(line);
 
+line = colorInfo.articleText;
+line = window.flowerBrain.fixCommonOcrErrors(line);
     if (
         !window.flowerBrain ||
         typeof window.flowerBrain.parseLine !== "function"
