@@ -2599,6 +2599,25 @@ console.log("FIRST CATALOG ITEM:", catalog[0]);
         );
         console.log("OCR PRODUCT:", productionProduct);
 console.log("CATALOG RESULT:", catalogResult);
+console.log(
+    "BEST ARTICLE:",
+    catalogResult?.best?.articleName || "NONE"
+);
+
+console.log(
+    "BEST FAMILY:",
+    catalogResult?.best?.family || "NONE"
+);
+
+console.log(
+    "BEST COLOR:",
+    catalogResult?.best?.color || "NONE"
+);
+
+console.log(
+    "BEST SCORE:",
+    catalogResult?.best?.score || 0
+);
 
         if (
             !catalogResult ||
