@@ -1720,23 +1720,24 @@ const lotResult = await Tesseract.recognize(
             }
         }
     );
+    const colorResult = await Tesseract.recognize(
+        colorCanvas,
+        "eng",
+        {
+            logger: function (m) {
+                console.log("COLOR OCR:", m);
+            },
+            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ.",
+            tessedit_pageseg_mode: 6
+        }
+    );
 
     return {
-    lotText: lotResult.data.text,
-    articleText: articleResult.data.text,
-    colorText: colorResult.data.text
-};
-const colorResult = await Tesseract.recognize(
-    colorCanvas,
-    "eng",
-    {
-        logger: function (m) {
-            console.log("COLOR OCR:", m);
-        },
-        tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ.",
-        tessedit_pageseg_mode: 6
-    }
-);
+        lotText: lotResult.data.text,
+        articleText: articleResult.data.text,
+        colorText: colorResult.data.text
+    };
+}
 function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
