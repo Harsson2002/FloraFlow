@@ -211,6 +211,10 @@ async function loadFlowerFamilies() {
         flowerFamilies.length +
         " families"
     );
+    alert(
+    "CERAERA → " +
+    findFamilyFromAlias("CERAERA")
+);
 }
 
     let lexiflorCatalog = [];
