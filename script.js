@@ -1652,7 +1652,7 @@ async function readProductionScreenshot() {
 
     const articleX = img.width * 0.295;
     const articleY = img.height * 0.255;
-    const articleWidth = img.width * 0.085;
+    const articleWidth = img.width * 0.14;
     const articleHeight = img.height * 0.30;
 
     articleCanvas.width = articleWidth;
@@ -1673,28 +1673,6 @@ async function readProductionScreenshot() {
     // COLOR CROP
     // =========================
 
-    const colorCanvas = document.createElement("canvas");
-    const colorCtx = colorCanvas.getContext("2d");
-
-    const colorX = img.width * 0.255;
-    const colorY = img.height * 0.255;
-    const colorWidth = img.width * 0.035;
-    const colorHeight = img.height * 0.30;
-
-    colorCanvas.width = colorWidth;
-    colorCanvas.height = colorHeight;
-
-    colorCtx.drawImage(
-        img,
-        colorX,
-        colorY,
-        colorWidth,
-        colorHeight,
-        0,
-        0,
-        colorWidth,
-        colorHeight
-    );
 
     window.lastLotCrop = lotCanvas.toDataURL();
     window.lastOcrCrop = articleCanvas.toDataURL();
@@ -1720,24 +1698,12 @@ const lotResult = await Tesseract.recognize(
             }
         }
     );
-    const colorResult = await Tesseract.recognize(
-        colorCanvas,
-        "eng",
-        {
-            logger: function (m) {
-                console.log("COLOR OCR:", m);
-            },
-            tessedit_char_whitelist: "ABCDEFGHIJKLMNOPQRSTUVWXYZ.",
-            tessedit_pageseg_mode: 6
-        }
-    );
-
     return {
-        lotText: lotResult.data.text,
-        articleText: articleResult.data.text,
-        colorText: colorResult.data.text
-    };
+    lotText: lotResult.data.text,
+    articleText: articleResult.data.text
+};
 }
+
 function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
