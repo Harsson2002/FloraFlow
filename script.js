@@ -1670,6 +1670,10 @@ async function startProductionAnalysis() {
 
     const productionOrderNumber =
     extractProductionLot(ocrResult.lotText);
+    alert(
+    "ORDER DETECTED: " +
+    (productionOrderNumber || "NOT FOUND")
+);
 
     console.log(
     "Production Order:",
@@ -1680,6 +1684,14 @@ async function startProductionAnalysis() {
 
 console.log("RAW ARTICLE OCR:");
 console.log(ocrResult.articleText);
+const products = normalizeProductionText(
+    ocrResult.articleText
+);
+
+alert(
+    "PRODUCTS DETECTED: " +
+    products.length
+);
 
     const matches = findInventoryMatches(products);
 
