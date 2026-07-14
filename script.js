@@ -2669,24 +2669,49 @@ const recognizedArticleText =
         catalogResult.best.articleName
     );
 
-const operationalFamilies = [
-    "CUSHION POM",
-    "MICRO POM",
-    "DAISY POM",
-    "SPRAY ROSE",
-    "MINI HYDRANGEA",
-    "DUSTY MILLER",
-    "MINI GREEN"
+const operationalFamilyRules = [
+    {
+        family: "CUSHION POM",
+        names: ["CUSHION POM", "POM CUSHION"]
+    },
+    {
+        family: "MICRO POM",
+        names: ["MICRO POM", "POM MICRO"]
+    },
+    {
+        family: "DAISY POM",
+        names: ["DAISY POM", "POM DAISY"]
+    },
+    {
+        family: "SPRAY ROSE",
+        names: ["SPRAY ROSE", "ROSE SPRAY"]
+    },
+    {
+        family: "MINI HYDRANGEA",
+        names: ["MINI HYDRANGEA", "HYDRANGEA MINI"]
+    },
+    {
+        family: "DUSTY MILLER",
+        names: ["DUSTY MILLER"]
+    },
+    {
+        family: "MINI GREEN",
+        names: ["MINI GREEN"]
+    }
 ];
 
-const operationalFamily =
-    operationalFamilies.find(function (family) {
-        return recognizedArticleText.includes(family);
+const operationalRule =
+    operationalFamilyRules.find(function (rule) {
+
+        return rule.names.some(function (name) {
+            return recognizedArticleText.includes(name);
+        });
     });
 
-if (operationalFamily) {
-    recognizedFamily = operationalFamily;
+if (operationalRule) {
+    recognizedFamily = operationalRule.family;
 }
+
 
          const recognizedColor =
         catalogResult.best.color ||
