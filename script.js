@@ -247,11 +247,6 @@ async function loadLexiflorCatalog() {
 
     lexiflorCatalog = allArticles;
 
-    alert(
-        "Lexiflor catalog loaded:\n\n" +
-        lexiflorCatalog.length +
-        " articles"
-    );
 }
 
 const users = [
