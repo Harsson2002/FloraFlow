@@ -1788,12 +1788,19 @@ async function analyzeProduction() {
     await startProductionAnalysis();
 }
 async function startProductionAnalysis() {
-    alert(
-    "Catalog loaded: " +
-    (Array.isArray(lexiflorCatalog)
-        ? lexiflorCatalog.length
-        : 0)
-);
+    console.log("Before loading:", lexiflorCatalog.length);
+
+if (!lexiflorCatalog || lexiflorCatalog.length === 0) {
+
+    console.log("Loading catalog...");
+
+    await loadLexiflorCatalog();
+
+    console.log(
+        "After loading:",
+        lexiflorCatalog.length
+    );
+}
     alert("ANALYZE STARTED");
 
     const ocrResult = await readProductionScreenshot();
