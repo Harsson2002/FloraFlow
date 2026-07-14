@@ -2698,7 +2698,11 @@ console.log(
             .sort(function (a, b) {
                 return b.colorScore - a.colorScore;
             });
-
+            
+console.log("RECOGNIZED ARTICLE:", recognizedArticle);
+console.log("RECOGNIZED FAMILY:", recognizedFamily);
+console.log("RECOGNIZED COLOR:", recognizedColor);
+console.log("INVENTORY MATCHES:", matchingInventory);
         const bestInventoryMatch =
             matchingInventory[0];
 
