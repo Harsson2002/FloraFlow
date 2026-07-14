@@ -1650,10 +1650,10 @@ async function readProductionScreenshot() {
     const articleCanvas = document.createElement("canvas");
     const articleCtx = articleCanvas.getContext("2d");
 
-    const articleX = img.width * 0.245;      // ← Mover izquierda/derecha
-    const articleY = img.height * 0.255;     // ↑↓ Mover arriba/abajo
-    const articleWidth = img.width * 0.135;  // ↔ Ancho del recorte
-    const articleHeight = img.height * 0.30; // ↕ Alto del recorte
+    const articleX = img.width * 0.185;
+    const articleY = img.height * 0.255;
+    const articleWidth = img.width * 0.175;
+    const articleHeight = img.height * 0.30;
 
     articleCanvas.width = articleWidth;
     articleCanvas.height = articleHeight;
