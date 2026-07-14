@@ -1666,6 +1666,7 @@ async function startProductionAnalysis() {
     alert("ANALYZE STARTED");
 
     const ocrResult = await readProductionScreenshot();
+    alert("OCR FINISHED");
 
     const productionOrderNumber =
     extractProductionLot(ocrResult.lotText);
