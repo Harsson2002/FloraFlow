@@ -2145,8 +2145,15 @@ function normalizeProductionText(text) {
     console.log("Normalizing production text...");
 
     const lines = String(text || "")
-        .split("\n")
-        .map(cleanProductionLine)
+    .split("\n")
+    .filter(function (rawLine) {
+
+        const raw = normalizeMatchText(rawLine);
+
+        return !/\b(SHEET|PAPER|SL CLEAR|NONWOVEN|SLEEVE|BOX|BOXES|CARTON|LABEL|FLOWER FOOD|FLOWERFOOD|PRESERVATIVE|CHRYSAL|FLORALIFE)\b/
+            .test(raw);
+    })
+    .map(cleanProductionLine)
         .filter(function (line) {
 
             const cleanLine = normalizeMatchText(line);
