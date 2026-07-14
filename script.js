@@ -278,6 +278,9 @@ async function loadLexiflorCatalog() {
 
     lexiflorCatalog = allArticles;
 
+    console.log("Catalog loaded:", allArticles.length);
+console.log(allArticles.slice(0,3));
+
 }
 
 const users = [
@@ -313,10 +316,20 @@ userSelect.addEventListener("change", function () {
     localStorage.setItem("currentUser", currentUser);
 });
 
-loadInventoryFromSupabase();
-loadHistoryFromSupabase();
-loadLexiflorCatalog();
-loadFlowerFamilies();
+async function initializeFloraFlow() {
+
+    await loadInventoryFromSupabase();
+    await loadHistoryFromSupabase();
+    await loadFlowerFamilies();
+    await loadLexiflorCatalog();
+
+    console.log(
+        "FloraFlow ready. Catalog:",
+        lexiflorCatalog.length
+    );
+}
+
+initializeFloraFlow();
 
 function findFamilyFromAlias(word) {
 
