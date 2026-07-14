@@ -240,6 +240,7 @@ async function loadLexiflorArticles() {
 }
 
     let lexiflorCatalog = [];
+    let lexiflorSearchCatalog = [];
 
 async function loadLexiflorCatalog() {
     console.log("ENTERING loadLexiflorCatalog");
@@ -278,6 +279,42 @@ async function loadLexiflorCatalog() {
     }
 
     lexiflorCatalog = allArticles;
+    lexiflorSearchCatalog = lexiflorCatalog
+    .map(function (item) {
+
+        const articleName =
+            normalizeMatchText(item.article_name);
+
+        if (!articleName) {
+            return null;
+        }
+
+        return {
+            product: articleName,
+            articleName: articleName,
+
+            family:
+                normalizeMatchText(
+                    item.proposed_family
+                ),
+
+            color:
+                normalizeMatchText(
+                    item.proposed_color
+                ),
+
+            variety:
+                normalizeMatchText(
+                    item.proposed_variety
+                )
+        };
+    })
+    .filter(Boolean);
+
+console.log(
+    "SEARCH CATALOG READY:",
+    lexiflorSearchCatalog.length
+);
     console.log(
     "CATALOG SIZE:",
     lexiflorCatalog.length
@@ -2535,7 +2572,11 @@ function findInventoryMatches(products) {
         return [];
     }
 
-    const catalog = buildProductCatalogFromLexiflor();
+    const catalog = lexiflorSearchCatalog;
+    console.log(
+    "CATALOG USED FOR SEARCH:",
+    catalog.length
+);
     console.log("CATALOG OBJECTS:", catalog.length);
 console.log("FIRST CATALOG ITEM:", catalog[0]);
 
