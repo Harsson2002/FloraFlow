@@ -1960,15 +1960,65 @@ const lotResult = await Tesseract.recognize(
     articleText: articleResult.data.text
 };
 }
-
 function normalizeProductionText(text) {
 
     console.log("Normalizing production text...");
 
-    const lines = text
+    const lines = String(text || "")
         .split("\n")
         .map(cleanProductionLine)
-        .filter(line => line !== "");
+        .filter(function (line) {
+
+            const cleanLine = normalizeMatchText(line);
+
+            if (!cleanLine) {
+                return false;
+            }
+
+            if (cleanLine.includes("PRODUCTION ORDER")) {
+                return false;
+            }
+
+            if (cleanLine.length < 5) {
+                return false;
+            }
+
+            const hasKnownFamily = flowerFamilies.some(function (item) {
+
+                const family = normalizeMatchText(item.family);
+
+                if (
+                    family &&
+                    cleanLine.includes(family)
+                ) {
+                    return true;
+                }
+
+                return item.aliases.some(function (alias) {
+
+                    const normalizedAlias =
+                        normalizeMatchText(alias);
+
+                    return (
+                        normalizedAlias &&
+                        cleanLine.includes(normalizedAlias)
+                    );
+                });
+            });
+
+            const hasMeasurement =
+                /\b\d{2,3}\s*CM\b/.test(cleanLine);
+
+            const hasKnownColor =
+                /\b(WHITE|YELLOW|PINK|RED|ORANGE|PURPLE|GREEN|BLUE|CREAM|LAVENDER|NOVELTY)\b/
+                    .test(cleanLine);
+
+            return (
+                hasKnownFamily ||
+                hasMeasurement ||
+                hasKnownColor
+            );
+        });
 
     return lines.map(normalizeProductionLine);
 }
