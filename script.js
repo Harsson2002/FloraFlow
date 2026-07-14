@@ -1663,6 +1663,7 @@ async function analyzeProduction() {
     await startProductionAnalysis();
 }
 async function startProductionAnalysis() {
+    alert("ANALYZE STARTED");
 
     const ocrResult = await readProductionScreenshot();
 
