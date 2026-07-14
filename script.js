@@ -329,6 +329,74 @@ function findFamilyFromAlias(word) {
 
     return null;
 }
+function replaceFamilyAliasesInLine(line) {
+
+    let result = String(line || "")
+        .trim()
+        .toUpperCase();
+
+    const aliasCandidates = [];
+
+    flowerFamilies.forEach(function (item) {
+
+        const familyName = String(item.family || "")
+            .trim()
+            .toUpperCase();
+
+        if (!familyName) {
+            return;
+        }
+
+        aliasCandidates.push({
+            alias: familyName,
+            family: familyName
+        });
+
+        const aliases = Array.isArray(item.aliases)
+            ? item.aliases
+            : String(item.aliases || "").split(",");
+
+        aliases.forEach(function (alias) {
+
+            const cleanAlias = String(alias || "")
+                .trim()
+                .toUpperCase();
+
+            if (cleanAlias) {
+                aliasCandidates.push({
+                    alias: cleanAlias,
+                    family: familyName
+                });
+            }
+        });
+    });
+
+    aliasCandidates.sort(function (a, b) {
+        return b.alias.length - a.alias.length;
+    });
+
+    aliasCandidates.forEach(function (candidate) {
+
+        const escapedAlias = candidate.alias.replace(
+            /[.*+?^${}()|[\]\\]/g,
+            "\\$&"
+        );
+
+        const aliasPattern = new RegExp(
+            "\\b" + escapedAlias + "\\b",
+            "g"
+        );
+
+        result = result.replace(
+            aliasPattern,
+            candidate.family
+        );
+    });
+
+    return result
+        .replace(/\s+/g, " ")
+        .trim();
+}
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
@@ -1881,18 +1949,7 @@ function normalizeProductionLine(line) {
 
 line = colorInfo.articleText;
 line = window.flowerBrain.fixCommonOcrErrors(line);
-const words = line.split(/\s+/);
-
-for (let i = 0; i < words.length; i++) {
-
-    const family = findFamilyFromAlias(words[i]);
-
-    if (family) {
-        words[i] = family;
-    }
-}
-
-line = words.join(" ");
+line = replaceFamilyAliasesInLine(line);
     if (
         !window.flowerBrain ||
         typeof window.flowerBrain.parseLine !== "function"
