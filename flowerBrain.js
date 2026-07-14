@@ -463,4 +463,16 @@ window.flowerBrain.getColorFromOrder = function (articleName, colorCode) {
         source: "NO_COLOR"
     };
 };
-alert("FLOWER BRAIN CARGADO");
+setTimeout(function () {
+
+    const result = window.flowerBrain.getColorFromOrder(
+        "SPRAY ROSE RED 55cm",
+        "ASST"
+    );
+
+    alert(
+        "Color: " + result.color +
+        "\nSource: " + result.source
+    );
+
+}, 1000);
