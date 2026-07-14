@@ -1666,7 +1666,33 @@ async function readProductionScreenshot() {
         articleWidth,
         articleHeight
     );
+    // =========================
+    // COLOR CROP
+    // =========================
 
+    const colorCanvas = document.createElement("canvas");
+    const colorCtx = colorCanvas.getContext("2d");
+
+    const colorX = img.width * 0.255;
+    const colorY = img.height * 0.255;
+    const colorWidth = img.width * 0.035;
+    const colorHeight = img.height * 0.30;
+
+    colorCanvas.width = colorWidth;
+    colorCanvas.height = colorHeight;
+
+    colorCtx.drawImage(
+        img,
+        colorX,
+        colorY,
+        colorWidth,
+        colorHeight,
+        0,
+        0,
+        colorWidth,
+        colorHeight
+    );
+    
     window.lastLotCrop = lotCanvas.toDataURL();
     window.lastOcrCrop = articleCanvas.toDataURL();
 
