@@ -324,11 +324,15 @@ function findFamilyFromAlias(word) {
 }
 function replaceFamilyAliasesInLine(line) {
 
-    let result = String(line || "")
+    const originalLine = String(line || "")
         .trim()
         .toUpperCase();
 
-    const aliasCandidates = [];
+    if (!originalLine || !Array.isArray(flowerFamilies)) {
+        return originalLine;
+    }
+
+    const candidates = [];
 
     flowerFamilies.forEach(function (item) {
 
@@ -340,53 +344,75 @@ function replaceFamilyAliasesInLine(line) {
             return;
         }
 
-        aliasCandidates.push({
-            alias: familyName,
-            family: familyName
-        });
-
         const aliases = Array.isArray(item.aliases)
             ? item.aliases
             : String(item.aliases || "").split(",");
 
-        aliases.forEach(function (alias) {
+        const allNames = [
+            familyName,
+            ...aliases
+        ];
+
+        allNames.forEach(function (alias) {
 
             const cleanAlias = String(alias || "")
                 .trim()
                 .toUpperCase();
 
-            if (cleanAlias) {
-                aliasCandidates.push({
+            if (!cleanAlias) {
+                return;
+            }
+
+            const escapedAlias = cleanAlias.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
+            const pattern = new RegExp(
+                "\\b" + escapedAlias + "\\b",
+                "i"
+            );
+
+            const match = originalLine.match(pattern);
+
+            if (match) {
+                candidates.push({
                     alias: cleanAlias,
-                    family: familyName
+                    family: familyName,
+                    index: match.index,
+                    length: cleanAlias.length
                 });
             }
         });
     });
 
-    aliasCandidates.sort(function (a, b) {
-        return b.alias.length - a.alias.length;
+    if (candidates.length === 0) {
+        return originalLine;
+    }
+
+    candidates.sort(function (a, b) {
+
+        if (b.length !== a.length) {
+            return b.length - a.length;
+        }
+
+        return a.index - b.index;
     });
 
-    aliasCandidates.forEach(function (candidate) {
+    const bestMatch = candidates[0];
 
-        const escapedAlias = candidate.alias.replace(
-            /[.*+?^${}()|[\]\\]/g,
-            "\\$&"
-        );
+    const escapedBestAlias = bestMatch.alias.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&"
+    );
 
-        const aliasPattern = new RegExp(
-            "\\b" + escapedAlias + "\\b",
-            "g"
-        );
+    const bestPattern = new RegExp(
+        "\\b" + escapedBestAlias + "\\b",
+        "i"
+    );
 
-        result = result.replace(
-            aliasPattern,
-            candidate.family
-        );
-    });
-
-    return result
+    return originalLine
+        .replace(bestPattern, bestMatch.family)
         .replace(/\s+/g, " ")
         .trim();
 }
