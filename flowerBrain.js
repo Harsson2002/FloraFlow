@@ -414,3 +414,52 @@ window.flowerBrain.getColorFromCode = function (code) {
 
     return this.colorCodes[cleanCode] || null;
 };
+window.flowerBrain.getColorFromOrder = function (articleName, colorCode) {
+
+    const articleText = String(articleName || "")
+        .toUpperCase()
+        .trim();
+
+    const words = articleText.split(/\s+/);
+
+    // 1. Primero busca colores de dos palabras en el nombre
+    for (let i = 0; i < words.length - 1; i++) {
+
+        const twoWordColor =
+            `${words[i]} ${words[i + 1]}`;
+
+        if (this.colorAliases[twoWordColor]) {
+            return {
+                color: this.colorAliases[twoWordColor],
+                source: "ARTICLE_NAME"
+            };
+        }
+    }
+
+    // 2. Después busca colores de una palabra en el nombre
+    for (let i = 0; i < words.length; i++) {
+
+        if (this.colorAliases[words[i]]) {
+            return {
+                color: this.colorAliases[words[i]],
+                source: "ARTICLE_NAME"
+            };
+        }
+    }
+
+    // 3. Si el nombre no tiene color, usa el código
+    const colorFromCode = this.getColorFromCode(colorCode);
+
+    if (colorFromCode) {
+        return {
+            color: colorFromCode,
+            source: "COLOR_CODE"
+        };
+    }
+
+    // 4. Si no existe un color confiable
+    return {
+        color: null,
+        source: "NO_COLOR"
+    };
+};
