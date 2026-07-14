@@ -2575,7 +2575,7 @@ function findBestCatalogProduct(productionProduct, catalog) {
     );
 
     const searchName = originalName || parsedName;
-    
+
     const detectedFamily = flowerFamilies
     .map(function (item) {
         return item.family;
@@ -2714,6 +2714,7 @@ console.log("FIRST CATALOG ITEM:", catalog[0]);
         );
         console.log("OCR PRODUCT:", productionProduct);
 console.log("CATALOG RESULT:", catalogResult);
+
 console.log(
     "BEST ARTICLE:",
     catalogResult?.best?.articleName || "NONE"
