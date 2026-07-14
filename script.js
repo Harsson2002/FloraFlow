@@ -1475,6 +1475,7 @@ async function startProductionAnalysis() {
 console.log("RAW ARTICLE OCR:");
 console.log(ocrResult.articleText);
 
+alert("ANTES DE NORMALIZAR");
     const products = normalizeProductionText(
         ocrResult.articleText
     );
