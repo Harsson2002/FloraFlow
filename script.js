@@ -2488,22 +2488,22 @@ function calculateFuzzyTokenSimilarity(searchText, catalogText) {
             .split(/\s+/)
             .filter(function (token) {
 
-                if (!token) {
-                    return false;
-                }
+               // Ignorar longitudes y lecturas incorrectas de longitudes
+if (/^\d+$/.test(token)) {
+    return false;
+}
 
-                // La longitud no decide el producto
-                if (/^\d+$/.test(token)) {
-                    return false;
-                }
+if (/^\d{2,3}(CM|AM|MM)$/.test(token)) {
+    return false;
+}
 
-                if (/^\d+CM$/.test(token)) {
-                    return false;
-                }
+if (/^(CM|MM)$/.test(token)) {
+    return false;
+}
 
-                if (token === "CM") {
-                    return false;
-                }
+if (/^(SOON|SOC|SOEM|S0CM|SOM)$/.test(token)) {
+    return false;
+}
 
                 return true;
             });
