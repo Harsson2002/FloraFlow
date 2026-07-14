@@ -169,6 +169,50 @@ let rotatingIndex = null;
 let showRemoved = false;
 let learnedProductAliases =
     JSON.parse(localStorage.getItem("learnedProductAliases")) || {};
+    let flowerFamilies = [];
+
+async function loadFlowerFamilies() {
+
+    const { data, error } = await supabaseClient
+        .from("flower_families")
+        .select("family, aliases")
+        .eq("active", true)
+        .order("family", { ascending: true });
+
+    if (error) {
+        alert(
+            "Error loading flower families: " +
+            error.message
+        );
+        console.error(error);
+        return;
+    }
+
+    flowerFamilies = (data || []).map(function (item) {
+
+        const aliases = String(item.aliases || "")
+            .split(",")
+            .map(function (alias) {
+                return alias.trim().toUpperCase();
+            })
+            .filter(Boolean);
+
+        return {
+            family: String(item.family || "")
+                .trim()
+                .toUpperCase(),
+
+            aliases: aliases
+        };
+    });
+
+    alert(
+        "Flower families loaded:\n\n" +
+        flowerFamilies.length +
+        " families"
+    );
+}
+
     let lexiflorCatalog = [];
 
 async function loadLexiflorCatalog() {
@@ -251,6 +295,7 @@ userSelect.addEventListener("change", function () {
 loadInventoryFromSupabase();
 loadHistoryFromSupabase();
 loadLexiflorCatalog();
+loadFlowerFamilies();
 
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
