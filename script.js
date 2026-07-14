@@ -286,14 +286,7 @@ loadInventoryFromSupabase();
 loadHistoryFromSupabase();
 loadLexiflorCatalog();
 loadFlowerFamilies();
-setTimeout(function () {
 
-    alert(
-        "CERAERA → " +
-        findFamilyFromAlias("CERAERA")
-    );
-
-}, 1500);
 function findFamilyFromAlias(word) {
 
     const search = String(word || "")
