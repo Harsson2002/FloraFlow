@@ -1472,6 +1472,9 @@ async function startProductionAnalysis() {
     "\n\nCOLORS:\n" +
     ocrResult.colorText
 );
+console.log("RAW ARTICLE OCR:");
+console.log(ocrResult.articleText);
+
     const products = normalizeProductionText(
         ocrResult.articleText
     );
