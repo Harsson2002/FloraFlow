@@ -1674,9 +1674,15 @@ alert("ANTES DE NORMALIZAR");
 
     const matches = findInventoryMatches(products);
 
-    showProductionRecommendations(matches);
+    showProductionRecommendations(
+    matches,
+    productionOrderNumber
+);
 }
-function showProductionRecommendations(matches) {
+function showProductionRecommendations(
+    matches,
+    productionOrderNumber
+) {
 
     let resultsContainer =
         document.getElementById("productionRecommendations");
