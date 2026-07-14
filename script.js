@@ -314,20 +314,35 @@ function findFamilyFromAlias(word) {
         .trim()
         .toUpperCase();
 
-    for (const family of flowerFamilies) {
+    for (const item of flowerFamilies) {
 
-        if (family.family === search) {
-            return family.family;
+        const familyName = String(item.family || "")
+            .trim()
+            .toUpperCase();
+
+        const aliases = Array.isArray(item.aliases)
+            ? item.aliases
+            : String(item.aliases || "").split(",");
+
+        const normalizedAliases = aliases
+            .map(function (alias) {
+                return String(alias || "")
+                    .trim()
+                    .toUpperCase();
+            })
+            .filter(Boolean);
+
+        if (familyName === search) {
+            return familyName;
         }
 
-        if (family.aliases.includes(search)) {
-            return family.family;
+        if (normalizedAliases.includes(search)) {
+            return familyName;
         }
     }
 
     return null;
 }
-
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
