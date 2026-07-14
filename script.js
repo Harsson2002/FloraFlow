@@ -2480,6 +2480,84 @@ function buildProductCatalogFromLexiflor() {
         })
         .filter(Boolean);
 }
+function calculateFuzzyTokenSimilarity(searchText, catalogText) {
+
+    function getUsefulTokens(text) {
+
+        return normalizeMatchText(text)
+            .split(/\s+/)
+            .filter(function (token) {
+
+                if (!token) {
+                    return false;
+                }
+
+                // La longitud no decide el producto
+                if (/^\d+$/.test(token)) {
+                    return false;
+                }
+
+                if (/^\d+CM$/.test(token)) {
+                    return false;
+                }
+
+                if (token === "CM") {
+                    return false;
+                }
+
+                return true;
+            });
+    }
+
+    const searchTokens = getUsefulTokens(searchText);
+    const catalogTokens = getUsefulTokens(catalogText);
+
+    if (
+        searchTokens.length === 0 ||
+        catalogTokens.length === 0
+    ) {
+        return 0;
+    }
+
+    const searchScore = searchTokens.reduce(
+        function (total, searchToken) {
+
+            const bestTokenScore = Math.max(
+                ...catalogTokens.map(function (catalogToken) {
+                    return calculateStringSimilarity(
+                        searchToken,
+                        catalogToken
+                    );
+                })
+            );
+
+            return total + bestTokenScore;
+        },
+        0
+    ) / searchTokens.length;
+
+    const catalogScore = catalogTokens.reduce(
+        function (total, catalogToken) {
+
+            const bestTokenScore = Math.max(
+                ...searchTokens.map(function (searchToken) {
+                    return calculateStringSimilarity(
+                        catalogToken,
+                        searchToken
+                    );
+                })
+            );
+
+            return total + bestTokenScore;
+        },
+        0
+    ) / catalogTokens.length;
+
+    return Math.round(
+        searchScore * 0.6 +
+        catalogScore * 0.4
+    );
+}
 function findBestCatalogProduct(productionProduct, catalog) {
 
     const parsedName = normalizeMatchText(
@@ -2521,15 +2599,22 @@ function findBestCatalogProduct(productionProduct, catalog) {
                         articleName
                     );
 
-                const tokenScore =
-                    calculateTokenSimilarity(
-                        searchName,
-                        articleName
-                    );
+                const exactTokenScore =
+    calculateTokenSimilarity(
+        searchName,
+        articleName
+    );
 
-                score =
-                    directScore * 0.4 +
-                    tokenScore * 0.6;
+const fuzzyTokenScore =
+    calculateFuzzyTokenSimilarity(
+        searchName,
+        articleName
+    );
+
+score =
+    directScore * 0.15 +
+    exactTokenScore * 0.25 +
+    fuzzyTokenScore * 0.60;
 
                 if (
                     searchName.includes(articleName) ||
