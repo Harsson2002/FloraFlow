@@ -1710,10 +1710,28 @@ function showProductionRecommendations(
     }
 
     resultsContainer.innerHTML = "";
+    const orderHeader = document.createElement("div");
+
+orderHeader.innerHTML = `
+    <div style="
+        background:#e8f5e9;
+        border:1px solid #2e7d32;
+        border-radius:10px;
+        padding:14px;
+        margin-bottom:15px;
+        font-size:18px;
+        font-weight:bold;
+    ">
+        📋 Production Order:
+        ${productionOrderNumber || "Not detected"}
+    </div>
+`;
+
+resultsContainer.appendChild(orderHeader);
 
     if (!Array.isArray(matches) || matches.length === 0) {
 
-        resultsContainer.innerHTML = `
+        resultsContainer.innerHTML += `
             <div style="
                 text-align:center;
                 padding:20px;
