@@ -463,3 +463,4 @@ window.flowerBrain.getColorFromOrder = function (articleName, colorCode) {
         source: "NO_COLOR"
     };
 };
+alert("FLOWER BRAIN CARGADO");
