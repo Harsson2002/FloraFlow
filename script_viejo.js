@@ -2583,21 +2583,44 @@ function findBestCatalogProduct(productionProduct, catalog) {
 
     const searchName = originalName || parsedName;
 
-    const detectedFamily = flowerFamilies
-    .map(function (item) {
-        return item.family;
-    })
-    .find(function (family) {
+const familyMatches = [];
 
-        const normalizedFamily =
-            normalizeMatchText(family);
+flowerFamilies.forEach(function (item) {
 
-        return (
-            normalizedFamily &&
-            searchName.includes(normalizedFamily)
-        );
+    const family =
+        normalizeMatchText(item.family);
+
+    const aliases = Array.isArray(item.aliases)
+        ? item.aliases
+        : String(item.aliases || "").split(",");
+
+    const names = [
+        family,
+        ...aliases.map(function (alias) {
+            return normalizeMatchText(alias);
+        })
+    ].filter(Boolean);
+
+    names.forEach(function (name) {
+
+        if (searchName.includes(name)) {
+            familyMatches.push({
+                name: name,
+                family: family
+            });
+        }
     });
+});
 
+// Usar la coincidencia más larga para evitar aliases muy generales
+familyMatches.sort(function (a, b) {
+    return b.name.length - a.name.length;
+});
+
+const detectedFamily =
+    familyMatches.length > 0
+        ? familyMatches[0].family
+        : "";
     if (!searchName || !Array.isArray(catalog)) {
         return null;
     }
