@@ -496,7 +496,8 @@ window.flowerBrain.extractColorCode = function (line) {
             colorCode: null
         };
     }
-        const possibleCode = words[words.length - 1];
+
+    const possibleCode = words[words.length - 1];
 
     if (
         this.colorCodes &&
