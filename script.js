@@ -207,6 +207,37 @@ async function loadFlowerFamilies() {
     });
 
 }
+let lexiflorArticles = [];
+
+async function loadLexiflorArticles() {
+
+    const { data, error } = await supabaseClient
+        .from("lexiflor_articles")
+        .select(`
+            code,
+            article_name,
+            proposed_family,
+            proposed_color,
+            proposed_variety
+        `)
+        .order("article_name", { ascending: true });
+
+    if (error) {
+        alert(
+            "Error loading Lexiflor articles:\n" +
+            error.message
+        );
+        console.error(error);
+        return;
+    }
+
+    lexiflorArticles = data || [];
+
+    console.log(
+        "Lexiflor Articles Loaded:",
+        lexiflorArticles.length
+    );
+}
 
     let lexiflorCatalog = [];
 
@@ -2342,61 +2373,52 @@ function getConfidenceLevel(score) {
 
     return "REVIEW";
 }
-function buildProductCatalogFromInventory() {
+function buildProductCatalogFromLexiflor() {
 
-    if (!Array.isArray(inventory)) {
+    if (!Array.isArray(lexiflorCatalog)) {
         return [];
     }
 
-    const catalogMap = new Map();
+    return lexiflorCatalog
+        .map(function (item) {
 
-    inventory.forEach(function (item) {
+            const articleName = normalizeMatchText(
+                item.article_name
+            );
 
-        const product = normalizeMatchText(item.product);
-        const color = normalizeMatchText(item.color);
+            const family = normalizeMatchText(
+                item.proposed_family
+            );
 
-        if (!product) {
-            return;
-        }
+            const color = normalizeMatchText(
+                item.proposed_color
+            );
 
-        if (!catalogMap.has(product)) {
-            catalogMap.set(product, {
-                product: product,
-                colors: new Set(),
-                examples: []
-            });
-        }
+            const variety = normalizeMatchText(
+                item.proposed_variety
+            );
 
-        const catalogItem = catalogMap.get(product);
+            if (!articleName) {
+                return null;
+            }
 
-        if (color) {
-            catalogItem.colors.add(color);
-        }
-
-        catalogItem.examples.push({
-            product: item.product || "",
-            color: item.color || "",
-            caseNumber: item.caseNumber || "",
-            quantity: Number(item.quantity || 0),
-            status: item.status || ""
-        });
-    });
-
-    return Array.from(catalogMap.values()).map(function (item) {
-        return {
-            product: item.product,
-            colors: Array.from(item.colors),
-            examples: item.examples
-        };
-    });
+            return {
+                product: articleName,
+                articleName: articleName,
+                family: family,
+                color: color,
+                variety: variety
+            };
+        })
+        .filter(Boolean);
 }
-
 function findBestCatalogProduct(productionProduct, catalog) {
 
     const parsedName = normalizeMatchText(
         [
             productionProduct.product,
-            productionProduct.variety
+            productionProduct.variety,
+            productionProduct.color
         ]
             .filter(Boolean)
             .join(" ")
@@ -2406,7 +2428,7 @@ function findBestCatalogProduct(productionProduct, catalog) {
         productionProduct.original
     );
 
-    const searchName = parsedName || originalName;
+    const searchName = originalName || parsedName;
 
     if (!searchName || !Array.isArray(catalog)) {
         return null;
@@ -2415,32 +2437,50 @@ function findBestCatalogProduct(productionProduct, catalog) {
     const candidates = catalog
         .map(function (catalogItem) {
 
-            const directScore = calculateStringSimilarity(
-                searchName,
-                catalogItem.product
-            );
+            const articleName = catalogItem.articleName;
 
-            const tokenScore = calculateTokenSimilarity(
-                searchName,
-                catalogItem.product
-            );
+            let score = 0;
 
-            let score =
-                directScore * 0.4 +
-                tokenScore * 0.6;
+            if (searchName === articleName) {
 
-            if (
-                searchName.includes(catalogItem.product) ||
-                catalogItem.product.includes(searchName)
-            ) {
-                score += 15;
+                score = 100;
+
+            } else {
+
+                const directScore =
+                    calculateStringSimilarity(
+                        searchName,
+                        articleName
+                    );
+
+                const tokenScore =
+                    calculateTokenSimilarity(
+                        searchName,
+                        articleName
+                    );
+
+                score =
+                    directScore * 0.4 +
+                    tokenScore * 0.6;
+
+                if (
+                    searchName.includes(articleName) ||
+                    articleName.includes(searchName)
+                ) {
+                    score += 15;
+                }
             }
 
             return {
-                product: catalogItem.product,
-                colors: catalogItem.colors,
-                examples: catalogItem.examples,
-                score: Math.min(100, Math.round(score))
+                product: articleName,
+                articleName: articleName,
+                family: catalogItem.family,
+                color: catalogItem.color,
+                variety: catalogItem.variety,
+                score: Math.min(
+                    100,
+                    Math.round(score)
+                )
             };
         })
         .sort(function (a, b) {
@@ -2452,6 +2492,7 @@ function findBestCatalogProduct(productionProduct, catalog) {
         alternatives: candidates.slice(1, 4)
     };
 }
+
 function findInventoryMatches(products) {
 
     console.log("Searching inventory matches...");
@@ -2463,7 +2504,7 @@ function findInventoryMatches(products) {
         return [];
     }
 
-    const catalog = buildProductCatalogFromInventory();
+    const catalog = buildProductCatalogFromLexiflor();
 
     const availableInventory = inventory.filter(function (item) {
 
@@ -2522,19 +2563,26 @@ function findInventoryMatches(products) {
             };
         }
 
-        const recognizedProduct =
-            catalogResult.best.product;
+        const recognizedArticle =
+        catalogResult.best.articleName;
 
+        const recognizedFamily =
+        catalogResult.best.family;
+
+         const recognizedColor =
+        catalogResult.best.color ||
+    productionProduct.color ||
+    "";
         const requestedColor = normalizeMatchText(
-            productionProduct.color
-        );
+    recognizedColor
+);
 
         const matchingInventory = availableInventory
             .filter(function (item) {
                 return (
-                    normalizeMatchText(item.product) ===
-                    recognizedProduct
-                );
+    normalizeMatchText(item.product) ===
+    recognizedFamily
+);
             })
             .map(function (item) {
 
@@ -2561,8 +2609,9 @@ function findInventoryMatches(products) {
 
         if (!bestInventoryMatch) {
             return {
-                product: recognizedProduct,
-                color: productionProduct.color || "",
+                product: recognizedFamily || recognizedArticle,
+               color: recognizedColor,
+articleName: recognizedArticle,
                 confidence: catalogResult.best.score,
 
                 confidenceLevel:
