@@ -414,3 +414,9 @@ window.flowerBrain.getColorFromCode = function (code) {
 
     return this.colorCodes[cleanCode] || null;
 };
+alert(
+    "GR = " +
+    window.flowerBrain.getColorFromCode("GR") +
+    "\nASST = " +
+    window.flowerBrain.getColorFromCode("ASST")
+);
