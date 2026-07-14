@@ -2575,12 +2575,33 @@ function findBestCatalogProduct(productionProduct, catalog) {
     );
 
     const searchName = originalName || parsedName;
+    
+    const detectedFamily = flowerFamilies
+    .map(function (item) {
+        return item.family;
+    })
+    .find(function (family) {
+
+        const normalizedFamily =
+            normalizeMatchText(family);
+
+        return (
+            normalizedFamily &&
+            searchName.includes(normalizedFamily)
+        );
+    });
 
     if (!searchName || !Array.isArray(catalog)) {
         return null;
     }
 
-    const candidates = catalog
+    const familyCatalog = detectedFamily
+    ? catalog.filter(function (item) {
+        return item.family === detectedFamily;
+    })
+    : catalog;
+
+const candidates = familyCatalog
         .map(function (catalogItem) {
 
             const articleName = catalogItem.articleName;
