@@ -242,6 +242,7 @@ async function loadLexiflorArticles() {
     let lexiflorCatalog = [];
 
 async function loadLexiflorCatalog() {
+    console.log("ENTERING loadLexiflorCatalog");
 
     const pageSize = 1000;
     let start = 0;
@@ -277,6 +278,10 @@ async function loadLexiflorCatalog() {
     }
 
     lexiflorCatalog = allArticles;
+    console.log(
+    "CATALOG SIZE:",
+    lexiflorCatalog.length
+);
 
     console.log("Catalog loaded:", allArticles.length);
 console.log(allArticles.slice(0,3));
