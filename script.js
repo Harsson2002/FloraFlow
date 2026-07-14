@@ -2720,7 +2720,30 @@ if (operationalRule) {
         const requestedColor = normalizeMatchText(
     recognizedColor
 );
-
+console.log(
+    "AVAILABLE INVENTORY PRODUCTS:",
+    availableInventory.map(function (item) {
+        return {
+            product: item.product,
+            normalized: normalizeMatchText(item.product),
+            color: item.color,
+            quantity: item.quantity,
+            status: item.status
+        };
+    })
+);
+console.log(
+    "AVAILABLE INVENTORY PRODUCTS:",
+    availableInventory.map(function (item) {
+        return {
+            product: item.product,
+            normalized: normalizeMatchText(item.product),
+            color: item.color,
+            quantity: item.quantity,
+            status: item.status
+        };
+    })
+);
         const matchingInventory = availableInventory
             .filter(function (item) {
                 return (
