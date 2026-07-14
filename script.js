@@ -1640,9 +1640,13 @@ async function startProductionAnalysis() {
 
     const ocrResult = await readProductionScreenshot();
 
-    const lotNumber = extractProductionLot(ocrResult.lotText);
+    const productionOrderNumber =
+    extractProductionLot(ocrResult.lotText);
 
-    console.log("Production Lot:", lotNumber);
+    console.log(
+    "Production Order:",
+    productionOrderNumber
+);
     console.log("Article Text:", ocrResult.articleText);
     console.log("Color Text:", ocrResult.colorText);
 
@@ -1650,7 +1654,7 @@ async function startProductionAnalysis() {
     "RAW LOT OCR:\n" +
     ocrResult.lotText +
     "\n\nLOT DETECTED:\n" +
-    (lotNumber || "NOT FOUND") +
+    (productionOrderNumber || "NOT FOUND") +
     "\n\nARTICLES:\n" +
     ocrResult.articleText +
     "\n\nCOLORS:\n" +
