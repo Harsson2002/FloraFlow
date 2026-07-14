@@ -2622,7 +2622,7 @@ console.log(
         if (
             !catalogResult ||
             !catalogResult.best ||
-            catalogResult.best.score < 45
+            catalogResult.best.score < 35
         ) {
             return {
                 product:
@@ -2661,8 +2661,32 @@ console.log(
         const recognizedArticle =
         catalogResult.best.articleName;
 
-        const recognizedFamily =
-        catalogResult.best.family;
+        let recognizedFamily =
+    catalogResult.best.family;
+
+const recognizedArticleText =
+    normalizeMatchText(
+        catalogResult.best.articleName
+    );
+
+const operationalFamilies = [
+    "CUSHION POM",
+    "MICRO POM",
+    "DAISY POM",
+    "SPRAY ROSE",
+    "MINI HYDRANGEA",
+    "DUSTY MILLER",
+    "MINI GREEN"
+];
+
+const operationalFamily =
+    operationalFamilies.find(function (family) {
+        return recognizedArticleText.includes(family);
+    });
+
+if (operationalFamily) {
+    recognizedFamily = operationalFamily;
+}
 
          const recognizedColor =
         catalogResult.best.color ||
@@ -2698,7 +2722,7 @@ console.log(
             .sort(function (a, b) {
                 return b.colorScore - a.colorScore;
             });
-            
+
 console.log("RECOGNIZED ARTICLE:", recognizedArticle);
 console.log("RECOGNIZED FAMILY:", recognizedFamily);
 console.log("RECOGNIZED COLOR:", recognizedColor);
