@@ -416,6 +416,87 @@ function replaceFamilyAliasesInLine(line) {
         .replace(/\s+/g, " ")
         .trim();
 }
+function extractProductionColor(line) {
+
+    const text = String(line || "")
+        .toUpperCase()
+        .replace(/[^A-Z0-9\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const colorRules = [
+        {
+            color: "HOT PINK",
+            aliases: ["HOT PINK", "HOTPNK", "HPINK", "HPNK"]
+        },
+        {
+            color: "LIGHT PINK",
+            aliases: ["LIGHT PINK", "LT PINK", "LTPINK"]
+        },
+        {
+            color: "YELLOW",
+            aliases: ["YELLOW", "YELLO", "YEL", "YLLW"]
+        },
+        {
+            color: "WHITE",
+            aliases: ["WHITE", "WHIT", "WHT", "WH"]
+        },
+        {
+            color: "PINK",
+            aliases: ["PINK", "PNK"]
+        },
+        {
+            color: "PURPLE",
+            aliases: ["PURPLE", "PURP", "PRPL"]
+        },
+        {
+            color: "LAVENDER",
+            aliases: ["LAVENDER", "LAV", "LAVNDR"]
+        },
+        {
+            color: "ORANGE",
+            aliases: ["ORANGE", "ORG", "ORNGE"]
+        },
+        {
+            color: "GREEN",
+            aliases: ["GREEN", "GRN"]
+        },
+        {
+            color: "CREAM",
+            aliases: ["CREAM", "CRM"]
+        },
+        {
+            color: "BLUE",
+            aliases: ["BLUE", "BLU"]
+        },
+        {
+            color: "RED",
+            aliases: ["RED"]
+        }
+    ];
+
+    for (const rule of colorRules) {
+
+        for (const alias of rule.aliases) {
+
+            const escapedAlias = alias.replace(
+                /[.*+?^${}()|[\]\\]/g,
+                "\\$&"
+            );
+
+            const pattern = new RegExp(
+                "\\b" + escapedAlias + "\\b",
+                "i"
+            );
+
+            if (pattern.test(text)) {
+                return rule.color;
+            }
+        }
+    }
+
+    return "";
+}
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
@@ -2030,6 +2111,12 @@ function normalizeProductionLine(line) {
 line = colorInfo.articleText;
 line = window.flowerBrain.fixCommonOcrErrors(line);
 line = replaceFamilyAliasesInLine(line);
+const detectedColor = extractProductionColor(line);
+
+console.log(
+    "FlowerBrain Color:",
+    detectedColor || "NONE"
+);
     if (
         !window.flowerBrain ||
         typeof window.flowerBrain.parseLine !== "function"
