@@ -187,9 +187,95 @@ let rotatingIndex = null;
 let showRemoved = false;
 let learnedProductAliases =
     JSON.parse(localStorage.getItem("learnedProductAliases")) || {};
-let flowerFamilies = [];
-let productionAliases = [];
-const FLORAFLOW_BRAIN_ADMIN = "HARSSON";
+    let flowerFamilies = [];
+let learnedProductionAliases = [];
+
+
+async function loadProductionAliases() {
+
+    const { data, error } = await supabaseClient
+        .from("production_aliases")
+        .select("alias, family, confirmed_by, active")
+        .eq("active", true)
+        .order("alias", { ascending: true });
+
+    if (error) {
+        console.error("Error loading learned production aliases:", error);
+        learnedProductionAliases = [];
+        return;
+    }
+
+    learnedProductionAliases = (data || [])
+        .map(function (item) {
+            return {
+                alias: normalizeMatchText(item.alias),
+                family: normalizeMatchText(item.family),
+                confirmedBy: item.confirmed_by || ""
+            };
+        })
+        .filter(function (item) {
+            return item.alias && item.family;
+        });
+
+    console.log(
+        "FloraFlow Brain ready:",
+        learnedProductionAliases.length,
+        "learned aliases"
+    );
+}
+
+async function saveProductionAliasLearning(alias, family) {
+
+    const normalizedAlias = normalizeMatchText(alias);
+    const normalizedFamily = normalizeMatchText(family);
+
+    if (!normalizedAlias || !normalizedFamily) {
+        throw new Error("The alias or family is empty.");
+    }
+
+    const { data: existingRows, error: selectError } = await supabaseClient
+        .from("production_aliases")
+        .select("id")
+        .ilike("alias", normalizedAlias)
+        .limit(1);
+
+    if (selectError) {
+        throw selectError;
+    }
+
+    let saveError = null;
+
+    if (existingRows && existingRows.length > 0) {
+        const result = await supabaseClient
+            .from("production_aliases")
+            .update({
+                alias: normalizedAlias,
+                family: normalizedFamily,
+                confirmed_by: currentUser || "Harsson",
+                active: true
+            })
+            .eq("id", existingRows[0].id);
+
+        saveError = result.error;
+    } else {
+        const result = await supabaseClient
+            .from("production_aliases")
+            .insert([{
+                alias: normalizedAlias,
+                family: normalizedFamily,
+                confirmed_by: currentUser || "Harsson",
+                active: true
+            }]);
+
+        saveError = result.error;
+    }
+
+    if (saveError) {
+        throw saveError;
+    }
+
+    await loadProductionAliases();
+}
 
 async function loadFlowerFamilies() {
 
@@ -227,165 +313,6 @@ async function loadFlowerFamilies() {
     });
 
 }
-
-async function loadProductionAliases() {
-
-    const { data, error } = await supabaseClient
-        .from("production_aliases")
-        .select("id, alias, family, confirmed_by, active, created_at")
-        .order("created_at", { ascending: true });
-
-    if (error) {
-        console.error(
-            "Error loading production aliases:",
-            error
-        );
-        productionAliases = [];
-        return;
-    }
-
-    productionAliases = (data || [])
-        .map(function (item) {
-            return {
-                id: item.id,
-                alias: normalizeMatchText(item.alias),
-                family: normalizeMatchText(item.family),
-                confirmedBy: String(item.confirmed_by || ""),
-                active: item.active !== false,
-                createdAt: item.created_at || ""
-            };
-        })
-        .filter(function (item) {
-            return item.alias && item.family;
-        });
-
-    console.log(
-        "FloraFlow Brain aliases ready:",
-        productionAliases.filter(function (item) {
-            return item.active;
-        }).length
-    );
-}
-
-function isProductionAliasLearned(alias, family) {
-
-    const normalizedAlias = normalizeMatchText(alias);
-    const normalizedFamily = normalizeMatchText(family);
-
-    if (!normalizedAlias) {
-        return false;
-    }
-
-    return productionAliases.some(function (item) {
-        return (
-            item.active &&
-            item.alias === normalizedAlias &&
-            (
-                !normalizedFamily ||
-                item.family === normalizedFamily
-            )
-        );
-    });
-}
-
-async function saveProductionAliasToSupabase(alias, family) {
-
-    const normalizedAlias = normalizeMatchText(alias);
-    const normalizedFamily = normalizeMatchText(family);
-
-    if (!normalizedAlias || !normalizedFamily) {
-        throw new Error("Alias and family are required.");
-    }
-
-    const confirmedBy =
-        String(currentUser || FLORAFLOW_BRAIN_ADMIN).trim() ||
-        FLORAFLOW_BRAIN_ADMIN;
-
-    let existing = productionAliases.find(function (item) {
-        return item.alias === normalizedAlias;
-    });
-
-    let savedRecord = null;
-
-    if (existing) {
-        const { data, error } = await supabaseClient
-            .from("production_aliases")
-            .update({
-                alias: normalizedAlias,
-                family: normalizedFamily,
-                confirmed_by: confirmedBy,
-                active: true
-            })
-            .eq("id", existing.id)
-            .select("id, alias, family, confirmed_by, active, created_at")
-            .single();
-
-        if (error) {
-            throw error;
-        }
-
-        savedRecord = data;
-    } else {
-        const { data, error } = await supabaseClient
-            .from("production_aliases")
-            .insert([
-                {
-                    alias: normalizedAlias,
-                    family: normalizedFamily,
-                    confirmed_by: confirmedBy,
-                    active: true
-                }
-            ])
-            .select("id, alias, family, confirmed_by, active, created_at")
-            .single();
-
-        if (error) {
-            if (String(error.code || "") === "23505") {
-                await loadProductionAliases();
-
-                existing = productionAliases.find(function (item) {
-                    return item.alias === normalizedAlias;
-                });
-
-                if (!existing) {
-                    throw error;
-                }
-
-                const retry = await supabaseClient
-                    .from("production_aliases")
-                    .update({
-                        family: normalizedFamily,
-                        confirmed_by: confirmedBy,
-                        active: true
-                    })
-                    .eq("id", existing.id)
-                    .select("id, alias, family, confirmed_by, active, created_at")
-                    .single();
-
-                if (retry.error) {
-                    throw retry.error;
-                }
-
-                savedRecord = retry.data;
-            } else {
-                throw error;
-            }
-        } else {
-            savedRecord = data;
-        }
-    }
-
-    await loadProductionAliases();
-
-    // Keep a local fallback too, but Supabase remains the shared source of truth.
-    saveLearnedProductAlias(
-        normalizedAlias,
-        normalizedFamily
-    );
-
-    return savedRecord;
-}
-
 let lexiflorCatalog = [];
 let lexiflorSearchCatalog = [];
 let lexiflorCatalogByFamily = new Map();
@@ -1458,13 +1385,6 @@ clearProductionImageBtn.addEventListener("click", function () {
     if (resultsContainer) {
         resultsContainer.innerHTML = "";
     }
-
-    const brainContainer =
-        document.getElementById("productionBrainReview");
-
-    if (brainContainer) {
-        brainContainer.remove();
-    }
 });
 
 document.addEventListener("paste", async function (event) {
@@ -1495,6 +1415,33 @@ document.addEventListener("paste", async function (event) {
 
         productionPreview.src = imageUrl;
         window.originalProductionImage = imageUrl;
+        productionPreview.onload = function () {
+
+    ensureProductionSelectionUI();
+
+    productionSelectionCanvas.style.cursor = "crosshair";
+
+    setProductionSelectionStatus(
+        "Drag over the product names to select the area.",
+        "info"
+    );
+
+    setTimeout(function () {
+
+        beginProductionAreaSelection();
+
+        const selectionTool =
+            document.getElementById("productionSelectionTool");
+
+        if (selectionTool) {
+            selectionTool.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+
+    }, 150);
+};
 
         productionPlaceholder.style.display = "none";
         productionLoaded.style.display = "block";
@@ -1504,25 +1451,6 @@ document.addEventListener("paste", async function (event) {
 
         try {
             await loadProductionImageIntoSelector(imageUrl);
-
-            productionSelectionCanvas.style.cursor = "crosshair";
-
-            const rememberedSelection =
-                getRememberedProductionSelection();
-
-            if (!rememberedSelection) {
-                beginProductionAreaSelection();
-            }
-
-            const selectionTool =
-                document.getElementById("productionSelectionTool");
-
-            if (selectionTool) {
-                selectionTool.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start"
-                });
-            }
         } catch (error) {
             console.error("Could not load the production screenshot.", error);
             alert("The pasted image could not be loaded.");
@@ -2804,353 +2732,6 @@ async function readSelectedProductionArea() {
     }
 }
 
-function canCurrentUserTeachProductionBrain() {
-    return normalizeMatchText(currentUser) === FLORAFLOW_BRAIN_ADMIN;
-}
-
-function getProductionBrainIdentityText(product) {
-
-    const observed = normalizeMatchText(
-        product?.familyObservedAlias || ""
-    );
-
-    if (observed) {
-        return observed;
-    }
-
-    return removeArticleColors(
-        prepareArticleSearchText(
-            product?.cleanedArticle ||
-            product?.original ||
-            ""
-        )
-    );
-}
-
-function getProductionBrainCandidates(products, matches) {
-
-    const candidates = new Map();
-
-    (products || []).forEach(function (product) {
-
-        const source = String(product.familySource || "");
-        const isFuzzy = source.startsWith("FUZZY_ALIAS");
-        const isUnresolved = Boolean(
-            product.familyNeedsReview ||
-            (!product.family && !product.product)
-        );
-
-        if (!isFuzzy && !isUnresolved) {
-            return;
-        }
-
-        const observedAlias =
-            getProductionBrainIdentityText(product);
-
-        if (!observedAlias || observedAlias.length < 3) {
-            return;
-        }
-
-        const alternatives = (
-            product.familyAlternatives || []
-        )
-            .map(function (item) {
-                return normalizeMatchText(item.family);
-            })
-            .filter(Boolean);
-
-        let suggestedFamily = normalizeMatchText(
-            product.family || alternatives[0] || ""
-        );
-
-        if (!suggestedFamily) {
-            const relatedMatch = (matches || []).find(
-                function (match) {
-                    return normalizeMatchText(
-                        match.originalOcrLine
-                    ) === normalizeMatchText(
-                        product.original
-                    );
-                }
-            );
-
-            const possibleFamily = normalizeMatchText(
-                relatedMatch?.normalizedProduct ||
-                relatedMatch?.product ||
-                ""
-            );
-
-            if (productsCatalog.includes(possibleFamily)) {
-                suggestedFamily = possibleFamily;
-            }
-        }
-
-        if (
-            suggestedFamily &&
-            isProductionAliasLearned(
-                observedAlias,
-                suggestedFamily
-            )
-        ) {
-            return;
-        }
-
-        const key = observedAlias;
-
-        if (!candidates.has(key)) {
-            candidates.set(key, {
-                observedAlias: observedAlias,
-                suggestedFamily: suggestedFamily,
-                expectedAlias:
-                    normalizeMatchText(product.familyAlias || ""),
-                confidence:
-                    Number(product.familyConfidence || 0),
-                alternatives: alternatives,
-                originalLine:
-                    normalizeMatchText(product.original || "")
-            });
-        }
-    });
-
-    return Array.from(candidates.values());
-}
-
-function renderProductionBrainReview(products, matches) {
-
-    const candidates = getProductionBrainCandidates(
-        products,
-        matches
-    );
-
-    let container = document.getElementById(
-        "productionBrainReview"
-    );
-
-    if (candidates.length === 0) {
-        if (container) {
-            container.remove();
-        }
-        return null;
-    }
-
-    if (!container) {
-        container = document.createElement("div");
-        container.id = "productionBrainReview";
-    }
-
-    container.innerHTML = "";
-    container.style.marginTop = "16px";
-    container.style.padding = "16px";
-    container.style.background = "#fff7ed";
-    container.style.border = "1px solid #fb923c";
-    container.style.borderRadius = "12px";
-
-    const title = document.createElement("div");
-    title.style.fontSize = "18px";
-    title.style.fontWeight = "700";
-    title.style.marginBottom = "6px";
-    title.textContent = "🧠 FloraFlow Brain";
-    container.appendChild(title);
-
-    const intro = document.createElement("div");
-    intro.style.fontSize = "14px";
-    intro.style.color = "#7c2d12";
-    intro.style.lineHeight = "1.5";
-    intro.style.marginBottom = "12px";
-    intro.textContent = canCurrentUserTeachProductionBrain()
-        ? "Review each OCR correction. Confirm it once and FloraFlow will remember it for everyone."
-        : "A possible OCR correction needs Harsson's confirmation before FloraFlow can remember it.";
-    container.appendChild(intro);
-
-    candidates.forEach(function (candidate, index) {
-
-        const card = document.createElement("div");
-        card.style.background = "white";
-        card.style.border = "1px solid #fed7aa";
-        card.style.borderRadius = "10px";
-        card.style.padding = "12px";
-        card.style.marginBottom =
-            index === candidates.length - 1
-                ? "0"
-                : "10px";
-
-        const readLine = document.createElement("div");
-        readLine.style.fontSize = "14px";
-        readLine.style.marginBottom = "5px";
-        readLine.textContent =
-            "OCR read: " + candidate.observedAlias;
-        card.appendChild(readLine);
-
-        if (candidate.expectedAlias) {
-            const matchedLine = document.createElement("div");
-            matchedLine.style.fontSize = "14px";
-            matchedLine.style.marginBottom = "5px";
-            matchedLine.textContent =
-                "Closest known alias: " +
-                candidate.expectedAlias +
-                (
-                    candidate.confidence
-                        ? " (" + candidate.confidence + "%)"
-                        : ""
-                );
-            card.appendChild(matchedLine);
-        }
-
-        const question = document.createElement("div");
-        question.style.fontWeight = "700";
-        question.style.margin = "8px 0";
-        question.textContent = "Which family is correct?";
-        card.appendChild(question);
-
-        const familySelect = document.createElement("select");
-        familySelect.style.width = "100%";
-        familySelect.style.maxWidth = "360px";
-        familySelect.style.padding = "8px";
-        familySelect.style.border = "1px solid #cbd5e1";
-        familySelect.style.borderRadius = "8px";
-
-        const emptyOption = document.createElement("option");
-        emptyOption.value = "";
-        emptyOption.textContent = "Choose a family";
-        familySelect.appendChild(emptyOption);
-
-        const familyOptions = Array.from(
-            new Set(
-                [
-                    candidate.suggestedFamily,
-                    ...candidate.alternatives,
-                    ...productsCatalog
-                ].filter(Boolean)
-            )
-        ).sort();
-
-        familyOptions.forEach(function (family) {
-            const option = document.createElement("option");
-            option.value = family;
-            option.textContent = family;
-            familySelect.appendChild(option);
-        });
-
-        familySelect.value = candidate.suggestedFamily || "";
-        familySelect.disabled =
-            !canCurrentUserTeachProductionBrain();
-        card.appendChild(familySelect);
-
-        const actions = document.createElement("div");
-        actions.style.display = "flex";
-        actions.style.flexWrap = "wrap";
-        actions.style.gap = "8px";
-        actions.style.marginTop = "10px";
-
-        if (canCurrentUserTeachProductionBrain()) {
-            const confirmButton = document.createElement("button");
-            confirmButton.type = "button";
-            confirmButton.textContent = "✅ Confirm and Learn";
-
-            confirmButton.addEventListener(
-                "click",
-                async function () {
-
-                    const selectedFamily =
-                        normalizeMatchText(
-                            familySelect.value
-                        );
-
-                    if (!selectedFamily) {
-                        alert("Choose the correct family first.");
-                        return;
-                    }
-
-                    confirmButton.disabled = true;
-                    familySelect.disabled = true;
-                    status.textContent =
-                        "Saving this correction to Supabase...";
-                    status.style.color = "#1d4ed8";
-
-                    try {
-                        await saveProductionAliasToSupabase(
-                            candidate.observedAlias,
-                            selectedFamily
-                        );
-
-                        status.textContent =
-                            candidate.observedAlias +
-                            " is now remembered as " +
-                            selectedFamily +
-                            ". Rechecking the order...";
-                        status.style.color = "#166534";
-
-                        await findLeftoversFromDetectedText();
-                    } catch (error) {
-                        console.error(
-                            "Could not save production alias:",
-                            error
-                        );
-
-                        status.textContent =
-                            "The correction could not be saved.";
-                        status.style.color = "#b91c1c";
-                        confirmButton.disabled = false;
-                        familySelect.disabled = false;
-
-                        alert(
-                            "The correction could not be saved. " +
-                            (error?.message || String(error))
-                        );
-                    }
-                }
-            );
-
-            actions.appendChild(confirmButton);
-        }
-
-        const ignoreButton = document.createElement("button");
-        ignoreButton.type = "button";
-        ignoreButton.textContent = "Ignore for now";
-        ignoreButton.addEventListener("click", function () {
-            card.remove();
-
-            if (!container.querySelector("select")) {
-                container.remove();
-            }
-        });
-        actions.appendChild(ignoreButton);
-        card.appendChild(actions);
-
-        const status = document.createElement("div");
-        status.style.fontSize = "13px";
-        status.style.marginTop = "8px";
-        status.style.color = "#64748b";
-        status.textContent = candidate.originalLine
-            ? "Original line: " + candidate.originalLine
-            : "";
-        card.appendChild(status);
-
-        container.appendChild(card);
-    });
-
-    const selectionTool = document.getElementById(
-        "productionSelectionTool"
-    );
-
-    const resultsContainer = document.getElementById(
-        "productionRecommendations"
-    );
-
-    const parent =
-        selectionTool?.parentNode ||
-        todayProductionModal.querySelector(".modal-content") ||
-        todayProductionModal;
-
-    if (resultsContainer && resultsContainer.parentNode === parent) {
-        parent.insertBefore(container, resultsContainer);
-    } else {
-        parent.appendChild(container);
-    }
-
-    return container;
-}
-
 async function findLeftoversFromDetectedText() {
 
     ensureProductionSelectionUI();
@@ -3178,15 +2759,47 @@ async function findLeftoversFromDetectedText() {
 
     try {
         const products = normalizeProductionText(editedText);
+        const matches = findInventoryMatches(products);
         const productionOrderNumber = extractProductionLot(editedText);
 
-        if (products.length === 0) {
-            renderProductionBrainReview([], []);
-            showProductionRecommendations(
-                [],
-                productionOrderNumber
-            );
+        showProductionRecommendations(
+    matches,
+    productionOrderNumber
+);
+const resultsContainer =
+    document.getElementById("productionRecommendations");
 
+const selectorTool =
+    document.getElementById("productionSelectionTool");
+
+if (resultsContainer) {
+
+    resultsContainer.style.display = "block";
+    resultsContainer.style.visibility = "visible";
+    resultsContainer.style.width = "100%";
+    resultsContainer.style.boxSizing = "border-box";
+    resultsContainer.style.marginTop = "16px";
+
+    if (
+        selectorTool &&
+        selectorTool.parentNode
+    ) {
+        selectorTool.parentNode.insertBefore(
+            resultsContainer,
+            selectorTool.nextSibling
+        );
+    }
+
+    setTimeout(function () {
+        resultsContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }, 150);
+}
+
+
+        if (products.length === 0) {
             setProductionSelectionStatus(
                 "No flower lines were recognized. Check the text and try again.",
                 "error"
@@ -3194,65 +2807,8 @@ async function findLeftoversFromDetectedText() {
             return;
         }
 
-        const matches = findInventoryMatches(products);
-
-        showProductionRecommendations(
-            matches,
-            productionOrderNumber
-        );
-
-        const brainContainer =
-            renderProductionBrainReview(
-                products,
-                matches
-            );
-
-        const resultsContainer =
-            document.getElementById(
-                "productionRecommendations"
-            );
-
-        const selectorTool =
-            document.getElementById(
-                "productionSelectionTool"
-            );
-
-        if (resultsContainer) {
-            resultsContainer.style.display = "block";
-            resultsContainer.style.visibility = "visible";
-            resultsContainer.style.width = "100%";
-            resultsContainer.style.boxSizing = "border-box";
-            resultsContainer.style.marginTop = "16px";
-
-            if (
-                selectorTool &&
-                selectorTool.parentNode &&
-                resultsContainer.parentNode !==
-                    selectorTool.parentNode
-            ) {
-                selectorTool.parentNode.insertBefore(
-                    resultsContainer,
-                    selectorTool.nextSibling
-                );
-            }
-        }
-
-        const scrollTarget =
-            brainContainer || resultsContainer;
-
-        if (scrollTarget) {
-            setTimeout(function () {
-                scrollTarget.scrollIntoView({
-                    behavior: "smooth",
-                    block: "start"
-                });
-            }, 150);
-        }
-
         setProductionSelectionStatus(
-            brainContainer
-                ? "Analysis completed. Review the FloraFlow Brain suggestion below, then confirm it if correct."
-                : "Analysis completed using the confirmed text below.",
+            "Analysis completed using the confirmed text below.",
             "success"
         );
 
@@ -3272,6 +2828,101 @@ async function findLeftoversFromDetectedText() {
         productionFindLeftoversBtn.disabled =
             productionDetectedText.value.trim() === "";
     }
+}
+
+
+function appendFloraFlowBrainCard(card, match) {
+
+    if (!match?.learningSuggested) {
+        return;
+    }
+
+    const brainCard = document.createElement("div");
+    brainCard.style.marginTop = "14px";
+    brainCard.style.padding = "13px";
+    brainCard.style.border = "1px solid #7c3aed";
+    brainCard.style.borderRadius = "10px";
+    brainCard.style.background = "#f5f3ff";
+
+    const canTeach =
+        normalizeMatchText(currentUser) === "HARSSON";
+
+    brainCard.innerHTML = `
+        <div style="font-weight:800;color:#5b21b6;margin-bottom:8px;">
+            🧠 FloraFlow Brain
+        </div>
+        <div style="font-size:14px;line-height:1.6;color:#3f3f46;">
+            OCR read: <strong>${match.learningAlias}</strong><br>
+            Closest known alias: <strong>${match.learningExpectedAlias}</strong><br>
+            Family: <strong>${match.learningFamily}</strong><br>
+            Similarity: <strong>${match.learningScore}%</strong>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">
+            <button type="button" class="flora-brain-confirm" ${canTeach ? "" : "disabled"}>
+                ✅ Confirm and Learn
+            </button>
+            <button type="button" class="flora-brain-ignore">
+                Ignore for now
+            </button>
+        </div>
+        ${
+            canTeach
+                ? ""
+                : `<div style="font-size:12px;color:#7c2d12;margin-top:8px;">
+                    Only Harsson can confirm new learning rules.
+                   </div>`
+        }
+    `;
+
+    const confirmButton =
+        brainCard.querySelector(".flora-brain-confirm");
+
+    const ignoreButton =
+        brainCard.querySelector(".flora-brain-ignore");
+
+    if (confirmButton && canTeach) {
+        confirmButton.addEventListener("click", async function () {
+
+            confirmButton.disabled = true;
+            confirmButton.textContent = "Saving...";
+
+            try {
+                await saveProductionAliasLearning(
+                    match.learningAlias,
+                    match.learningFamily
+                );
+
+                confirmButton.textContent = "✓ Learned";
+                setProductionSelectionStatus(
+                    match.learningAlias +
+                    " was saved as " +
+                    match.learningFamily + ".",
+                    "success"
+                );
+
+                setTimeout(function () {
+                    findLeftoversFromDetectedText();
+                }, 350);
+
+            } catch (error) {
+                console.error("FloraFlow Brain save error:", error);
+                confirmButton.disabled = false;
+                confirmButton.textContent = "✅ Confirm and Learn";
+                alert(
+                    "The learning rule could not be saved. " +
+                    (error?.message || String(error))
+                );
+            }
+        });
+    }
+
+    if (ignoreButton) {
+        ignoreButton.addEventListener("click", function () {
+            brainCard.remove();
+        });
+    }
+
+    card.appendChild(brainCard);
 }
 
 function showProductionRecommendations(
@@ -3458,6 +3109,7 @@ function showProductionRecommendations(
             `;
         }
 
+        appendFloraFlowBrainCard(card, match);
         resultsContainer.appendChild(card);
     });
 
@@ -3656,10 +3308,7 @@ function normalizeProductionText(text) {
             const catalogFamily =
                 detectBestCatalogFamily(preparedLine);
 
-            return Boolean(
-                catalogFamily ||
-                extractProductionColor(cleanLine)
-            );
+            return Boolean(catalogFamily);
         })
         .map(function (lineInfo) {
             return normalizeProductionLine(
@@ -3783,46 +3432,29 @@ function normalizeProductionLine(line) {
         codedColor ||
         "";
 
-    const observedFamilyAlias =
-        normalizeMatchText(
-            directFamily?.observedAlias || ""
-        );
-
-    const suggestedFamily =
-        familyNeedsReview
-            ? ""
-            : normalizeMatchText(
-                directFamily?.family || ""
-            );
-
-    const familyNeedsLearning = Boolean(
-        directFamily &&
-        String(directFamily.source || "")
-            .startsWith("FUZZY_ALIAS") &&
-        observedFamilyAlias &&
-        !isProductionAliasLearned(
-            observedFamilyAlias,
-            suggestedFamily
-        )
-    );
-
     return {
         original: normalizeMatchText(correctedLine),
         cleanedArticle: normalizeMatchText(articleLine),
-        parsedProduct:
-            normalizeMatchText(parsed.product || ""),
-        product: suggestedFamily,
-        family: suggestedFamily,
+        product:
+            familyNeedsReview
+                ? ""
+                : (
+                    directFamily?.family ||
+                    normalizeMatchText(parsed.product || "")
+                ),
+        family:
+            familyNeedsReview
+                ? ""
+                : (directFamily?.family || ""),
         familyAlias:
             directFamily?.alias || "",
         familyObservedAlias:
-            observedFamilyAlias,
+            directFamily?.observedAlias || "",
         familySource:
             directFamily?.source || "",
         familyConfidence:
             directFamily?.score || 0,
         familyNeedsReview: familyNeedsReview,
-        familyNeedsLearning: familyNeedsLearning,
         familyAlternatives:
             directFamily?.alternatives || [],
         variety:
@@ -4491,6 +4123,14 @@ function getRuntimeOperationalFamilyRules() {
         });
     });
 
+    (learnedProductionAliases || []).forEach(function (item) {
+        addFamilyRuleName(
+            ruleMap,
+            item.family,
+            item.alias
+        );
+    });
+
     (flowerFamilies || []).forEach(function (item) {
 
         addFamilyRuleName(
@@ -4507,18 +4147,6 @@ function getRuntimeOperationalFamilyRules() {
             );
         });
     });
-
-    (productionAliases || [])
-        .filter(function (item) {
-            return item.active;
-        })
-        .forEach(function (item) {
-            addFamilyRuleName(
-                ruleMap,
-                item.family,
-                item.alias
-            );
-        });
 
     if (window.flowerBrain) {
 
@@ -4828,13 +4456,7 @@ function detectOperationalFamilyFromLine(value) {
                 ) {
                     exactCandidates.push({
                         ...baseCandidate,
-                        source: isProductionAliasLearned(
-                            normalizedName,
-                            baseCandidate.family
-                        )
-                            ? "SUPABASE_ALIAS"
-                            : "ALIAS_RULE",
-                        observedAlias: normalizedName,
+                        source: "ALIAS_RULE",
                         score: 100,
                         distance: 0,
                         needsReview: false
@@ -4855,10 +4477,9 @@ function detectOperationalFamilyFromLine(value) {
                 fuzzyCandidates.push({
                     ...baseCandidate,
                     source: "FUZZY_ALIAS_RULE",
-                    observedAlias:
-                        fuzzyMatch.observedAlias || "",
                     score: fuzzyMatch.score,
                     distance: fuzzyMatch.distance,
+                    observedAlias: fuzzyMatch.observedAlias || "",
                     needsReview: false
                 });
             });
@@ -4898,7 +4519,6 @@ function detectOperationalFamilyFromLine(value) {
         return {
             family: "",
             alias: best.alias,
-            observedAlias: best.observedAlias || "",
             source: "FUZZY_ALIAS_AMBIGUOUS",
             score: best.score,
             distance: best.distance,
@@ -5046,12 +4666,7 @@ function isProductionMaterialLine(line) {
         /\bTAPE\b/,
         /\bWIRE\b/,
         /\bFOAM\b/,
-        /\bBAGS?\b/,
-        /\bPICKS?\b/,
-        /\bTAGS?\b/,
-        /\bARRANGEMENTS?\b/,
-        /\bS?5?L\s+\d{1,3}\s+CLR\b/,
-        /\bCLR\s+F?C\b/
+        /\bBAGS?\b/
     ];
 
     return materialPatterns.some(function (pattern) {
@@ -5656,6 +5271,7 @@ function findBestCatalogProduct(
 
     const explicitFamily =
         productionProduct.family ||
+        productionProduct.product ||
         "";
 
     if (explicitFamily) {
@@ -5723,6 +5339,44 @@ function findBestCatalogProduct(
     };
 }
 
+
+function getProductionLearningSuggestion(productionProduct) {
+
+    if (
+        !productionProduct ||
+        productionProduct.familySource !== "FUZZY_ALIAS_RULE" ||
+        !productionProduct.family ||
+        !productionProduct.familyObservedAlias ||
+        !productionProduct.familyAlias
+    ) {
+        return null;
+    }
+
+    const observedAlias = normalizeMatchText(
+        productionProduct.familyObservedAlias
+    );
+
+    const expectedAlias = normalizeMatchText(
+        productionProduct.familyAlias
+    );
+
+    if (!observedAlias || observedAlias === expectedAlias) {
+        return null;
+    }
+
+    return {
+        learningSuggested: true,
+        learningAlias: observedAlias,
+        learningExpectedAlias: expectedAlias,
+        learningFamily: normalizeMatchText(
+            productionProduct.family
+        ),
+        learningScore: Number(
+            productionProduct.familyConfidence || 0
+        )
+    };
+}
+
 function findInventoryMatches(products) {
 
     if (
@@ -5749,6 +5403,9 @@ function findInventoryMatches(products) {
 
     products.forEach(function (productionProduct) {
 
+        const learningData =
+            getProductionLearningSuggestion(productionProduct) || {};
+
         const catalogResult =
             findBestCatalogProduct(
                 productionProduct,
@@ -5767,6 +5424,7 @@ function findInventoryMatches(products) {
 
         if (!recognizedFamily) {
             results.push({
+                ...learningData,
                 product:
                     prepareArticleSearchText(
                         productionProduct.original
@@ -5827,6 +5485,7 @@ function findInventoryMatches(products) {
 
         if (matchingInventory.length === 0) {
             results.push({
+                ...learningData,
                 product: recognizedFamily,
                 articleName: recognizedArticle,
                 color: recognizedColor,
@@ -5856,6 +5515,7 @@ function findInventoryMatches(products) {
         matchingInventory.forEach(function (bestItem) {
 
             results.push({
+                ...learningData,
                 inventoryIndex:
                     inventory.indexOf(bestItem),
                 id: bestItem.id,
