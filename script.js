@@ -3364,8 +3364,8 @@ function fixProductionOcrWords(text) {
         "LILV": "LILY",
 
         // ===== GENERAL =====
-        "AS50RTED": "ASSORTED"
-        
+        "AS50RTED": "ASSORTED",
+
         "EM LEEM VD MARK": "MARK",
     };
 
