@@ -3469,10 +3469,17 @@ let colorCode = "";
     const codedColor =
         getProductionColorFromCode(colorCode);
 
-    const detectedColor =
-        explicitColor ||
-        codedColor ||
-        "";
+let detectedColor =
+    explicitColor ||
+    codedColor ||
+    "";
+
+if (
+    directFamily?.family === "TULIP" &&
+    /\bMARK\b/.test(normalizeMatchText(articleLine))
+) {
+    detectedColor = "MARK";
+}
 
     return {
         original: normalizeMatchText(correctedLine),
