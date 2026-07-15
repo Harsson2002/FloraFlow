@@ -466,9 +466,18 @@ function normalizeAppRole(value) {
 }
 
 function canManageProducts() {
+    const role = normalizeAppRole(currentUserProfile?.role);
     const name = normalizeMatchText(currentUser);
-    return normalizeAppRole(currentUserProfile?.role) === "admin" ||
+    return role === "admin" || role === "manager" ||
         name === "HARSSON" || name === "MARK";
+}
+
+function isFloraFlowAdmin() {
+    return normalizeAppRole(currentUserProfile?.role) === "admin";
+}
+
+function isFloraFlowManager() {
+    return normalizeAppRole(currentUserProfile?.role) === "manager";
 }
 
 function canManageUsers() {
@@ -608,7 +617,7 @@ async function initializeFloraFlowAuth() {
     });
 }
 
-const FLORAFLOW_VERSION = "2.6.0";
+const FLORAFLOW_VERSION = "2.7.0";
 let floraFlowHealthRefreshTimer = null;
 
 function ensureSettingsCurrentUserPanel() {
@@ -647,7 +656,11 @@ function updateSettingsCurrentUserPanel() {
 }
 
 function ensureFloraFlowHealthPanel() {
-    if (!settingsModal) return null;
+    if (!settingsModal || !isFloraFlowAdmin()) {
+        const existingPanel = document.getElementById("floraFlowHealthPanel");
+        if (existingPanel) existingPanel.style.display = "none";
+        return null;
+    }
     let panel = document.getElementById("floraFlowHealthPanel");
     if (panel) return panel;
     panel = document.createElement("section");
@@ -690,6 +703,7 @@ async function measureFloraFlowService(name, task, slowMs) {
 }
 
 async function refreshFloraFlowHealth() {
+    if (!isFloraFlowAdmin()) return;
     const panel = ensureFloraFlowHealthPanel();
     if (!panel) return;
     const services = panel.querySelector("#floraFlowHealthServices");
@@ -754,8 +768,29 @@ function updateNotificationCurrentUser() {
 }
 
 function applyUserPermissions() {
-    if (productsBtn) productsBtn.style.display = canManageProducts() ? "" : "none";
-    if (usersBtn) usersBtn.style.display = canManageUsers() ? "" : "none";
+    const role = normalizeAppRole(currentUserProfile?.role);
+    const isAdmin = role === "admin";
+    const isManager = role === "manager";
+    const isOperational = isAdmin || isManager;
+
+    ensureRoleBasedSettingsButtons();
+
+    if (productsBtn) productsBtn.style.display = isOperational ? "" : "none";
+    if (usersBtn) usersBtn.style.display = isAdmin ? "" : "none";
+    if (articlesBtn) articlesBtn.style.display = "none";
+    if (exportInventorySettingsBtn) exportInventorySettingsBtn.style.display = isOperational ? "" : "none";
+    if (exportActivitySettingsBtn) exportActivitySettingsBtn.style.display = isOperational ? "" : "none";
+
+    const healthPanel = document.getElementById("floraFlowHealthPanel");
+    if (healthPanel) healthPanel.style.display = isAdmin ? "" : "none";
+
+    document.querySelectorAll("[data-floraflow-setting-role]").forEach(function (button) {
+        const permission = button.dataset.floraflowSettingRole;
+        const visible = permission === "all" ||
+            (permission === "operations" && isOperational) ||
+            (permission === "admin" && isAdmin);
+        button.style.display = visible ? "" : "none";
+    });
 }
 
 
@@ -1501,6 +1536,163 @@ function extractProductionColor(line) {
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
+
+const FLORAFLOW_SETTINGS_STORAGE_KEY = "floraFlowPreferences";
+let floraFlowSettingsPreviousOverflow = "";
+
+function getFloraFlowPreferences() {
+    try {
+        return Object.assign({
+            notifications: true,
+            sounds: true,
+            soundVolume: "medium",
+            compactMobile: true,
+            qcReviewDays: 3
+        }, JSON.parse(localStorage.getItem(FLORAFLOW_SETTINGS_STORAGE_KEY) || "{}"));
+    } catch (error) {
+        return { notifications: true, sounds: true, soundVolume: "medium", compactMobile: true, qcReviewDays: 3 };
+    }
+}
+
+function saveFloraFlowPreferences(preferences) {
+    localStorage.setItem(FLORAFLOW_SETTINGS_STORAGE_KEY, JSON.stringify(preferences));
+}
+
+function lockFloraFlowPageScroll(locked) {
+    if (locked) {
+        if (document.body.dataset.floraFlowScrollLocked === "true") return;
+        floraFlowSettingsPreviousOverflow = document.body.style.overflow || "";
+        document.body.dataset.floraFlowScrollLocked = "true";
+        document.body.style.overflow = "hidden";
+        return;
+    }
+    if (document.body.dataset.floraFlowScrollLocked !== "true") return;
+    document.body.style.overflow = floraFlowSettingsPreviousOverflow;
+    delete document.body.dataset.floraFlowScrollLocked;
+}
+
+function createRoleSettingsButton(id, icon, label, role, action) {
+    let button = document.getElementById(id);
+    if (button) return button;
+    const menu = settingsModal?.querySelector(".settings-menu");
+    if (!menu) return null;
+    button = document.createElement("button");
+    button.type = "button";
+    button.id = id;
+    button.dataset.floraflowSettingRole = role;
+    button.innerHTML = icon + " " + label;
+    button.addEventListener("click", action);
+    const logout = logoutBtn;
+    if (logout && logout.parentNode === menu) menu.insertBefore(button, logout);
+    else menu.appendChild(button);
+    return button;
+}
+
+function openFloraFlowPreferencePanel(section) {
+    let overlay = document.getElementById("floraFlowPreferenceOverlay");
+    if (!overlay) {
+        overlay = document.createElement("div");
+        overlay.id = "floraFlowPreferenceOverlay";
+        overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:190000;background:rgba(15,23,42,.58);padding:18px;box-sizing:border-box;overflow:hidden;";
+        overlay.innerHTML = '<div id="floraFlowPreferenceCard" style="width:min(560px,100%);max-height:90vh;overflow:auto;overscroll-behavior:contain;margin:4vh auto;background:white;border-radius:20px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);"></div>';
+        document.body.appendChild(overlay);
+        installSafeBackdropClose(overlay, function () { overlay.style.display = "none"; });
+    }
+
+    const prefs = getFloraFlowPreferences();
+    const card = overlay.querySelector("#floraFlowPreferenceCard");
+    const titleMap = {
+        notifications: ["🔔", "Notifications"],
+        sounds: ["🎵", "Sounds"],
+        mobile: ["📱", "Mobile"],
+        qc: ["🟡", "QC Review"],
+        inventory: ["📦", "Inventory"],
+        system: ["⚙️", "System"]
+    };
+    const info = titleMap[section] || ["⚙️", "Settings"];
+
+    let body = "";
+    if (section === "notifications") body = `
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
+            <span><strong>App notifications</strong><br><small>Pick lists, pickup requests and internal updates.</small></span>
+            <input id="prefNotifications" type="checkbox" ${prefs.notifications ? "checked" : ""}>
+        </label>`;
+    if (section === "sounds") body = `
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
+            <span><strong>Enable sounds</strong><br><small>Play a short sound for important events.</small></span>
+            <input id="prefSounds" type="checkbox" ${prefs.sounds ? "checked" : ""}>
+        </label>
+        <label style="display:block;margin-top:12px;font-weight:800;">Volume
+            <select id="prefSoundVolume" style="width:100%;margin-top:7px;padding:11px;border:1px solid #cbd5e1;border-radius:10px;">
+                <option value="low" ${prefs.soundVolume === "low" ? "selected" : ""}>Low</option>
+                <option value="medium" ${prefs.soundVolume === "medium" ? "selected" : ""}>Medium</option>
+                <option value="high" ${prefs.soundVolume === "high" ? "selected" : ""}>High</option>
+            </select>
+        </label>`;
+    if (section === "mobile") body = `
+        <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
+            <span><strong>Compact mobile view</strong><br><small>Use tighter cards and controls on phones.</small></span>
+            <input id="prefCompactMobile" type="checkbox" ${prefs.compactMobile ? "checked" : ""}>
+        </label>`;
+    if (section === "qc") body = `
+        <label style="display:block;font-weight:800;">QC review begins after
+            <select id="prefQcDays" style="width:100%;margin-top:7px;padding:11px;border:1px solid #cbd5e1;border-radius:10px;">
+                ${[2,3,4,5,7].map(function(day){ return '<option value="'+day+'" '+(Number(prefs.qcReviewDays)===day?'selected':'')+'>'+day+' days</option>'; }).join("")}
+            </select>
+        </label>
+        <div style="margin-top:12px;padding:12px;border-radius:10px;background:#fff7ed;color:#9a3412;font-size:13px;">This preference prepares the automatic QC Review alerts planned for the inventory module.</div>`;
+    if (section === "inventory") body = `
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div style="padding:14px;border:1px solid #e2e8f0;border-radius:12px;"><small>Available items</small><div style="font-size:24px;font-weight:900;">${inventory.filter(function(i){return i.status === "Available";}).length}</div></div>
+            <div style="padding:14px;border:1px solid #e2e8f0;border-radius:12px;"><small>Total stems</small><div style="font-size:24px;font-weight:900;">${inventory.filter(function(i){return i.status === "Available";}).reduce(function(sum,i){return sum + Number(i.quantity || 0);},0)}</div></div>
+        </div>`;
+    if (section === "system") body = `
+        <div style="padding:14px;border:1px solid #e2e8f0;border-radius:12px;line-height:1.8;">
+            <div><strong>FloraFlow version:</strong> ${FLORAFLOW_VERSION}</div>
+            <div><strong>Role:</strong> ${normalizeAppRole(currentUserProfile?.role)}</div>
+            <div><strong>Connection:</strong> ${navigator.onLine ? "Online" : "Offline"}</div>
+        </div>`;
+
+    card.innerHTML = `
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+            <div><div style="font-size:12px;font-weight:900;letter-spacing:.1em;color:#8a3f76;text-transform:uppercase;">FloraFlow Settings</div><h2 style="margin:4px 0 0;">${info[0]} ${info[1]}</h2></div>
+            <button id="closeFloraFlowPreference" type="button" style="width:42px;height:42px;border:0;border-radius:11px;background:#a11375;color:white;font-size:23px;">×</button>
+        </div>
+        <div style="margin-top:18px;">${body}</div>
+        ${["notifications","sounds","mobile","qc"].includes(section) ? '<button id="saveFloraFlowPreference" type="button" style="width:100%;margin-top:18px;min-height:46px;background:#a11375;color:white;border:0;border-radius:11px;font-weight:900;">Save settings</button>' : ''}`;
+
+    card.querySelector("#closeFloraFlowPreference").addEventListener("click", function () { overlay.style.display = "none"; });
+    const save = card.querySelector("#saveFloraFlowPreference");
+    if (save) save.addEventListener("click", function () {
+        if (section === "notifications") prefs.notifications = Boolean(card.querySelector("#prefNotifications")?.checked);
+        if (section === "sounds") {
+            prefs.sounds = Boolean(card.querySelector("#prefSounds")?.checked);
+            prefs.soundVolume = card.querySelector("#prefSoundVolume")?.value || "medium";
+        }
+        if (section === "mobile") prefs.compactMobile = Boolean(card.querySelector("#prefCompactMobile")?.checked);
+        if (section === "qc") prefs.qcReviewDays = Number(card.querySelector("#prefQcDays")?.value || 3);
+        saveFloraFlowPreferences(prefs);
+        overlay.style.display = "none";
+    });
+    overlay.style.display = "block";
+}
+
+function ensureRoleBasedSettingsButtons() {
+    if (!settingsModal) return;
+    const menu = settingsModal.querySelector(".settings-menu");
+    if (!menu) return;
+
+    if (productsBtn) productsBtn.innerHTML = "🌸 Products & Catalog";
+    if (articlesBtn) articlesBtn.style.display = "none";
+
+    createRoleSettingsButton("notificationsSettingsBtn", "🔔", "Notifications", "all", function () { openFloraFlowPreferencePanel("notifications"); });
+    createRoleSettingsButton("soundsSettingsBtn", "🎵", "Sounds", "all", function () { openFloraFlowPreferencePanel("sounds"); });
+    createRoleSettingsButton("mobileSettingsBtn", "📱", "Mobile", "all", function () { openFloraFlowPreferencePanel("mobile"); });
+    createRoleSettingsButton("qcReviewSettingsBtn", "🟡", "QC Review", "operations", function () { openFloraFlowPreferencePanel("qc"); });
+    createRoleSettingsButton("inventorySettingsBtn", "📦", "Inventory", "operations", function () { openFloraFlowPreferencePanel("inventory"); });
+    createRoleSettingsButton("systemSettingsBtn", "⚙️", "System", "admin", function () { openFloraFlowPreferencePanel("system"); });
+}
+
 function configureFloraFlowSettingsModal() {
     if (!settingsModal) return;
     const content = settingsModal.querySelector(".modal-content") || settingsModal;
@@ -1528,18 +1720,26 @@ settingsBtn.addEventListener("click", function () {
     configureFloraFlowSettingsModal();
     ensureSettingsCurrentUserPanel();
     updateSettingsCurrentUserPanel();
-    ensureFloraFlowHealthPanel();
+    ensureRoleBasedSettingsButtons();
     applyUserPermissions();
     settingsModal.style.display = "block";
-    refreshFloraFlowHealth();
-    if (floraFlowHealthRefreshTimer) clearInterval(floraFlowHealthRefreshTimer);
-    floraFlowHealthRefreshTimer = setInterval(function () {
-        if (settingsModal.style.display === "block") refreshFloraFlowHealth();
-    }, 30000);
+    lockFloraFlowPageScroll(true);
+
+    if (isFloraFlowAdmin()) {
+        ensureFloraFlowHealthPanel();
+        refreshFloraFlowHealth();
+        if (floraFlowHealthRefreshTimer) clearInterval(floraFlowHealthRefreshTimer);
+        floraFlowHealthRefreshTimer = setInterval(function () {
+            if (settingsModal.style.display === "block" && isFloraFlowAdmin()) {
+                refreshFloraFlowHealth();
+            }
+        }, 30000);
+    }
 });
 closeSettingsModal.addEventListener("click", function () {
 
     settingsModal.style.display = "none";
+    lockFloraFlowPageScroll(false);
     if (floraFlowHealthRefreshTimer) {
         clearInterval(floraFlowHealthRefreshTimer);
         floraFlowHealthRefreshTimer = null;
@@ -1550,9 +1750,12 @@ closeSettingsModal.addEventListener("click", function () {
 window.addEventListener("click", function (event) {
 
     if (event.target === settingsModal) {
-
         settingsModal.style.display = "none";
-
+        lockFloraFlowPageScroll(false);
+        if (floraFlowHealthRefreshTimer) {
+            clearInterval(floraFlowHealthRefreshTimer);
+            floraFlowHealthRefreshTimer = null;
+        }
     }
 
 });
@@ -8072,6 +8275,11 @@ function ensureProductsManagementModal() {
                 ">✕</button>
             </div>
 
+            <div style="display:flex;gap:9px;flex-wrap:wrap;margin-top:16px;padding:10px;background:#faf5f9;border:1px solid #eadfea;border-radius:12px;">
+                <button type="button" id="openArticleCatalogFromProducts" style="min-height:42px;background:#a11375;color:white;border:0;border-radius:10px;padding:10px 14px;font-weight:850;">📚 Article Catalog</button>
+                <span style="font-size:13px;color:#64748b;align-self:center;">Catalog, families and FlowerBrain are now grouped under Products.</span>
+            </div>
+
             <div style="
                 margin-top:18px;
                 padding:16px;
@@ -8153,6 +8361,11 @@ function ensureProductsManagementModal() {
     `;
 
     document.body.appendChild(overlay);
+
+    overlay.querySelector("#openArticleCatalogFromProducts")?.addEventListener("click", function () {
+        overlay.style.display = "none";
+        if (articlesBtn) articlesBtn.click();
+    });
 
     overlay.querySelector("#closeProductsManagementBtn")
         .addEventListener("click", function () {
