@@ -844,3 +844,97 @@ button:hover { background: var(--ff-forest); }
     }
     #pickConfirmButton + #pickCloseWithoutPickupButton { width:100%; }
 }
+
+/* ===== FloraFlow Lexiflor visual system — final override ===== */
+:root {
+    --ff-primary:#DB1B60;
+    --ff-primary-dark:#A90F49;
+    --ff-primary-soft:#FDE8F0;
+    --ff-primary-pale:#FFF6F9;
+    --ff-purple:#5B174D;
+    --ff-text:#171923;
+    --ff-muted:#69707D;
+    --ff-border:#E7E9EE;
+    --ff-surface:#FFFFFF;
+    --ff-bg:#F7F8FA;
+    --ff-success:#1F9D55;
+    --ff-shadow:0 10px 30px rgba(39,30,38,.08);
+    --ff-shadow-soft:0 5px 18px rgba(39,30,38,.06);
+}
+html { background:var(--ff-bg); }
+body.ff-app { background:var(--ff-bg); color:var(--ff-text); font-family:Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+.ff-shell { max-width:1280px; background:var(--ff-surface); border-radius:24px; padding:0 28px 34px; box-shadow:var(--ff-shadow); }
+.ff-brand-header { margin:0 -28px 26px; min-height:104px; padding:20px 28px; display:flex; align-items:center; justify-content:space-between; gap:24px; background:#fff; color:var(--ff-text); border-bottom:2px solid var(--ff-primary); box-shadow:0 3px 12px rgba(39,30,38,.04); }
+.ff-brand-identity { min-width:0; display:flex; align-items:center; gap:22px; }
+.ff-lexiflor-logo { display:block; width:min(275px,31vw); max-height:64px; object-fit:contain; object-position:left center; }
+.ff-brand-divider { width:1px; height:58px; background:#D6D9E0; flex:0 0 auto; }
+.ff-brand-copy { min-width:0; }
+.ff-brand-copy h1 { margin:0; text-align:left; font-size:31px; line-height:1.05; letter-spacing:-.035em; color:#111827; font-weight:700; }
+.ff-brand-copy p { margin:7px 0 0; color:var(--ff-muted); font-size:13px; white-space:nowrap; }
+.ff-header-action-slot { width:54px; height:54px; flex:0 0 54px; }
+.dashboard { gap:14px; }
+.ff-metric-card { min-height:118px; position:relative; overflow:hidden; text-align:left; padding:20px 20px 18px 76px; border:1px solid var(--ff-border); border-top:0; border-radius:18px; background:#fff; box-shadow:var(--ff-shadow-soft); }
+.ff-metric-card::before { position:absolute; left:18px; top:50%; transform:translateY(-50%); width:42px; height:42px; display:grid; place-items:center; border-radius:50%; background:var(--ff-primary-soft); color:var(--ff-primary); font-size:21px; font-weight:700; }
+.ff-metric-card:nth-child(1)::before { content:'□'; }
+.ff-metric-card:nth-child(2)::before { content:'✿'; }
+.ff-metric-card:nth-child(3)::before { content:'↻'; }
+.ff-metric-card:nth-child(4)::before { content:'⌫'; }
+.ff-metric-card h3 { margin:3px 0 0; color:#353944; font-size:11px; letter-spacing:.1em; text-transform:uppercase; }
+.ff-metric-card p { margin:10px 0 0; color:var(--ff-primary); font-size:31px; line-height:1; }
+.ff-command-bar { padding:8px; border:1px solid var(--ff-border); border-radius:16px; background:#fff; box-shadow:var(--ff-shadow-soft); }
+.ff-command-bar input { min-height:47px; border:0; background:#fff; }
+.ff-command-bar button, #activityBtn { background:var(--ff-primary); }
+.ff-add-panel { padding:22px; border:1px solid var(--ff-border); border-radius:20px; background:#fff; box-shadow:var(--ff-shadow-soft); }
+.ff-panel-heading { border-bottom:1px solid var(--ff-border); }
+.ff-panel-heading span { color:var(--ff-primary); }
+.ff-panel-heading strong { color:#20232C; }
+input, select, textarea, .ts-control { min-height:46px; border:1px solid #D9DDE5 !important; border-radius:10px !important; background:#fff !important; box-shadow:none !important; }
+input:focus, select:focus, textarea:focus, .ts-wrapper.focus .ts-control { border-color:var(--ff-primary) !important; box-shadow:0 0 0 3px rgba(219,27,96,.12) !important; outline:none; }
+button { background:var(--ff-primary); border-radius:11px; }
+button:hover { background:var(--ff-primary-dark); }
+#todayProductionBtn { background:var(--ff-primary); }
+#todayProductionBtn:hover { background:var(--ff-primary-dark); }
+th { background:#5B174D; }
+.status-available { background:#E7F8ED; color:#17753C; }
+.mobile-inventory-card { border:1px solid var(--ff-border); border-left:0; border-top:3px solid var(--ff-primary); border-radius:17px; box-shadow:var(--ff-shadow-soft); }
+.mobile-product-title { color:#292D36; }
+.mobile-copy-btn,.ff-send-pickup-btn { color:var(--ff-primary); background:var(--ff-primary-pale); border-color:#F4C4D5; }
+.ff-sheet-overlay { background:rgba(28,20,27,.52); }
+.ff-sheet { border:1px solid var(--ff-border); box-shadow:0 28px 80px rgba(35,22,33,.25); }
+.ff-sheet-header span,.ff-field-label,.ff-inline-status { color:var(--ff-primary); }
+.ff-pickup-summary { background:var(--ff-primary-pale); }
+.ff-pickup-summary strong { color:var(--ff-purple); }
+.ff-segmented button { color:var(--ff-purple); background:#fff; border-color:var(--ff-border); }
+.ff-segmented button.active { background:var(--ff-primary); color:#fff; border-color:var(--ff-primary); }
+.ff-privacy-note { border-left-color:var(--ff-primary); background:var(--ff-primary-pale); }
+.ff-mobile-nav button.active, .ff-mobile-nav button:active { color:var(--ff-primary); }
+.ff-mobile-nav button.active span, .ff-mobile-nav button:active span { color:var(--ff-primary); }
+#floraFlowNotificationBell { background:#fff !important; color:var(--ff-primary) !important; border:1px solid #F0C6D6 !important; box-shadow:0 6px 18px rgba(219,27,96,.14) !important; }
+#floraFlowNotificationBadge { background:var(--ff-primary) !important; }
+#floraFlowNotificationPanel { background:#F8F8FA !important; }
+#floraFlowNotificationHeader { border-bottom-color:var(--ff-border) !important; }
+
+@media (max-width:720px) {
+    body.ff-app { padding:0 0 88px; }
+    .ff-shell { padding:0 14px 26px; }
+    .ff-brand-header { margin:0 -14px 18px; min-height:94px; padding:15px 16px; gap:12px; }
+    .ff-brand-identity { gap:12px; max-width:calc(100% - 56px); }
+    .ff-lexiflor-logo { width:132px; max-height:48px; }
+    .ff-brand-divider { height:49px; }
+    .ff-brand-copy h1 { font-size:24px; }
+    .ff-brand-copy p { max-width:150px; white-space:normal; font-size:10px; line-height:1.25; margin-top:4px; }
+    .ff-header-action-slot { width:46px; height:46px; flex-basis:46px; }
+    .dashboard { gap:10px; }
+    .ff-metric-card { min-height:104px; padding:15px 11px 13px 55px; border-radius:16px; }
+    .ff-metric-card::before { left:12px; width:34px; height:34px; font-size:17px; }
+    .ff-metric-card h3 { font-size:9px; line-height:1.25; }
+    .ff-metric-card p { font-size:27px; }
+    .ff-command-bar { grid-template-columns:1fr auto; }
+    .ff-add-panel { padding:16px; }
+    .ff-mobile-nav { left:10px; right:10px; bottom:calc(8px + env(safe-area-inset-bottom)); border-color:#E9E9EE; background:rgba(255,255,255,.97); box-shadow:0 12px 32px rgba(40,30,39,.16); }
+    .ff-mobile-nav button span { color:#6B707B; }
+    .ff-mobile-nav button[data-action="notifications"] span { color:var(--ff-primary); }
+    #floraFlowNotificationLauncher { position:static !important; display:flex !important; width:46px !important; height:46px !important; padding:0 !important; margin:0 !important; border:0 !important; background:transparent !important; box-shadow:none !important; }
+    #floraFlowNotificationBell { width:46px !important; height:46px !important; border-radius:14px !important; }
+    #floraFlowNotificationUser { display:none !important; }
+}

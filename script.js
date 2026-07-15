@@ -541,7 +541,7 @@ function ensureLoginOverlay() {
     overlay.style.cssText = "position:fixed;inset:0;z-index:200000;background:#f1f5f9;display:none;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;";
     overlay.innerHTML = `
         <form id="floraFlowLoginForm" style="width:min(420px,100%);background:white;border-radius:18px;padding:24px;box-shadow:0 24px 70px rgba(15,23,42,.16);">
-            <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#166534;text-transform:uppercase;">FloraFlow</div>
+            <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#DB1B60;text-transform:uppercase;">FloraFlow</div>
             <h1 style="margin:6px 0 4px;font-size:27px;color:#0f172a;">Sign in</h1>
             <p style="margin:0 0 18px;color:#64748b;font-size:14px;line-height:1.5;">Use your company account to continue.</p>
             <label style="display:block;font-weight:700;font-size:14px;margin-bottom:12px;">Email
@@ -550,7 +550,7 @@ function ensureLoginOverlay() {
             <label style="display:block;font-weight:700;font-size:14px;margin-bottom:14px;">Password
                 <input id="floraFlowLoginPassword" type="password" required autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;">
             </label>
-            <button id="floraFlowLoginButton" type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#166534;color:white;font-weight:800;font-size:15px;">Sign in</button>
+            <button id="floraFlowLoginButton" type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#DB1B60;color:white;font-weight:800;font-size:15px;">Sign in</button>
             <div id="floraFlowLoginMessage" style="min-height:20px;margin-top:12px;font-size:13px;color:#b91c1c;"></div>
         </form>`;
     document.body.appendChild(overlay);
@@ -684,14 +684,14 @@ function ensureNotificationCenter() {
                 height: 44px;
                 border: 0;
                 border-radius: 12px;
-                background: #166534;
+                background: #DB1B60;
                 color: #fff;
                 cursor: pointer;
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 font-size: 20px;
-                box-shadow: 0 4px 12px rgba(22, 101, 52, .25);
+                box-shadow: 0 4px 12px rgba(219, 27, 96, .20);
             }
 
             #floraFlowNotificationUser {
@@ -712,11 +712,12 @@ function ensureNotificationCenter() {
 
             @media (max-width: 720px) {
                 #floraFlowNotificationLauncher {
-                    top: auto;
-                    right: 14px;
-                    bottom: calc(14px + env(safe-area-inset-bottom));
-                    padding: 6px;
-                    border-radius: 999px;
+                    position: static;
+                    inset: auto;
+                    padding: 0;
+                    border: 0;
+                    background: transparent;
+                    box-shadow: none;
                 }
 
                 #floraFlowNotificationUser {
@@ -784,7 +785,7 @@ function ensureNotificationCenter() {
             <div id="floraFlowNotificationUserName" style="font-size:14px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeProductionPickHtml(getCurrentUserName())}</div>
         </div>
     `;
-    document.body.appendChild(launcher);
+    (document.getElementById("ffHeaderNotificationSlot") || document.body).appendChild(launcher);
 
     const overlay = document.createElement("div");
     overlay.id = "floraFlowNotificationOverlay";
@@ -883,12 +884,12 @@ function renderAppNotifications() {
         card.style.cssText = `
             width:100%;
             text-align:left;
-            border:1px solid ${item.is_read ? "#e2e8f0" : "#86efac"};
-            border-left:5px solid ${item.is_read ? "#cbd5e1" : "#166534"};
+            border:1px solid ${item.is_read ? "#e2e8f0" : "#F2B6CC"};
+            border-left:5px solid ${item.is_read ? "#cbd5e1" : "#DB1B60"};
             border-radius:13px;
             padding:14px;
             margin-bottom:10px;
-            background:${item.is_read ? "white" : "#f0fdf4"};
+            background:${item.is_read ? "white" : "#FFF6F9"};
             cursor:pointer;
         `;
         card.innerHTML = `
@@ -1435,12 +1436,12 @@ function ensureProductionSelectionUI() {
                         box-sizing:border-box;
                         margin-top:6px;
                         padding:11px 12px;
-                        border:2px solid #166534;
+                        border:2px solid #DB1B60;
                         border-radius:10px;
                         font-size:18px;
                         font-weight:800;
                         color:#14532d;
-                        background:#f0fdf4;
+                        background:#FFF6F9;
                     " placeholder="Confirm the order number">
                 </label>
                 <button type="button" id="productionDetectOrderBtn" style="min-height:44px;">
@@ -1600,7 +1601,7 @@ function setProductionSelectionStatus(message, type) {
     ensureProductionSelectionUI();
 
     const colors = {
-        success: "#166534",
+        success: "#DB1B60",
         error: "#b91c1c",
         working: "#1d4ed8",
         info: "#475569"
@@ -3535,7 +3536,7 @@ function appendFloraFlowBrainCard(card, match) {
         canManageProducts();
 
     brainCard.innerHTML = `
-        <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#166534;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#DB1B60;margin-bottom:10px;">
             <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;background:#dcfce7;align-items:center;justify-content:center;font-size:15px;">FF</span>
             FloraFlow Learning
         </div>
@@ -3788,7 +3789,7 @@ function ensureTeachFloraFlowModal() {
             try {
                 await saveProductionAliasLearning(alias, family);
 
-                message.style.color = "#166534";
+                message.style.color = "#DB1B60";
                 message.textContent =
                     alias + " was saved as " + family +
                     (color ? " | Color: " + color : "") +
@@ -3878,7 +3879,7 @@ function appendTeachFloraFlowButton(card, match) {
         padding:10px 16px;
         border:none;
         border-radius:10px;
-        background:#166534;
+        background:#DB1B60;
         color:white;
         font-size:14px;
         font-weight:700;
@@ -3896,7 +3897,7 @@ function appendTeachFloraFlowButton(card, match) {
     });
 
     button.addEventListener("mouseleave", function () {
-        button.style.background = "#166534";
+        button.style.background = "#DB1B60";
         button.style.boxShadow = "0 2px 6px rgba(22,101,52,.20)";
     });
 
@@ -4267,7 +4268,7 @@ function appendProductionShareControls(
     `;
 
     controls.innerHTML = `
-        <div style="font-weight:800;margin-bottom:9px;color:#166534;">
+        <div style="font-weight:800;margin-bottom:9px;color:#DB1B60;">
             📤 Build production list
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
@@ -4282,7 +4283,7 @@ function appendProductionShareControls(
             </button>
             <span class="production-share-count" style="font-size:13px;color:#475569;"></span>
         </div>
-        <div class="production-share-status" style="font-size:13px;color:#166534;margin-top:8px;"></div>
+        <div class="production-share-status" style="font-size:13px;color:#DB1B60;margin-top:8px;"></div>
     `;
 
     resultsContainer.appendChild(controls);
@@ -4393,9 +4394,9 @@ function showProductionRecommendations(
 
     orderHeader.innerHTML = `
         <div style="
-            background:#f0fdf4;
-            border:1px solid #86efac;
-            border-left:5px solid #166534;
+            background:#FFF6F9;
+            border:1px solid #F2B6CC;
+            border-left:5px solid #DB1B60;
             border-radius:12px;
             padding:15px 16px;
             margin-bottom:15px;
@@ -4459,7 +4460,7 @@ function showProductionRecommendations(
                     font-size:18px;
                     font-weight:bold;
                     margin-bottom:10px;
-                    color:#166534;
+                    color:#DB1B60;
                     cursor:pointer;
                 ">
                     <input
@@ -7212,7 +7213,7 @@ function ensureUsersManagementModal() {
             <input id="newUserPassword" type="password" placeholder="Temporary password" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
             <select id="newUserRole" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
           </div>
-          <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:10px 16px;border:none;border-radius:9px;background:#166534;color:white;font-weight:800;">Create Account</button>
+          <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:10px 16px;border:none;border-radius:9px;background:#DB1B60;color:white;font-weight:800;">Create Account</button>
           <div id="usersManagementMessage" style="min-height:20px;margin-top:9px;font-size:13px;color:#475569;"></div>
         </div>
         <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;"><div style="font-size:18px;font-weight:800;">All users</div><button id="refreshUsersBtn" type="button">Refresh</button></div>
@@ -7240,7 +7241,7 @@ async function createUserAccountFromSettings() {
         const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", { body: { full_name, email, password, role } });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        message.style.color="#166534"; message.textContent = full_name + " was created successfully.";
+        message.style.color="#DB1B60"; message.textContent = full_name + " was created successfully.";
         overlay.querySelector("#newUserName").value=""; overlay.querySelector("#newUserEmail").value=""; overlay.querySelector("#newUserPassword").value=""; overlay.querySelector("#newUserRole").value="user";
         await refreshUsersManagement();
     } catch (error) {
@@ -7317,7 +7318,7 @@ function ensureProductsManagementModal() {
         ">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
                 <div>
-                    <div style="font-size:22px;font-weight:800;color:#166534;">
+                    <div style="font-size:22px;font-weight:800;color:#DB1B60;">
                         🌼 Products & Families
                     </div>
                     <div style="font-size:13px;color:#64748b;margin-top:3px;">
@@ -7340,10 +7341,10 @@ function ensureProductsManagementModal() {
                 margin-top:18px;
                 padding:16px;
                 border:1px solid #bbf7d0;
-                background:#f0fdf4;
+                background:#FFF6F9;
                 border-radius:12px;
             ">
-                <div style="font-weight:800;margin-bottom:12px;color:#166534;">
+                <div style="font-weight:800;margin-bottom:12px;color:#DB1B60;">
                     ➕ Add New Product / Family
                 </div>
 
@@ -7525,7 +7526,7 @@ function renderProductsFamiliesList() {
 
         card.innerHTML = `
             <div>
-                <div style="font-weight:800;color:#166534;">🌸 ${family}</div>
+                <div style="font-weight:800;color:#DB1B60;">🌸 ${family}</div>
                 <div style="font-size:13px;color:#64748b;margin-top:5px;line-height:1.5;">
                     ${aliases.length > 0
                         ? "Aliases: " + aliases.join(", ")
@@ -7630,7 +7631,7 @@ async function saveNewProductFamilyFromSettings() {
             message.textContent = family + " was added successfully.";
         }
 
-        message.style.color = "#166534";
+        message.style.color = "#DB1B60";
 
         familyInput.value = "";
         aliasesInput.value = "";
@@ -7916,7 +7917,7 @@ async function shareProductionList(
 
         if (statusElement) {
             statusElement.innerHTML = `
-                <div style="padding:12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;">
+                <div style="padding:12px;border:1px solid #F2B6CC;border-radius:10px;background:#FFF6F9;">
                     <strong>Pick list created and boxes reserved.</strong><br>
                     ${recipientIds.length
                         ? `<span>Sent internally to ${recipientIds.length} user(s). They will receive it in FloraFlow.</span><br>`
@@ -8035,7 +8036,7 @@ function appendProductionShareControls(
             <button type="button" class="production-clear-selection">Clear</button>
             <button type="button" class="production-share-list" style="
                 font-weight:800;
-                background:#166534;
+                background:#DB1B60;
                 color:white;
                 border:none;
                 border-radius:9px;
@@ -8045,7 +8046,7 @@ function appendProductionShareControls(
             </button>
             <span class="production-share-count" style="font-size:13px;color:#475569;"></span>
         </div>
-        <div class="production-share-status" style="font-size:13px;color:#166534;margin-top:9px;line-height:1.5;"></div>
+        <div class="production-share-status" style="font-size:13px;color:#DB1B60;margin-top:9px;line-height:1.5;"></div>
     `;
 
     resultsContainer.appendChild(controls);
@@ -8189,7 +8190,7 @@ function buildProductionPickPage(data) {
 
             <div style="background:white;border-radius:18px;padding:16px;box-shadow:0 8px 30px rgba(15,23,42,.08);">
                 ${isClosed ? `
-                    <div style="padding:18px;border-radius:12px;background:#ecfdf5;color:#166534;font-weight:800;text-align:center;">
+                    <div style="padding:18px;border-radius:12px;background:#ecfdf5;color:#DB1B60;font-weight:800;text-align:center;">
                         ${list.status === "CANCELLED" ? "This order was closed because no product was taken." : "This pick list has already been completed."}
                     </div>
                 ` : `
@@ -8281,7 +8282,7 @@ function buildProductionPickPage(data) {
                 </div>
             </label>
             ${isClosed ? `
-                <div style="margin-top:10px;font-weight:700;color:#166534;">
+                <div style="margin-top:10px;font-weight:700;color:#DB1B60;">
                     ${escapeProductionPickHtml(item.status)} — ${Number(item.quantity_taken || 0)} stems
                 </div>
             ` : `
@@ -8611,7 +8612,7 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
         await loadHistoryFromSupabase();
 
         statusElement.innerHTML = `
-            <div style="padding:14px;border-radius:10px;background:#ecfdf5;color:#166534;font-weight:800;">
+            <div style="padding:14px;border-radius:10px;background:#ecfdf5;color:#DB1B60;font-weight:800;">
                 Pick confirmed. Inventory and activity history were updated.
             </div>
         `;
@@ -8686,7 +8687,7 @@ function getProductionProgressColors(status) {
         PENDING: { background: "#fff7ed", text: "#9a3412", border: "#fdba74" },
         IN_PROGRESS: { background: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
         PROCESSING: { background: "#faf5ff", text: "#7e22ce", border: "#d8b4fe" },
-        COMPLETED: { background: "#ecfdf5", text: "#166534", border: "#86efac" },
+        COMPLETED: { background: "#ecfdf5", text: "#DB1B60", border: "#F2B6CC" },
         CANCELLED: { background: "#f8fafc", text: "#475569", border: "#cbd5e1" }
     };
     return colors[value] || colors.PENDING;
@@ -9003,7 +9004,7 @@ function renderProductionProgressLists() {
             </div>
             <div style="margin-top:14px;">
                 <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:#475569;margin-bottom:6px;"><span>Progress</span><span>${progress.percentage}%</span></div>
-                <div style="height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden;"><div style="width:${progress.percentage}%;height:100%;background:#166534;border-radius:999px;transition:width .25s ease;"></div></div>
+                <div style="height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden;"><div style="width:${progress.percentage}%;height:100%;background:#DB1B60;border-radius:999px;transition:width .25s ease;"></div></div>
             </div>
             ${lastConfirmed ? `<div style="margin-top:12px;padding:10px;border-radius:10px;background:#f8fafc;font-size:12px;color:#475569;">Last update: ${escapeProductionPickHtml(lastConfirmed.product || "Product")} · Case ${escapeProductionPickHtml(lastConfirmed.case_number || "")} · ${escapeProductionPickHtml(formatProgressCenterTime(lastConfirmed.confirmed_at))}</div>` : ""}
             <details style="margin-top:12px;">
@@ -9015,7 +9016,7 @@ function renderProductionProgressLists() {
                 </div>
             </details>
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
-                <button type="button" class="open-progress-pick" style="background:#166534;color:white;border:0;border-radius:9px;padding:10px 13px;font-weight:800;">Open Pick List</button>
+                <button type="button" class="open-progress-pick" style="background:#DB1B60;color:white;border:0;border-radius:9px;padding:10px 13px;font-weight:800;">Open Pick List</button>
                 <button type="button" class="copy-progress-link">Copy Link</button>
             </div>
         `;
@@ -9147,15 +9148,15 @@ function ensureProductionAssistantStyles() {
             box-sizing: border-box;
         }
         .ff-input-card.recommended {
-            border: 2px solid #166534;
-            background: #f0fdf4;
+            border: 2px solid #DB1B60;
+            background: #FFF6F9;
         }
         .ff-recommended-badge {
             display: inline-flex;
             align-items: center;
             padding: 5px 9px;
             border-radius: 999px;
-            background: #166534;
+            background: #DB1B60;
             color: white;
             font-size: 11px;
             font-weight: 800;
@@ -9168,7 +9169,7 @@ function ensureProductionAssistantStyles() {
             margin-top: 14px;
             border: 0;
             border-radius: 11px;
-            background: #166534;
+            background: #DB1B60;
             color: white;
             font-size: 14px;
             font-weight: 800;
@@ -9199,7 +9200,7 @@ function ensureProductionAssistantStyles() {
             width: 0%;
             height: 100%;
             border-radius: inherit;
-            background: #166534;
+            background: #DB1B60;
             transition: width .25s ease;
         }
         .ff-pdf-summary {
@@ -9520,10 +9521,10 @@ function prependPdfAnalysisSummary(resultsContainer, analysis, matches) {
     const summary = document.createElement("section");
     summary.className = "ff-pdf-analysis-summary";
     summary.innerHTML = `
-        <div style="padding:15px;border:1px solid #86efac;border-radius:14px;background:#f0fdf4;margin-bottom:14px;">
+        <div style="padding:15px;border:1px solid #F2B6CC;border-radius:14px;background:#FFF6F9;margin-bottom:14px;">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
                 <div>
-                    <div style="font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#166534;">PDF analysis complete</div>
+                    <div style="font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#DB1B60;">PDF analysis complete</div>
                     <div style="font-size:21px;font-weight:850;color:#14532d;margin-top:3px;">Production Order #${escapeProductionPickHtml(analysis.orderNumber || "Not detected")}</div>
                     <div style="font-size:13px;color:#475569;margin-top:4px;">${escapeProductionPickHtml(analysis.fileName || "Pick List PDF")} · ${analysis.pageCount} page(s) · Text read directly</div>
                 </div>
