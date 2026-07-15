@@ -1073,16 +1073,57 @@ async function initializeFloraFlow() {
 
     await initializeFloraFlowAuth();
     ensureSettingsCurrentUserPanel();
-    await loadInventoryFromSupabase();
-    await loadHistoryFromSupabase();
-    await loadFlowerFamilies();
-    await loadProductionAliases();
-    await loadLexiflorCatalog();
-    await loadActiveProductionReservations();
+
+    const urlParams = new URLSearchParams(window.location.search);
+    const hasPickLink = Boolean(urlParams.get("pick"));
+
+    // Fast-link mode: show the requested Pick List before loading the
+    // complete inventory, catalog, history and progress modules.
+    if (hasPickLink) {
+        await openProductionPickListFromUrl();
+
+        Promise.allSettled([
+            loadInventoryFromSupabase(),
+            loadHistoryFromSupabase(),
+            loadFlowerFamilies(),
+            loadProductionAliases(),
+            loadLexiflorCatalog(),
+            loadActiveProductionReservations()
+        ]).then(function () {
+            startNotificationRefresh();
+            ensureProductionProgressCenter();
+            startProductionProgressRefresh();
+            console.log("FloraFlow background loading complete.");
+        });
+
+        return;
+    }
+
+    await Promise.all([
+        loadInventoryFromSupabase(),
+        loadHistoryFromSupabase(),
+        loadFlowerFamilies(),
+        loadProductionAliases(),
+        loadLexiflorCatalog(),
+        loadActiveProductionReservations()
+    ]);
+
     startNotificationRefresh();
     ensureProductionProgressCenter();
     startProductionProgressRefresh();
-    await openProductionPickListFromUrl();
+
+    // Warm up the PDF reader without blocking the main screen.
+    const warmPdfReader = function () {
+        loadFloraFlowPdfJs().catch(function (error) {
+            console.warn("PDF reader preload skipped:", error);
+        });
+    };
+
+    if ("requestIdleCallback" in window) {
+        window.requestIdleCallback(warmPdfReader, { timeout: 2500 });
+    } else {
+        setTimeout(warmPdfReader, 800);
+    }
 
     console.log(
         "FloraFlow ready. Catalog:",
@@ -2034,6 +2075,11 @@ todayProductionBtn.addEventListener("click", function () {
     todayProductionModal.style.display = "block";
     ensureProductionSelectionUI();
     configureTodayProductionWorkspace();
+
+    // Start loading the PDF engine immediately while the user chooses a file.
+    loadFloraFlowPdfJs().catch(function (error) {
+        console.warn("PDF reader preload skipped:", error);
+    });
 });
 
 closeTodayProductionModal.addEventListener("click", function () {
@@ -2077,7 +2123,7 @@ clearProductionImageBtn.addEventListener("click", function () {
         document.getElementById("productionRecommendations");
 
     if (resultsContainer) {
-        renderProductionOrderHistory();
+        resultsContainer.innerHTML = "";
     }
 });
 
@@ -4677,276 +4723,13 @@ function appendProductionCorrectionControls(card, match) {
     card.appendChild(wrap);
 }
 
-
-// ============================================================
-// TODAY'S PRODUCTION ORDER ACCORDION
-// One open order per user. Opening one closes the previous one.
-// The visual state is local to each signed-in user and device.
-// ============================================================
-
-const PRODUCTION_ORDER_HISTORY_LIMIT = 25;
-
-function getProductionOrderHistoryStorageKey() {
-    const userKey = normalizeMatchText(
-        getCurrentAuthUserId() || getCurrentUserName() || "USER"
-    ) || "USER";
-
-    return "floraFlowProductionOrderHistory:" + userKey;
-}
-
-function getProductionOrderActiveStorageKey() {
-    const userKey = normalizeMatchText(
-        getCurrentAuthUserId() || getCurrentUserName() || "USER"
-    ) || "USER";
-
-    return "floraFlowProductionOrderActive:" + userKey;
-}
-
-function loadProductionOrderHistory() {
-    try {
-        const stored = JSON.parse(
-            localStorage.getItem(getProductionOrderHistoryStorageKey()) || "[]"
-        );
-
-        return Array.isArray(stored) ? stored : [];
-    } catch (error) {
-        console.warn("Could not load Today's Production order history.", error);
-        return [];
-    }
-}
-
-function saveProductionOrderHistory(entries) {
-    try {
-        localStorage.setItem(
-            getProductionOrderHistoryStorageKey(),
-            JSON.stringify((entries || []).slice(0, PRODUCTION_ORDER_HISTORY_LIMIT))
-        );
-    } catch (error) {
-        console.warn("Could not save Today's Production order history.", error);
-    }
-}
-
-function getActiveProductionOrderKey() {
-    return localStorage.getItem(getProductionOrderActiveStorageKey()) || "";
-}
-
-function setActiveProductionOrderKey(value) {
-    const key = getProductionOrderActiveStorageKey();
-
-    if (value) {
-        localStorage.setItem(key, value);
-    } else {
-        localStorage.removeItem(key);
-    }
-}
-
-function createProductionOrderEntry(matches, productionOrderNumber) {
-    const orderNumber = normalizeProductionOrderNumber(productionOrderNumber) || "Not detected";
-    const now = new Date();
-    const safeMatches = JSON.parse(JSON.stringify(Array.isArray(matches) ? matches : []));
-    const foundCount = safeMatches.filter(function (match) {
-        return Boolean(match && match.inventoryFound);
-    }).length;
-
-    return {
-        key: orderNumber !== "Not detected"
-            ? "order-" + orderNumber
-            : "scan-" + now.getTime(),
-        orderNumber: orderNumber,
-        createdAt: now.toISOString(),
-        productCount: safeMatches.length,
-        foundCount: foundCount,
-        matches: safeMatches
-    };
-}
-
-function upsertProductionOrderHistory(matches, productionOrderNumber) {
-    const entry = createProductionOrderEntry(matches, productionOrderNumber);
-    let entries = loadProductionOrderHistory();
-
-    // Reanalyzing the same numbered order refreshes that line instead of duplicating it.
-    entries = entries.filter(function (item) {
-        return item.key !== entry.key;
-    });
-
-    entries.unshift(entry);
-    entries = entries.slice(0, PRODUCTION_ORDER_HISTORY_LIMIT);
-
-    saveProductionOrderHistory(entries);
-    setActiveProductionOrderKey(entry.key);
-
-    return entry;
-}
-
-function getProductionRecommendationsRoot() {
-    let root = document.getElementById("productionRecommendations");
-    const selectionTool = document.getElementById("productionSelectionTool");
-    const modalContent = todayProductionModal?.querySelector(".modal-content");
-    const parent = selectionTool?.parentNode || modalContent || todayProductionModal;
-
-    if (!root) {
-        root = document.createElement("div");
-        root.id = "productionRecommendations";
-        root.style.marginTop = "20px";
-    }
-
-    if (root.parentNode !== parent) {
-        parent.appendChild(root);
-    }
-
-    root.style.display = "block";
-    root.style.visibility = "visible";
-    root.style.width = "100%";
-    root.style.boxSizing = "border-box";
-
-    return root;
-}
-
-function formatProductionOrderHistoryTime(value) {
-    const date = new Date(value || "");
-    if (Number.isNaN(date.getTime())) return "";
-
-    return date.toLocaleTimeString([], {
-        hour: "2-digit",
-        minute: "2-digit"
-    });
-}
-
-function removeProductionOrderHistoryEntry(entryKey) {
-    const entries = loadProductionOrderHistory().filter(function (entry) {
-        return entry.key !== entryKey;
-    });
-
-    saveProductionOrderHistory(entries);
-
-    if (getActiveProductionOrderKey() === entryKey) {
-        setActiveProductionOrderKey("");
-    }
-
-    renderProductionOrderHistory();
-}
-
-function clearProductionOrderHistory() {
-    const entries = loadProductionOrderHistory();
-    if (entries.length === 0) return;
-
-    if (!window.confirm("Clear all production orders from this view?")) {
-        return;
-    }
-
-    localStorage.removeItem(getProductionOrderHistoryStorageKey());
-    setActiveProductionOrderKey("");
-    renderProductionOrderHistory();
-}
-
-function renderProductionOrderHistory(options = {}) {
-    const root = getProductionRecommendationsRoot();
-    const entries = loadProductionOrderHistory();
-    let activeKey = getActiveProductionOrderKey();
-
-    if (activeKey && !entries.some(function (entry) { return entry.key === activeKey; })) {
-        activeKey = "";
-        setActiveProductionOrderKey("");
-    }
-
-    root.innerHTML = "";
-    root.style.padding = "0";
-    root.style.background = "transparent";
-    root.style.borderRadius = "0";
-
-    const heading = document.createElement("div");
-    heading.style.cssText = "display:flex;align-items:center;justify-content:space-between;gap:12px;margin:14px 0 10px;";
-    heading.innerHTML = `
-        <div>
-            <div style="font-size:18px;font-weight:850;color:#111827;">Today's Production Orders</div>
-            <div style="font-size:12px;color:#64748b;margin-top:3px;">Only one order opens at a time.</div>
-        </div>
-        <button type="button" class="production-orders-clear" style="background:#fff;color:#b91c1c;border:1px solid #fecaca;padding:9px 12px;border-radius:10px;white-space:nowrap;">
-            Clear list
-        </button>
-    `;
-    root.appendChild(heading);
-
-    heading.querySelector(".production-orders-clear")
-        .addEventListener("click", clearProductionOrderHistory);
-
-    if (entries.length === 0) {
-        const empty = document.createElement("div");
-        empty.style.cssText = "padding:22px;text-align:center;color:#64748b;background:#f8fafc;border:1px dashed #cbd5e1;border-radius:13px;";
-        empty.textContent = "No production orders have been analyzed yet.";
-        root.appendChild(empty);
-        return;
-    }
-
-    entries.forEach(function (entry) {
-        const isOpen = entry.key === activeKey;
-        const wrapper = document.createElement("section");
-        wrapper.dataset.orderKey = entry.key;
-        wrapper.style.cssText = "margin-bottom:10px;border:1px solid #e2e8f0;border-radius:14px;background:white;overflow:hidden;box-shadow:0 3px 12px rgba(15,23,42,.06);";
-
-        const header = document.createElement("div");
-        header.style.cssText = "display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px;padding:13px 14px;background:" + (isOpen ? "#fdf2f8" : "#ffffff") + ";";
-
-        const toggle = document.createElement("button");
-        toggle.type = "button";
-        toggle.style.cssText = "display:flex;align-items:center;gap:11px;width:100%;padding:0;background:transparent;color:#111827;text-align:left;box-shadow:none;";
-        toggle.innerHTML = `
-            <span style="font-size:17px;color:#a11375;min-width:18px;">${isOpen ? "▼" : "▶"}</span>
-            <span style="min-width:0;">
-                <span style="display:block;font-size:16px;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">Production Order #${escapeProductionPickHtml(entry.orderNumber || "Not detected")}</span>
-                <span style="display:block;font-size:12px;color:#64748b;margin-top:4px;">${Number(entry.productCount || 0)} products detected · ${Number(entry.foundCount || 0)} leftovers found · ${escapeProductionPickHtml(formatProductionOrderHistoryTime(entry.createdAt))}</span>
-            </span>
-        `;
-
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.title = "Remove this order from the list";
-        remove.setAttribute("aria-label", "Remove Production Order " + (entry.orderNumber || ""));
-        remove.textContent = "×";
-        remove.style.cssText = "width:38px;height:38px;padding:0;border-radius:10px;background:#fff;color:#b91c1c;border:1px solid #fecaca;font-size:22px;box-shadow:none;";
-
-        toggle.addEventListener("click", function () {
-            const nextKey = isOpen ? "" : entry.key;
-            setActiveProductionOrderKey(nextKey);
-            renderProductionOrderHistory();
-        });
-
-        remove.addEventListener("click", function (event) {
-            event.stopPropagation();
-            removeProductionOrderHistoryEntry(entry.key);
-        });
-
-        header.appendChild(toggle);
-        header.appendChild(remove);
-        wrapper.appendChild(header);
-
-        if (isOpen) {
-            const details = document.createElement("div");
-            details.style.cssText = "padding:14px;border-top:1px solid #f1f5f9;background:#f8fafc;";
-            wrapper.appendChild(details);
-            renderProductionOrderDetails(entry.matches || [], entry.orderNumber, details);
-        }
-
-        root.appendChild(wrapper);
-    });
-
-    if (options.scrollIntoView) {
-        requestAnimationFrame(function () {
-            root.scrollIntoView({ behavior: "smooth", block: "start" });
-        });
-    }
-}
-
-function showProductionRecommendations(matches, productionOrderNumber) {
-    upsertProductionOrderHistory(matches, productionOrderNumber);
-    renderProductionOrderHistory({ scrollIntoView: true });
-}
-
-function renderProductionOrderDetails(
+function showProductionRecommendations(
     matches,
-    productionOrderNumber,
-    resultsContainer
+    productionOrderNumber
 ) {
+
+    let resultsContainer =
+        document.getElementById("productionRecommendations");
 
     const selectionTool =
         document.getElementById("productionSelectionTool");
@@ -4970,8 +4753,8 @@ function renderProductionOrderDetails(
         resultsContainer.style.overflow = "visible";
     }
 
-    // Keep standalone result containers inside the visible modal content.
-    if (!resultsContainer.parentNode) {
+    // Keep the results inside the visible modal content.
+    if (resultsContainer.parentNode !== resultsParent) {
         resultsParent.appendChild(resultsContainer);
     }
 
