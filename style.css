@@ -934,27 +934,81 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     }
 }
 
-/* ===== Inventory performance controls ===== */
-.inventory-load-more-controls {
+/* ===== Inventory pagination ===== */
+.inventory-pagination-controls {
     display: flex;
+    flex-direction: column;
     align-items: center;
     justify-content: center;
-    gap: 14px;
-    flex-wrap: wrap;
+    gap: 11px;
     padding: 18px 0 4px;
 }
 .inventory-visible-summary {
     color: #68756f;
     font-size: 13px;
-    font-weight: 700;
+    font-weight: 750;
+    text-align: center;
 }
-#inventoryLoadMoreBtn {
-    min-width: 130px;
-    min-height: 42px;
+.inventory-pagination-row {
+    display: flex;
+    align-items: center;
     justify-content: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+.inventory-page-numbers {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    flex-wrap: wrap;
+}
+.inventory-page-button,
+.inventory-page-navigation {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 42px;
+    min-height: 42px;
+    padding: 8px 12px;
+    border: 1px solid var(--ff-line, #dbe5df);
+    border-radius: 11px;
+    background: #fff;
+    color: var(--ff-forest, #173f35);
+    box-shadow: none;
+    font-weight: 850;
+}
+.inventory-page-navigation {
+    min-width: 112px;
+}
+.inventory-page-button:hover,
+.inventory-page-navigation:hover:not(:disabled) {
+    background: var(--ff-mint, #eaf4ef);
+    color: var(--ff-forest, #173f35);
+    box-shadow: none;
+}
+.inventory-page-button.active {
+    background: var(--ff-forest, #173f35);
+    border-color: var(--ff-forest, #173f35);
+    color: #fff;
+}
+.inventory-page-navigation:disabled {
+    opacity: .42;
+    cursor: not-allowed;
+    background: #f5f7f6;
+}
+.inventory-page-ellipsis {
+    min-width: 26px;
+    text-align: center;
+    color: #68756f;
+    font-weight: 900;
+    letter-spacing: .08em;
+}
+.inventory-pagination-controls.is-empty .inventory-pagination-row {
+    display: none;
 }
 @media (max-width: 650px) {
-    .inventory-load-more-controls {
+    .inventory-pagination-controls {
         position: sticky;
         bottom: 84px;
         z-index: 20;
@@ -962,11 +1016,42 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
         padding: 10px;
         border: 1px solid var(--ff-line, #dbe5df);
         border-radius: 14px;
-        background: rgba(255,255,255,.96);
+        background: rgba(255,255,255,.97);
         box-shadow: 0 8px 24px rgba(28,58,47,.10);
         backdrop-filter: blur(10px);
     }
-    #inventoryLoadMoreBtn {
+    .inventory-pagination-row {
         width: 100%;
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr) auto;
+        gap: 6px;
+    }
+    .inventory-page-numbers {
+        flex-wrap: nowrap;
+        overflow-x: auto;
+        justify-content: flex-start;
+        padding: 2px;
+        scrollbar-width: thin;
+    }
+    .inventory-page-button {
+        flex: 0 0 40px;
+        min-width: 40px;
+        min-height: 40px;
+        padding: 7px;
+    }
+    .inventory-page-navigation {
+        min-width: 44px;
+        min-height: 42px;
+        padding: 8px 10px;
+        font-size: 0;
+    }
+    #inventoryPreviousPageBtn::before {
+        content: "←";
+        font-size: 19px;
+    }
+    #inventoryNextPageBtn::before {
+        content: "→";
+        font-size: 19px;
     }
 }
+

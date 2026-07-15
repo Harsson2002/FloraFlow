@@ -186,7 +186,7 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 // for Production Today, but render only a small block at a time.
 const INVENTORY_FETCH_PAGE_SIZE = 1000;
 const INVENTORY_RENDER_PAGE_SIZE = 75;
-let inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+let inventoryCurrentPage = 1;
 let removedInventoryLoaded = inventory.some(function (item) {
     return item.status === "Removed from Inventory";
 });
@@ -2704,16 +2704,21 @@ setTimeout(function () {
 }, 2500);
 });
 
-function ensureInventoryLoadMoreControls() {
-    let controls = document.getElementById("inventoryLoadMoreControls");
+function ensureInventoryPaginationControls() {
+    let controls = document.getElementById("inventoryPaginationControls");
     if (controls) return controls;
 
-    controls = document.createElement("div");
-    controls.id = "inventoryLoadMoreControls";
-    controls.className = "inventory-load-more-controls";
+    controls = document.createElement("nav");
+    controls.id = "inventoryPaginationControls";
+    controls.className = "inventory-pagination-controls";
+    controls.setAttribute("aria-label", "Inventory pages");
     controls.innerHTML = `
         <div id="inventoryVisibleSummary" class="inventory-visible-summary"></div>
-        <button id="inventoryLoadMoreBtn" type="button">Load more</button>
+        <div class="inventory-pagination-row">
+            <button id="inventoryPreviousPageBtn" class="inventory-page-navigation" type="button">← Previous</button>
+            <div id="inventoryPageNumbers" class="inventory-page-numbers"></div>
+            <button id="inventoryNextPageBtn" class="inventory-page-navigation" type="button">Next →</button>
+        </div>
     `;
 
     const anchor = mobileInventoryList || table?.closest("table") || table;
@@ -2721,17 +2726,113 @@ function ensureInventoryLoadMoreControls() {
         anchor.parentNode.insertBefore(controls, anchor.nextSibling);
     }
 
-    controls.querySelector("#inventoryLoadMoreBtn").addEventListener("click", function () {
-        inventoryRenderLimit += INVENTORY_RENDER_PAGE_SIZE;
+    controls.querySelector("#inventoryPreviousPageBtn").addEventListener("click", function () {
+        if (inventoryCurrentPage <= 1) return;
+        inventoryCurrentPage -= 1;
         renderInventory();
+        scrollInventoryToTop();
+    });
+
+    controls.querySelector("#inventoryNextPageBtn").addEventListener("click", function () {
+        const totalPages = Math.max(1, Math.ceil(getVisibleInventoryItems().length / INVENTORY_RENDER_PAGE_SIZE));
+        if (inventoryCurrentPage >= totalPages) return;
+        inventoryCurrentPage += 1;
+        renderInventory();
+        scrollInventoryToTop();
+    });
+
+    controls.querySelector("#inventoryPageNumbers").addEventListener("click", function (event) {
+        const button = event.target.closest("button[data-page]");
+        if (!button) return;
+        const page = Number(button.dataset.page);
+        if (!Number.isInteger(page) || page < 1 || page === inventoryCurrentPage) return;
+        inventoryCurrentPage = page;
+        renderInventory();
+        scrollInventoryToTop();
     });
 
     return controls;
 }
 
+function scrollInventoryToTop() {
+    const inventoryHeading = document.querySelector(".ff-section-title") || table?.closest("table") || mobileInventoryList;
+    if (!inventoryHeading) return;
+    inventoryHeading.scrollIntoView({ behavior: "smooth", block: "start" });
+}
+
+function getInventoryPaginationItems(currentPage, totalPages) {
+    if (totalPages <= 7) {
+        return Array.from({ length: totalPages }, function (_, index) { return index + 1; });
+    }
+
+    const pages = new Set([1, totalPages, currentPage]);
+    pages.add(Math.max(1, currentPage - 1));
+    pages.add(Math.min(totalPages, currentPage + 1));
+
+    if (currentPage <= 4) {
+        [2, 3, 4, 5].forEach(function (page) { pages.add(page); });
+    }
+
+    if (currentPage >= totalPages - 3) {
+        [totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1].forEach(function (page) {
+            if (page > 0) pages.add(page);
+        });
+    }
+
+    const sortedPages = Array.from(pages).filter(function (page) {
+        return page >= 1 && page <= totalPages;
+    }).sort(function (a, b) { return a - b; });
+
+    const items = [];
+    sortedPages.forEach(function (page, index) {
+        if (index > 0 && page - sortedPages[index - 1] > 1) {
+            items.push("ellipsis-" + page);
+        }
+        items.push(page);
+    });
+    return items;
+}
+
+function renderInventoryPagination(totalItems, totalPages) {
+    const controls = ensureInventoryPaginationControls();
+    const summary = controls?.querySelector("#inventoryVisibleSummary");
+    const pageNumbers = controls?.querySelector("#inventoryPageNumbers");
+    const previousButton = controls?.querySelector("#inventoryPreviousPageBtn");
+    const nextButton = controls?.querySelector("#inventoryNextPageBtn");
+
+    if (!controls || !summary || !pageNumbers || !previousButton || !nextButton) return;
+
+    if (totalItems === 0) {
+        summary.textContent = "No inventory items found";
+        pageNumbers.innerHTML = "";
+        previousButton.disabled = true;
+        nextButton.disabled = true;
+        controls.classList.add("is-empty");
+        return;
+    }
+
+    controls.classList.remove("is-empty");
+    const firstItem = (inventoryCurrentPage - 1) * INVENTORY_RENDER_PAGE_SIZE + 1;
+    const lastItem = Math.min(inventoryCurrentPage * INVENTORY_RENDER_PAGE_SIZE, totalItems);
+    summary.textContent = `Showing ${firstItem}–${lastItem} of ${totalItems} products`;
+
+    pageNumbers.innerHTML = getInventoryPaginationItems(inventoryCurrentPage, totalPages)
+        .map(function (item) {
+            if (typeof item === "string") {
+                return '<span class="inventory-page-ellipsis" aria-hidden="true">…</span>';
+            }
+            const active = item === inventoryCurrentPage;
+            return `<button type="button" class="inventory-page-button${active ? " active" : ""}" data-page="${item}" ${active ? 'aria-current="page"' : ""}>${item}</button>`;
+        })
+        .join("");
+
+    previousButton.disabled = inventoryCurrentPage <= 1;
+    nextButton.disabled = inventoryCurrentPage >= totalPages;
+}
+
 function queueInventoryRender(options = {}) {
-    if (options.resetLimit) {
-        inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+    if (options.resetLimit || options.resetPage) {
+        inventoryCurrentPage = 1;
     }
     if (inventoryRenderQueued) return;
     inventoryRenderQueued = true;
@@ -2769,11 +2870,12 @@ function getVisibleInventoryItems() {
 }
 
 function renderInventory() {
-    const controls = ensureInventoryLoadMoreControls();
-    const summary = controls?.querySelector("#inventoryVisibleSummary");
-    const loadMoreBtn = controls?.querySelector("#inventoryLoadMoreBtn");
     const visibleInventory = getVisibleInventoryItems();
-    const renderedInventory = visibleInventory.slice(0, inventoryRenderLimit);
+    const totalPages = Math.max(1, Math.ceil(visibleInventory.length / INVENTORY_RENDER_PAGE_SIZE));
+    inventoryCurrentPage = Math.min(Math.max(1, inventoryCurrentPage), totalPages);
+
+    const startIndex = (inventoryCurrentPage - 1) * INVENTORY_RENDER_PAGE_SIZE;
+    const renderedInventory = visibleInventory.slice(startIndex, startIndex + INVENTORY_RENDER_PAGE_SIZE);
 
     table.innerHTML = "";
     mobileInventoryList.innerHTML = "";
@@ -2875,15 +2977,7 @@ function renderInventory() {
 
     table.appendChild(tableFragment);
     mobileInventoryList.appendChild(mobileFragment);
-
-    if (summary) {
-        summary.textContent = visibleInventory.length === 0
-            ? "No inventory items found"
-            : `Showing ${Math.min(renderedInventory.length, visibleInventory.length)} of ${visibleInventory.length}`;
-    }
-    if (loadMoreBtn) {
-        loadMoreBtn.style.display = renderedInventory.length < visibleInventory.length ? "inline-flex" : "none";
-    }
+    renderInventoryPagination(visibleInventory.length, totalPages);
 }
 
 async function rotateProduct(index) {
@@ -3721,7 +3815,7 @@ async function loadInventoryFromSupabase() {
                 : [];
 
             inventory = activeRows.concat(existingRemovedRows);
-            inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+            inventoryCurrentPage = 1;
             renderInventory();
             updateDashboard();
             return inventory;
