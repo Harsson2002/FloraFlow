@@ -3359,7 +3359,9 @@ let correctedLine =
         : cleanOcrText;
 
 correctedLine = correctedLine
-    .replace(/\b[PF]AE[OQ0]\b/g, "PAEO");
+    .replace(/\b[PF]AE[DQO0]\b/g, "PAEO")
+    .replace(/\bPINE\b/g, "PINK")
+    .replace(/\bGREEM\b/g, "GREEN");
 
 let articleLine = correctedLine;
 let colorCode = "";
