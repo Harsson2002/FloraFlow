@@ -776,6 +776,8 @@ let productionReadAreaBtn = null;
 let productionFindLeftoversBtn = null;
 let productionSelectAreaBtn = null;
 let productionSelectAgainBtn = null;
+let productionOrderInput = null;
+let productionDetectOrderBtn = null;
 
 function ensureProductionSelectionUI() {
 
@@ -858,6 +860,32 @@ function ensureProductionSelectionUI() {
                 </label>
             </div>
 
+            <div style="
+                display:grid;
+                grid-template-columns:minmax(180px, 1fr) auto;
+                gap:8px;
+                margin-top:14px;
+                align-items:end;
+            ">
+                <label style="display:block;font-weight:700;font-size:14px;">
+                    Production Order #
+                    <input type="text" id="productionOrderInput" inputmode="numeric" autocomplete="off" style="
+                        width:100%;
+                        box-sizing:border-box;
+                        margin-top:6px;
+                        padding:11px 12px;
+                        border:1px solid #cbd5e1;
+                        border-radius:10px;
+                        font-size:16px;
+                        font-weight:700;
+                        background:white;
+                    " placeholder="Confirm the order number">
+                </label>
+                <button type="button" id="productionDetectOrderBtn" style="min-height:44px;">
+                    Detect Order #
+                </button>
+            </div>
+
             <div id="productionSelectionStatus" style="
                 margin-top:10px;
                 min-height:22px;
@@ -927,6 +955,12 @@ function ensureProductionSelectionUI() {
     productionSelectAgainBtn =
         document.getElementById("productionSelectAgainBtn");
 
+    productionOrderInput =
+        document.getElementById("productionOrderInput");
+
+    productionDetectOrderBtn =
+        document.getElementById("productionDetectOrderBtn");
+
     productionSelectAreaBtn.addEventListener("click", function () {
         beginProductionAreaSelection();
     });
@@ -946,6 +980,16 @@ function ensureProductionSelectionUI() {
     productionDetectedText.addEventListener("input", function () {
         productionFindLeftoversBtn.disabled =
             productionDetectedText.value.trim() === "";
+    });
+
+    productionOrderInput.addEventListener("input", function () {
+        this.value = String(this.value || "")
+            .replace(/[^0-9]/g, "")
+            .slice(0, 8);
+    });
+
+    productionDetectOrderBtn.addEventListener("click", async function () {
+        await detectProductionOrderFromImage();
     });
 
     productionSelectionCanvas.addEventListener(
@@ -983,6 +1027,8 @@ function ensureProductionSelectionUI() {
     if (productionPreviewViewport) {
         productionPreviewViewport.style.display = "none";
     }
+
+    configureTodayProductionWorkspace();
 
     return tool;
 }
@@ -1328,6 +1374,10 @@ async function loadProductionImageIntoSelector(imageUrl) {
     productionDetectedText.value = "";
     productionFindLeftoversBtn.disabled = true;
     drawProductionSelectionCanvas();
+
+    setTimeout(function () {
+        detectProductionOrderFromImage({ silent: true });
+    }, 100);
 }
 
 function beginProductionAreaSelection() {
@@ -1376,6 +1426,7 @@ function cleanDetectedProductionText(value) {
 todayProductionBtn.addEventListener("click", function () {
     todayProductionModal.style.display = "block";
     ensureProductionSelectionUI();
+    configureTodayProductionWorkspace();
 });
 
 closeTodayProductionModal.addEventListener("click", function () {
@@ -2796,7 +2847,15 @@ async function findLeftoversFromDetectedText() {
     try {
         const products = normalizeProductionText(editedText);
         const matches = findInventoryMatches(products);
-        const productionOrderNumber = extractProductionLot(editedText);
+        const confirmedOrderNumber = normalizeProductionOrderNumber(
+            productionOrderInput?.value
+        );
+        const productionOrderNumber =
+            confirmedOrderNumber || extractProductionLot(editedText);
+
+        if (productionOrderInput && productionOrderNumber) {
+            productionOrderInput.value = productionOrderNumber;
+        }
 
         showProductionRecommendations(
     matches,
@@ -3238,6 +3297,184 @@ function appendTeachFloraFlowButton(card, match) {
 }
 
 
+function configureTodayProductionWorkspace() {
+
+    if (!todayProductionModal) {
+        return;
+    }
+
+    const modalContent =
+        todayProductionModal.querySelector(".modal-content");
+
+    todayProductionModal.style.overflow = "hidden";
+
+    if (modalContent) {
+        modalContent.style.width = "min(1100px, 96vw)";
+        modalContent.style.maxWidth = "1100px";
+        modalContent.style.height = "min(92vh, 920px)";
+        modalContent.style.maxHeight = "92vh";
+        modalContent.style.overflowY = "auto";
+        modalContent.style.overflowX = "hidden";
+        modalContent.style.boxSizing = "border-box";
+        modalContent.style.padding = "22px";
+        modalContent.style.scrollBehavior = "smooth";
+        modalContent.style.overscrollBehavior = "contain";
+        modalContent.style.position = "relative";
+    }
+
+    if (closeTodayProductionModal) {
+        closeTodayProductionModal.textContent = "×";
+        closeTodayProductionModal.setAttribute(
+            "aria-label",
+            "Close Today's Production"
+        );
+        closeTodayProductionModal.title = "Close Today's Production";
+        closeTodayProductionModal.style.cssText += `
+            position:sticky;
+            top:0;
+            float:right;
+            z-index:50;
+            width:46px;
+            height:46px;
+            min-width:46px;
+            min-height:46px;
+            border:none;
+            border-radius:12px;
+            background:#b91c1c;
+            color:white;
+            font-size:30px;
+            font-weight:900;
+            line-height:1;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            cursor:pointer;
+            box-shadow:0 4px 12px rgba(0,0,0,.18);
+            margin-left:12px;
+        `;
+    }
+
+    const stage = document.getElementById("productionSelectionStage");
+
+    if (stage) {
+        stage.style.maxHeight = "none";
+        stage.style.overflow = "auto hidden";
+        stage.style.overscrollBehavior = "contain";
+        stage.style.scrollbarGutter = "stable";
+    }
+
+    const results = document.getElementById("productionRecommendations");
+
+    if (results) {
+        results.style.maxHeight = "none";
+        results.style.overflow = "visible";
+    }
+}
+
+function normalizeProductionOrderNumber(value) {
+
+    const digits = String(value || "")
+        .toUpperCase()
+        .replace(/O/g, "0")
+        .replace(/[IL]/g, "1")
+        .replace(/[^0-9]/g, "");
+
+    return digits.length >= 4 && digits.length <= 8
+        ? digits
+        : "";
+}
+
+async function detectProductionOrderFromImage(options = {}) {
+
+    ensureProductionSelectionUI();
+
+    if (!productionSelectionImage) {
+        if (!options.silent) {
+            alert("Paste a production screenshot first.");
+        }
+        return "";
+    }
+
+    const button = productionDetectOrderBtn;
+    const previousText = button?.textContent || "Detect Order #";
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Detecting...";
+    }
+
+    try {
+        const image = productionSelectionImage;
+        const cropHeight = Math.max(
+            160,
+            Math.round(image.naturalHeight * 0.35)
+        );
+
+        const headerCanvas = createEnhancedOcrCanvas(
+            image,
+            0,
+            0,
+            image.naturalWidth,
+            Math.min(cropHeight, image.naturalHeight),
+            Math.max(1.5, Math.min(3, 1600 / image.naturalWidth))
+        );
+
+        const result = await Tesseract.recognize(
+            headerCanvas,
+            "eng",
+            {
+                preserve_interword_spaces: "1",
+                tessedit_pageseg_mode: 6,
+                tessedit_char_whitelist:
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -:#"
+            }
+        );
+
+        const headerText = String(result?.data?.text || "");
+        const detected = extractProductionLot(headerText, {
+            strict: true
+        });
+
+        if (detected) {
+            productionOrderInput.value = detected;
+            setProductionSelectionStatus(
+                "Production Order #" + detected +
+                " detected. Confirm it before sharing.",
+                "success"
+            );
+            return detected;
+        }
+
+        if (!options.silent) {
+            setProductionSelectionStatus(
+                "The order number was not detected. Enter it manually before searching.",
+                "error"
+            );
+            productionOrderInput.focus();
+        }
+
+        return "";
+
+    } catch (error) {
+        console.error("Production order OCR error:", error);
+
+        if (!options.silent) {
+            setProductionSelectionStatus(
+                "The order number could not be detected. Enter it manually.",
+                "error"
+            );
+        }
+
+        return "";
+
+    } finally {
+        if (button) {
+            button.disabled = false;
+            button.textContent = previousText;
+        }
+    }
+}
+
 function formatProductionShareDate(value) {
 
     const source = String(value || "").trim();
@@ -3522,8 +3759,8 @@ function showProductionRecommendations(
         resultsContainer.style.padding = "15px";
         resultsContainer.style.background = "#f8f9fa";
         resultsContainer.style.borderRadius = "12px";
-        resultsContainer.style.maxHeight = "450px";
-        resultsContainer.style.overflowY = "auto";
+        resultsContainer.style.maxHeight = "none";
+        resultsContainer.style.overflow = "visible";
     }
 
     // Keep the results inside the visible modal content.
@@ -3712,7 +3949,7 @@ function showProductionRecommendations(
         });
     });
 }
-function extractProductionLot(text) {
+function extractProductionLot(text, options = {}) {
 
     const source = String(text || "").toUpperCase();
 
@@ -3721,32 +3958,31 @@ function extractProductionLot(text) {
     }
 
     const normalizeDigits = function (value) {
-        return String(value || "")
-            .replace(/O/g, "0")
-            .replace(/[IL]/g, "1")
-            .replace(/[^0-9]/g, "");
+        return normalizeProductionOrderNumber(value);
     };
 
-    const nearOrder = source.match(
-        /([0-9OIL]{4,7})\s*[-:]?\s*PRODUCTION\s*ORDER/
-    );
+    const orderPatterns = [
+        /PRODUCTION\s*ORDER\s*(?:NUMBER|NO|#)?\s*[-:]?\s*([0-9OIL]{4,8})/,
+        /ORDER\s*(?:NUMBER|NO|#)?\s*[-:]?\s*([0-9OIL]{4,8})/,
+        /([0-9OIL]{4,8})\s*[-:]?\s*PRODUCTION\s*ORDER/
+    ];
 
-    if (nearOrder) {
-        const orderNumber = normalizeDigits(nearOrder[1]);
+    for (const pattern of orderPatterns) {
+        const match = source.match(pattern);
 
-        if (orderNumber.length >= 4) {
+        if (!match) {
+            continue;
+        }
+
+        const orderNumber = normalizeDigits(match[1]);
+
+        if (orderNumber) {
             return orderNumber;
         }
     }
 
-    const possibleNumbers = source.match(/[0-9OIL]{4,7}/g) || [];
-
-    for (const possibleNumber of possibleNumbers) {
-        const orderNumber = normalizeDigits(possibleNumber);
-
-        if (orderNumber.length >= 4 && orderNumber.length <= 7) {
-            return orderNumber;
-        }
+    if (options.strict) {
+        return null;
     }
 
     return null;
