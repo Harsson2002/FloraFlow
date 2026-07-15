@@ -7,8 +7,8 @@
 <link rel="stylesheet" href="style.css">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon.png">
-<link rel="apple-touch-icon" href="apple-touch-icon.png">
-<meta name="theme-color" content="#DB1B60">
+<link rel="apple-touch-icon" href="icon.png">
+<meta name="theme-color" content="#2e7d32">
 </head>
 
 <body>
@@ -16,15 +16,12 @@
 <div class="container">
 
 <header class="ff-brand-header">
-    <div class="ff-brand-identity">
-        <img class="ff-lexiflor-logo" src="lexiflor-logo.png" alt="Lexiflor Inc.">
-        <span class="ff-brand-divider" aria-hidden="true"></span>
-        <div class="ff-brand-copy">
-            <h1>FloraFlow</h1>
-            <p>Production &amp; Leftover Inventory</p>
-        </div>
+    <div class="ff-brand-mark" aria-hidden="true">LF</div>
+    <div class="ff-brand-copy">
+        <div class="ff-brand-company">LEXIFLOR</div>
+        <h1>FloraFlow</h1>
+        <p>Production &amp; Leftover Inventory</p>
     </div>
-    <div id="ffHeaderNotificationSlot" class="ff-header-action-slot" aria-label="Notifications"></div>
 </header>
 <div class="dashboard">
 
@@ -518,7 +515,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.2/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js"></script>
 <script src="flowerBrain.js"></script>
-<script src="script.js?v=20260715-lexiflor-redesign-1"></script>
+<script src="script.js?v=20260715-progress-nav-fix"></script>
 <script>
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js");
