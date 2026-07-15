@@ -3683,7 +3683,7 @@ function getOperationalFamilyRules() {
     family: "PEONY",
     names: [
         "PAEO",
-        "PAEO PINK",
+        "PAEO",
         "PAEO ENHANCED",
         "PEONY",
         "PEONIES"
