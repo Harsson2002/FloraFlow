@@ -277,6 +277,40 @@ async function saveProductionAliasLearning(alias, family) {
     await loadProductionAliases();
 }
 
+function syncProductCatalogFromFlowerFamilies() {
+
+    const dynamicFamilies = (flowerFamilies || [])
+        .map(function (item) {
+            return normalizeMatchText(item.family);
+        })
+        .filter(Boolean);
+
+    dynamicFamilies.forEach(function (family) {
+        if (!productsCatalog.includes(family)) {
+            productsCatalog.push(family);
+        }
+    });
+
+    productsCatalog.sort(function (a, b) {
+        return a.localeCompare(b);
+    });
+
+    if (!productSelect) {
+        return;
+    }
+
+    productsCatalog.forEach(function (family) {
+        if (!productSelect.options[family]) {
+            productSelect.addOption({
+                value: family,
+                text: family
+            });
+        }
+    });
+
+    productSelect.refreshOptions(false);
+}
+
 async function loadFlowerFamilies() {
 
     const { data, error } = await supabaseClient
@@ -311,6 +345,8 @@ async function loadFlowerFamilies() {
             aliases: aliases
         };
     });
+
+    syncProductCatalogFromFlowerFamilies();
 
 }
 let lexiflorCatalog = [];
@@ -6292,13 +6328,14 @@ async function saveNewProductFamilyFromSettings() {
         }
 
         message.style.color = "#166534";
-        addFamilyToProductDropdown(family);
 
         familyInput.value = "";
         aliasesInput.value = "";
 
         await loadFlowerFamilies();
         renderProductsFamiliesList();
+
+        message.textContent += " It is now available in Add Product, Today's Production and Teach FloraFlow.";
 
     } catch (error) {
         console.error("Products management save error:", error);
