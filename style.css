@@ -901,3 +901,35 @@ button:hover { background: var(--ff-forest); }
 body.ff-secondary-view-open #floraFlowNotificationLauncher {
     display: none !important;
 }
+
+/* Pickup request actions */
+.ff-pickup-actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-top: 14px;
+}
+
+.ff-pickup-actions .ff-primary-action,
+.ff-pickup-actions .ff-secondary-action {
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+}
+
+.ff-secondary-action {
+    background: #ffffff;
+    color: #d81b60;
+    border: 1px solid #f3b4cf;
+}
+
+.ff-secondary-action:hover {
+    background: #fff3f8;
+    color: #b31350;
+}
+
+@media (max-width: 520px) {
+    .ff-pickup-actions {
+        grid-template-columns: 1fr;
+    }
+}

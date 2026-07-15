@@ -9715,7 +9715,10 @@ window.addEventListener("floraflow-auth-ready", function () {
                 <div class="ff-field-label">Send internally to</div>
                 <div id="ffPickupRecipients" class="ff-recipient-grid"></div>
                 <div class="ff-privacy-note"><strong>Case number stays hidden</strong><span>Product, color, quantity and date remain visible. The case appears only after the teammate accepts the task.</span></div>
-                <button type="button" id="ffCreatePickupRequest" class="ff-primary-action">Send pickup request</button>
+                <div class="ff-pickup-actions">
+                    <button type="button" id="ffCreatePickupRequest" class="ff-primary-action">Send internally</button>
+                    <button type="button" id="ffSharePickupWhatsApp" class="ff-secondary-action">Share by WhatsApp</button>
+                </div>
                 <div id="ffPickupStatus" class="ff-inline-status"></div>
             </section>`;
         document.body.appendChild(overlay);
@@ -9728,10 +9731,95 @@ window.addEventListener("floraflow-auth-ready", function () {
             button.classList.add('active');
         });
         overlay.querySelector('#ffCreatePickupRequest').addEventListener('click', createManualPickupRequest);
+        overlay.querySelector('#ffSharePickupWhatsApp').addEventListener('click', shareManualPickupByWhatsApp);
         return overlay;
     }
 
     let manualPickupItem = null;
+
+    function getManualPickupFormData(overlay) {
+        if (!manualPickupItem) {
+            throw new Error('No leftover product is selected.');
+        }
+
+        const quantity = Number(overlay.querySelector('#ffPickupQuantity').value || 0);
+        const destination = overlay.querySelector('#ffPickupDestination .active')?.dataset.value || 'Production';
+        const recipients = Array.from(
+            overlay.querySelectorAll('#ffPickupRecipients input:checked')
+        ).map(function (input) {
+            return input.value;
+        });
+
+        if (!quantity || quantity < 1 || quantity > Number(manualPickupItem.quantity || 0)) {
+            throw new Error('Enter a valid quantity.');
+        }
+
+        return {
+            quantity: quantity,
+            destination: destination,
+            recipients: recipients,
+            requestItem: Object.assign({}, manualPickupItem, {
+                quantity: quantity,
+                articleName: 'Manual pickup · ' + destination
+            })
+        };
+    }
+
+    function buildManualPickupWhatsAppText(pickList, formData) {
+        const item = manualPickupItem || {};
+        return [
+            'FloraFlow pickup request',
+            '',
+            'Product: ' + (item.product || ''),
+            'Color / Variety: ' + (item.color || 'Not specified'),
+            'Stems requested: ' + formData.quantity,
+            'Date received: ' + formatProductionShareDate(item.date),
+            'Destination: ' + formData.destination,
+            '',
+            'Case number: Hidden until the request is accepted',
+            '',
+            'Open and accept the request:',
+            pickList.link
+        ].join('\n');
+    }
+
+    async function shareManualPickupByWhatsApp() {
+        const overlay = ensureSendPickupModal();
+        const button = overlay.querySelector('#ffSharePickupWhatsApp');
+        const status = overlay.querySelector('#ffPickupStatus');
+
+        button.disabled = true;
+        button.textContent = 'Preparing link...';
+        status.textContent = 'Creating the protected pickup link...';
+
+        try {
+            const formData = getManualPickupFormData(overlay);
+            const pickList = await createProductionPickList(
+                buildManualPickupReference(),
+                [formData.requestItem]
+            );
+            pickList.link += '&mode=pickup';
+
+            if (formData.recipients.length > 0) {
+                await assignProductionPickListInternally(pickList, formData.recipients);
+            }
+
+            const shareText = buildManualPickupWhatsAppText(pickList, formData);
+            const whatsappUrl = 'https://wa.me/?text=' + encodeURIComponent(shareText);
+
+            status.innerHTML = '<strong>Pickup link ready.</strong><br>WhatsApp will open without showing the case number.';
+            window.open(whatsappUrl, '_blank', 'noopener');
+
+            await loadActiveProductionReservations();
+            await loadInventoryFromSupabase();
+        } catch (error) {
+            console.error('WhatsApp pickup share error:', error);
+            status.textContent = error?.message || String(error);
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Share by WhatsApp';
+        }
+    }
 
     function openSendPickupModal(item) {
         manualPickupItem = item;
@@ -9755,14 +9843,14 @@ window.addEventListener("floraflow-auth-ready", function () {
         const button = overlay.querySelector('#ffCreatePickupRequest');
         const status = overlay.querySelector('#ffPickupStatus');
         if (!manualPickupItem) return;
-        const quantity = Number(overlay.querySelector('#ffPickupQuantity').value || 0);
-        const recipients = Array.from(overlay.querySelectorAll('#ffPickupRecipients input:checked')).map(function (input) { return input.value; });
-        const destination = overlay.querySelector('#ffPickupDestination .active')?.dataset.value || 'Production';
-        if (!quantity || quantity < 1 || quantity > Number(manualPickupItem.quantity || 0)) {
-            alert('Enter a valid quantity.');
+        let formData;
+        try {
+            formData = getManualPickupFormData(overlay);
+        } catch (error) {
+            alert(error.message);
             return;
         }
-        if (recipients.length === 0) {
+        if (formData.recipients.length === 0) {
             alert('Select at least one teammate.');
             return;
         }
@@ -9770,13 +9858,9 @@ window.addEventListener("floraflow-auth-ready", function () {
         button.textContent = 'Creating request...';
         status.textContent = 'Reserving the requested quantity and sending the internal alert...';
         try {
-            const requestItem = Object.assign({}, manualPickupItem, {
-                quantity: quantity,
-                articleName: 'Manual pickup · ' + destination
-            });
-            const pickList = await createProductionPickList(buildManualPickupReference(), [requestItem]);
+            const pickList = await createProductionPickList(buildManualPickupReference(), [formData.requestItem]);
             pickList.link += '&mode=pickup';
-            await assignProductionPickListInternally(pickList, recipients);
+            await assignProductionPickListInternally(pickList, formData.recipients);
             status.innerHTML = '<strong>Pickup request sent.</strong><br>The case number will appear only after the teammate accepts the task.';
             await loadActiveProductionReservations();
             await loadInventoryFromSupabase();
@@ -9786,7 +9870,7 @@ window.addEventListener("floraflow-auth-ready", function () {
             status.textContent = 'The request could not be created. ' + (error?.message || String(error));
         } finally {
             button.disabled = false;
-            button.textContent = 'Send pickup request';
+            button.textContent = 'Send internally';
         }
     }
 
