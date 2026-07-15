@@ -3341,7 +3341,40 @@ function normalizeProductionText(text) {
 
     return uniqueProducts;
 }
+function fixProductionOcrWords(text) {
 
+    const corrections = {
+
+        // ===== PEONIES =====
+        "FPAEQ": "PAEO",
+        "FAEQ": "PAEO",
+        "PAEQ": "PAEO",
+        "FAED": "PAEO",
+
+        // ===== COLORS =====
+        "GREEM": "GREEN",
+        "WHlTE": "WHITE",
+        "YELL0W": "YELLOW",
+
+        // ===== PRODUCTS =====
+        "HYDE": "HYDR",
+        "LELICAD": "LEUCAD",
+        "LILV": "LILY",
+
+        // ===== GENERAL =====
+        "AS50RTED": "ASSORTED"
+    };
+
+    for (const [wrong, correct] of Object.entries(corrections)) {
+
+        text = text.replace(
+            new RegExp(`\\b${wrong}\\b`, "gi"),
+            correct
+        );
+    }
+
+    return text;
+}
 function normalizeProductionLine(line) {
 
     const rawLine = String(line || "");
@@ -3357,12 +3390,10 @@ let correctedLine =
     typeof window.flowerBrain.fixCommonOcrErrors === "function"
         ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
         : cleanOcrText;
+        correctedLine = fixProductionOcrWords(correctedLine);
+        
 
-correctedLine = correctedLine
-    .replace(/\bF?P?AE[DQO0]\b/g, "PAEO")
-    .replace(/\bPINE\b/g, "PINK")
-    .replace(/\bGREEM\b/g, "GREEN")
-    .replace(/\bAS5?0RTED\b/g, "ASSORTED");
+
 
 let articleLine = correctedLine;
 let colorCode = "";
