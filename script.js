@@ -3193,6 +3193,7 @@ let isPulling = false;
 
 
 document.addEventListener("touchstart", function (event) {
+    if (window.matchMedia("(max-width: 720px)").matches) return;
     if (window.scrollY === 0) {
         pullStartY = event.touches[0].clientY;
         isPulling = true;
@@ -3200,6 +3201,7 @@ document.addEventListener("touchstart", function (event) {
 });
 
 document.addEventListener("touchmove", function (event) {
+    if (window.matchMedia("(max-width: 720px)").matches) return;
     if (!isPulling) return;
 
     const currentY = event.touches[0].clientY;
@@ -9842,4 +9844,105 @@ window.addEventListener("floraflow-auth-ready", function () {
         decoratePrimaryLayout();
         setTimeout(attachSendPickupButtons, 300);
     }
+})();
+
+
+/* ===== FloraFlow mobile scroll stability ===== */
+(function initializeMobileScrollStability() {
+    const MOBILE_QUERY = window.matchMedia("(max-width: 720px)");
+    const overlaySelectors = [
+        ".modal",
+        ".ff-sheet-overlay",
+        "#floraFlowNotificationOverlay",
+        "#floraFlowProductionProgressOverlay",
+        "#productionPickPage",
+        "#teachFloraFlowOverlay",
+        "#usersManagementOverlay",
+        "#productsManagementOverlay"
+    ];
+
+    let savedScrollY = 0;
+    let locked = false;
+    let syncQueued = false;
+
+    function isVisibleOverlay(element) {
+        if (!element || !element.isConnected) return false;
+        const style = window.getComputedStyle(element);
+        return style.display !== "none" &&
+            style.visibility !== "hidden" &&
+            Number(style.opacity || 1) !== 0;
+    }
+
+    function getOpenOverlays() {
+        return overlaySelectors.flatMap(function (selector) {
+            return Array.from(document.querySelectorAll(selector));
+        }).filter(isVisibleOverlay);
+    }
+
+    function lockPageScroll() {
+        if (locked || !MOBILE_QUERY.matches) return;
+        savedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        document.documentElement.classList.add("ff-mobile-overlay-open");
+        document.body.classList.add("ff-mobile-overlay-open");
+        document.body.dataset.ffScrollY = String(savedScrollY);
+        document.body.style.position = "fixed";
+        document.body.style.top = "-" + savedScrollY + "px";
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
+        locked = true;
+    }
+
+    function unlockPageScroll() {
+        if (!locked) return;
+        const restoreY = Number(document.body.dataset.ffScrollY || savedScrollY || 0);
+        document.documentElement.classList.remove("ff-mobile-overlay-open");
+        document.body.classList.remove("ff-mobile-overlay-open");
+        delete document.body.dataset.ffScrollY;
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
+        locked = false;
+        window.scrollTo(0, restoreY);
+    }
+
+    function syncScrollLock() {
+        syncQueued = false;
+        if (!MOBILE_QUERY.matches) {
+            unlockPageScroll();
+            return;
+        }
+        if (getOpenOverlays().length > 0) lockPageScroll();
+        else unlockPageScroll();
+    }
+
+    function queueSync() {
+        if (syncQueued) return;
+        syncQueued = true;
+        requestAnimationFrame(syncScrollLock);
+    }
+
+    const observer = new MutationObserver(queueSync);
+    observer.observe(document.documentElement, {
+        subtree: true,
+        childList: true,
+        attributes: true,
+        attributeFilter: ["style", "class", "hidden"]
+    });
+
+    MOBILE_QUERY.addEventListener?.("change", queueSync);
+    window.addEventListener("pageshow", queueSync);
+    window.addEventListener("resize", queueSync, { passive: true });
+
+    document.addEventListener("touchmove", function (event) {
+        if (!locked) return;
+        const scrollRegion = event.target.closest(
+            ".modal-content, .ff-sheet, #floraFlowNotificationPanel, #floraFlowProductionProgressPanel, #productionPickPage"
+        );
+        if (!scrollRegion) event.preventDefault();
+    }, { passive: false, capture: true });
+
+    queueSync();
 })();

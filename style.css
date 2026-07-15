@@ -844,3 +844,54 @@ button:hover { background: var(--ff-forest); }
     }
     #pickConfirmButton + #pickCloseWithoutPickupButton { width:100%; }
 }
+
+
+/* ===== Mobile scroll stabilization ===== */
+@media (max-width: 720px) {
+    html,
+    body {
+        overscroll-behavior-y: none;
+        scroll-behavior: auto !important;
+    }
+
+    html.ff-mobile-overlay-open,
+    body.ff-mobile-overlay-open {
+        overflow: hidden !important;
+        overscroll-behavior: none !important;
+    }
+
+    .modal,
+    .ff-sheet-overlay,
+    #floraFlowNotificationOverlay,
+    #floraFlowProductionProgressOverlay,
+    #productionPickPage,
+    #teachFloraFlowOverlay {
+        overscroll-behavior: contain;
+        touch-action: none;
+    }
+
+    .modal-content,
+    .ff-sheet,
+    #floraFlowNotificationPanel,
+    #floraFlowProductionProgressPanel,
+    #productionPickPage > div {
+        max-height: calc(100dvh - 20px) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+        scroll-behavior: auto !important;
+    }
+
+    .ff-sheet-overlay,
+    #floraFlowNotificationOverlay,
+    #floraFlowProductionProgressOverlay {
+        overflow: hidden !important;
+    }
+
+    #productionSelectionStage {
+        overscroll-behavior: contain !important;
+        touch-action: pan-x pan-y !important;
+    }
+}
