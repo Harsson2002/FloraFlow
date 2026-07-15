@@ -2690,6 +2690,17 @@ function showProductionRecommendations(
     let resultsContainer =
         document.getElementById("productionRecommendations");
 
+    const selectionTool =
+        document.getElementById("productionSelectionTool");
+
+    const modalContent =
+        todayProductionModal.querySelector(".modal-content");
+
+    const resultsParent =
+        selectionTool?.parentNode ||
+        modalContent ||
+        todayProductionModal;
+
     if (!resultsContainer) {
         resultsContainer = document.createElement("div");
         resultsContainer.id = "productionRecommendations";
@@ -2699,9 +2710,14 @@ function showProductionRecommendations(
         resultsContainer.style.borderRadius = "12px";
         resultsContainer.style.maxHeight = "450px";
         resultsContainer.style.overflowY = "auto";
-        todayProductionModal.appendChild(resultsContainer);
     }
 
+    // Keep the results inside the visible modal content.
+    if (resultsContainer.parentNode !== resultsParent) {
+        resultsParent.appendChild(resultsContainer);
+    }
+
+    resultsContainer.style.display = "block";
     resultsContainer.innerHTML = "";
 
     const orderHeader = document.createElement("div");
@@ -2733,6 +2749,14 @@ function showProductionRecommendations(
                 No production flowers were detected.
             </div>
         `;
+
+        requestAnimationFrame(function () {
+            resultsContainer.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest"
+            });
+        });
+
         return;
     }
 
@@ -2843,6 +2867,13 @@ function showProductionRecommendations(
         }
 
         resultsContainer.appendChild(card);
+    });
+
+    requestAnimationFrame(function () {
+        resultsContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "nearest"
+        });
     });
 }
 function extractProductionLot(text) {
@@ -3141,6 +3172,10 @@ function normalizeProductionLine(line) {
             parsed.product || ""
         );
 
+    const familyNeedsReview = Boolean(
+        directFamily?.needsReview
+    );
+
     const explicitColor =
         extractProductionColor(articleLine) ||
         extractProductionColor(parsed.color || "");
@@ -3157,16 +3192,25 @@ function normalizeProductionLine(line) {
         original: normalizeMatchText(correctedLine),
         cleanedArticle: normalizeMatchText(articleLine),
         product:
-            directFamily?.family ||
-            normalizeMatchText(parsed.product || ""),
+            familyNeedsReview
+                ? ""
+                : (
+                    directFamily?.family ||
+                    normalizeMatchText(parsed.product || "")
+                ),
         family:
-            directFamily?.family || "",
+            familyNeedsReview
+                ? ""
+                : (directFamily?.family || ""),
         familyAlias:
             directFamily?.alias || "",
         familySource:
             directFamily?.source || "",
         familyConfidence:
             directFamily?.score || 0,
+        familyNeedsReview: familyNeedsReview,
+        familyAlternatives:
+            directFamily?.alternatives || [],
         variety:
             normalizeMatchText(
                 parsed.variety || articleLine
@@ -3928,6 +3972,187 @@ function containsNormalizedPhrase(text, phrase) {
     );
 }
 
+function getAllowedAliasDistance(aliasToken) {
+
+    const length = normalizeMatchText(aliasToken).length;
+
+    if (length <= 4) {
+        return 0;
+    }
+
+    if (length <= 11) {
+        return 2;
+    }
+
+    return 3;
+}
+
+function compareOcrTokenToAlias(ocrToken, aliasToken) {
+
+    const observed = normalizeMatchText(ocrToken);
+    const expected = normalizeMatchText(aliasToken);
+
+    if (!observed || !expected) {
+        return null;
+    }
+
+    if (observed === expected) {
+        return {
+            distance: 0,
+            score: 100,
+            exact: true
+        };
+    }
+
+    const allowedDistance =
+        getAllowedAliasDistance(expected);
+
+    // Short codes such as HYDR, POM, ROSE or ECA must be exact.
+    if (allowedDistance === 0) {
+        return null;
+    }
+
+    if (
+        Math.abs(observed.length - expected.length) >
+        allowedDistance
+    ) {
+        return null;
+    }
+
+    const distance = levenshteinDistance(
+        observed,
+        expected
+    );
+
+    if (distance > allowedDistance) {
+        return null;
+    }
+
+    const longestLength = Math.max(
+        observed.length,
+        expected.length
+    );
+
+    const score = Math.max(
+        0,
+        Math.round(
+            (1 - distance / longestLength) * 100
+        )
+    );
+
+    return {
+        distance: distance,
+        score: score,
+        exact: false
+    };
+}
+
+function findFuzzyAliasPhraseMatch(line, alias) {
+
+    const lineTokens = normalizeMatchText(line)
+        .split(" ")
+        .filter(Boolean);
+
+    const aliasTokens = normalizeMatchText(alias)
+        .split(" ")
+        .filter(Boolean);
+
+    if (
+        aliasTokens.length === 0 ||
+        lineTokens.length < aliasTokens.length
+    ) {
+        return null;
+    }
+
+    let bestMatch = null;
+
+    for (
+        let startIndex = 0;
+        startIndex <= lineTokens.length - aliasTokens.length;
+        startIndex++
+    ) {
+        let totalScore = 0;
+        let totalDistance = 0;
+        let fuzzyTokenCount = 0;
+        let matched = true;
+
+        for (
+            let aliasIndex = 0;
+            aliasIndex < aliasTokens.length;
+            aliasIndex++
+        ) {
+            const comparison = compareOcrTokenToAlias(
+                lineTokens[startIndex + aliasIndex],
+                aliasTokens[aliasIndex]
+            );
+
+            if (!comparison) {
+                matched = false;
+                break;
+            }
+
+            totalScore += comparison.score;
+            totalDistance += comparison.distance;
+
+            if (!comparison.exact) {
+                fuzzyTokenCount++;
+            }
+        }
+
+        if (!matched || fuzzyTokenCount === 0) {
+            continue;
+        }
+
+        const averageScore = Math.round(
+            totalScore / aliasTokens.length
+        );
+
+        const currentMatch = {
+            score: averageScore,
+            distance: totalDistance,
+            fuzzyTokenCount: fuzzyTokenCount,
+            startIndex: startIndex
+        };
+
+        if (
+            !bestMatch ||
+            currentMatch.score > bestMatch.score ||
+            (
+                currentMatch.score === bestMatch.score &&
+                currentMatch.distance < bestMatch.distance
+            )
+        ) {
+            bestMatch = currentMatch;
+        }
+    }
+
+    return bestMatch;
+}
+
+function sortFamilyCandidates(candidates) {
+
+    return candidates.sort(function (a, b) {
+
+        if (b.wordCount !== a.wordCount) {
+            return b.wordCount - a.wordCount;
+        }
+
+        if (b.length !== a.length) {
+            return b.length - a.length;
+        }
+
+        if (b.score !== a.score) {
+            return b.score - a.score;
+        }
+
+        if ((a.distance || 0) !== (b.distance || 0)) {
+            return (a.distance || 0) - (b.distance || 0);
+        }
+
+        return a.priority - b.priority;
+    });
+}
+
 function detectOperationalFamilyFromLine(value) {
 
     const normalizedLine =
@@ -3937,7 +4162,8 @@ function detectOperationalFamilyFromLine(value) {
         return null;
     }
 
-    const candidates = [];
+    const exactCandidates = [];
+    const fuzzyCandidates = [];
 
     getRuntimeOperationalFamilyRules()
         .forEach(function (rule, ruleIndex) {
@@ -3947,49 +4173,111 @@ function detectOperationalFamilyFromLine(value) {
                 const normalizedName =
                     normalizeMatchText(name);
 
-                if (
-                    !normalizedName ||
-                    !containsNormalizedPhrase(
-                        normalizedLine,
-                        normalizedName
-                    )
-                ) {
+                if (!normalizedName) {
                     return;
                 }
 
-                candidates.push({
+                const baseCandidate = {
                     family:
                         normalizeMatchText(rule.family),
                     alias: normalizedName,
-                    source: "ALIAS_RULE",
-                    score: 100,
                     priority: ruleIndex,
                     wordCount:
                         normalizedName.split(" ").length,
                     length:
                         normalizedName.length
+                };
+
+                if (
+                    containsNormalizedPhrase(
+                        normalizedLine,
+                        normalizedName
+                    )
+                ) {
+                    exactCandidates.push({
+                        ...baseCandidate,
+                        source: "ALIAS_RULE",
+                        score: 100,
+                        distance: 0,
+                        needsReview: false
+                    });
+                    return;
+                }
+
+                const fuzzyMatch =
+                    findFuzzyAliasPhraseMatch(
+                        normalizedLine,
+                        normalizedName
+                    );
+
+                if (!fuzzyMatch) {
+                    return;
+                }
+
+                fuzzyCandidates.push({
+                    ...baseCandidate,
+                    source: "FUZZY_ALIAS_RULE",
+                    score: fuzzyMatch.score,
+                    distance: fuzzyMatch.distance,
+                    needsReview: false
                 });
             });
         });
 
-    if (candidates.length === 0) {
+    if (exactCandidates.length > 0) {
+        sortFamilyCandidates(exactCandidates);
+        return exactCandidates[0];
+    }
+
+    if (fuzzyCandidates.length === 0) {
         return null;
     }
 
-    candidates.sort(function (a, b) {
+    sortFamilyCandidates(fuzzyCandidates);
 
-        if (b.wordCount !== a.wordCount) {
-            return b.wordCount - a.wordCount;
+    const best = fuzzyCandidates[0];
+
+    const competingFamily = fuzzyCandidates.find(
+        function (candidate) {
+            return candidate.family !== best.family;
         }
+    );
 
-        if (a.priority !== b.priority) {
-            return a.priority - b.priority;
-        }
+    const isAmbiguous = Boolean(
+        competingFamily &&
+        competingFamily.wordCount === best.wordCount &&
+        Math.abs(competingFamily.length - best.length) <= 2 &&
+        Math.abs(competingFamily.score - best.score) <= 5 &&
+        Math.abs(
+            (competingFamily.distance || 0) -
+            (best.distance || 0)
+        ) <= 1
+    );
 
-        return b.length - a.length;
-    });
+    if (isAmbiguous) {
+        return {
+            family: "",
+            alias: best.alias,
+            source: "FUZZY_ALIAS_AMBIGUOUS",
+            score: best.score,
+            distance: best.distance,
+            needsReview: true,
+            alternatives: [
+                {
+                    family: best.family,
+                    alias: best.alias,
+                    score: best.score
+                },
+                {
+                    family: competingFamily.family,
+                    alias: competingFamily.alias,
+                    score: competingFamily.score
+                }
+            ]
+        };
+    }
 
-    return candidates[0];
+    return best;
 }
 
 function resolveInventoryFamilyName(value) {
@@ -4693,6 +4981,15 @@ function findBestCatalogProduct(
     productionProduct,
     catalog
 ) {
+
+    if (productionProduct?.familyNeedsReview) {
+        return {
+            detectedFamily: null,
+            best: null,
+            alternatives:
+                productionProduct.familyAlternatives || []
+        };
+    }
 
     const searchName = prepareArticleSearchText(
         [
