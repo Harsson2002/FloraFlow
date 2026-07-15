@@ -499,7 +499,7 @@ function syncLegacyUserSelect() {
 async function loadAppUsers() {
     const { data, error } = await supabaseClient
         .from("app_profiles")
-        .select("id, full_name, email, role, active, department, created_at")
+        .select("id, full_name, email, role, active, department, created_at, access_type, access_expires_at, must_change_password, last_sign_in_at")
         .order("full_name", { ascending: true });
 
     if (error) {
@@ -517,13 +517,19 @@ async function loadAppUsers() {
 async function loadCurrentUserProfile(authUser) {
     const { data, error } = await supabaseClient
         .from("app_profiles")
-        .select("id, full_name, email, role, active, department")
+        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at")
         .eq("id", authUser.id)
         .maybeSingle();
 
     if (error) throw error;
     if (!data) throw new Error("Your FloraFlow profile has not been created yet.");
     if (data.active === false) throw new Error("This FloraFlow account is inactive.");
+    if (String(data.access_type || "permanent").toLowerCase() === "temporary" && data.access_expires_at) {
+        const expiration = new Date(String(data.access_expires_at).slice(0, 10) + "T23:59:59");
+        if (!Number.isNaN(expiration.getTime()) && expiration.getTime() < Date.now()) {
+            throw new Error("This temporary FloraFlow account has expired.");
+        }
+    }
 
     currentAuthUser = authUser;
     currentUserProfile = data;
@@ -7564,86 +7570,302 @@ function cleanProductionLine(line) {
 
 // ============================================================
 // USER ACCOUNTS MANAGEMENT
+// Permanent and temporary accounts, role, status and password reset.
 // ============================================================
+const USER_ADMIN_FUNCTION = "manage-floraflow-user";
+
+function formatUserAccessDate(value) {
+    if (!value) return "No expiration";
+    const date = new Date(value + (String(value).length === 10 ? "T12:00:00" : ""));
+    if (Number.isNaN(date.getTime())) return String(value);
+    return date.toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+}
+
+function isUserAccessExpired(user) {
+    if (String(user?.access_type || "permanent").toLowerCase() !== "temporary") return false;
+    if (!user?.access_expires_at) return false;
+    const expires = new Date(String(user.access_expires_at).slice(0, 10) + "T23:59:59");
+    return !Number.isNaN(expires.getTime()) && expires.getTime() < Date.now();
+}
+
+function getUserVisualStatus(user) {
+    if (user?.active === false) return { label: "Inactive", icon: "🔴", bg: "#fef2f2", color: "#991b1b", border: "#fecaca" };
+    if (isUserAccessExpired(user)) return { label: "Expired", icon: "🔴", bg: "#fff7ed", color: "#9a3412", border: "#fed7aa" };
+    if (String(user?.access_type || "permanent").toLowerCase() === "temporary") return { label: "Temporary", icon: "🟡", bg: "#fffbeb", color: "#92400e", border: "#fde68a" };
+    return { label: "Active", icon: "🟢", bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" };
+}
+
+async function invokeUserAdminAction(action, payload) {
+    const { data, error } = await supabaseClient.functions.invoke(USER_ADMIN_FUNCTION, {
+        body: Object.assign({ action: action }, payload || {})
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data || {};
+}
+
+function setUsersManagementMessage(text, type) {
+    const message = document.getElementById("usersManagementMessage");
+    if (!message) return;
+    const colors = { success: "#166534", error: "#b91c1c", working: "#1d4ed8", info: "#475569" };
+    message.style.color = colors[type] || colors.info;
+    message.textContent = text || "";
+}
+
+function ensureUsersManagementStyles() {
+    if (document.getElementById("floraFlowUsersManagementStyles")) return;
+    const style = document.createElement("style");
+    style.id = "floraFlowUsersManagementStyles";
+    style.textContent = `
+      #usersManagementOverlay input, #usersManagementOverlay select { min-height:44px; box-sizing:border-box; }
+      .ff-user-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+      .ff-user-actions { display:flex; flex-wrap:wrap; gap:8px; margin-top:14px; }
+      .ff-user-actions button { min-height:40px; padding:9px 12px; border-radius:10px; border:1px solid #cbd5e1; background:white; color:#334155; font-weight:750; cursor:pointer; }
+      .ff-user-actions button.primary { background:#a11375; border-color:#a11375; color:white; }
+      .ff-user-actions button.danger { color:#b91c1c; border-color:#fecaca; background:#fff; }
+      .ff-user-card { padding:16px; border:1px solid #e2e8f0; border-radius:15px; background:white; box-shadow:0 3px 12px rgba(15,23,42,.06); }
+      @media (max-width:720px) {
+        #usersManagementOverlay { padding:0 !important; }
+        #usersManagementPanel { width:100% !important; min-height:100%; margin:0 !important; border-radius:0 !important; padding:16px !important; }
+        .ff-user-grid { grid-template-columns:1fr; }
+        .ff-user-actions button { flex:1 1 calc(50% - 8px); }
+      }
+    `;
+    document.head.appendChild(style);
+}
+
 function ensureUsersManagementModal() {
     let overlay = document.getElementById("usersManagementOverlay");
     if (overlay) return overlay;
+    ensureUsersManagementStyles();
     overlay = document.createElement("div");
     overlay.id = "usersManagementOverlay";
-    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);padding:18px;box-sizing:border-box;overflow:auto;";
+    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:160000;background:rgba(15,23,42,.62);padding:18px;box-sizing:border-box;overflow:auto;";
     overlay.innerHTML = `
-      <div style="width:min(900px,100%);margin:4vh auto;background:white;border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-          <div><div style="font-size:22px;font-weight:800;color:#0f172a;">User Management</div><div style="font-size:13px;color:#64748b;margin-top:3px;">Create accounts and control access to FloraFlow.</div></div>
-          <button id="closeUsersManagementBtn" type="button" style="width:40px;height:40px;border:none;border-radius:10px;background:#0f172a;color:white;font-size:20px;">×</button>
+      <div id="usersManagementPanel" style="width:min(980px,100%);margin:3vh auto;background:#f8fafc;border-radius:20px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);box-sizing:border-box;">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;position:sticky;top:0;z-index:3;background:#f8fafc;padding-bottom:12px;">
+          <div><div style="font-size:23px;font-weight:850;color:#0f172a;">User Management</div><div style="font-size:13px;color:#64748b;margin-top:3px;">Create accounts and control access to FloraFlow.</div></div>
+          <button id="closeUsersManagementBtn" type="button" style="width:44px;height:44px;border:none;border-radius:12px;background:#0f172a;color:white;font-size:24px;">×</button>
         </div>
-        <div style="margin-top:18px;padding:16px;border:1px solid #dbe4ea;border-radius:12px;background:#f8fafc;">
-          <div style="font-weight:800;margin-bottom:12px;">Create account</div>
-          <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:10px;">
-            <input id="newUserName" placeholder="Full name" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <input id="newUserEmail" type="email" placeholder="Email" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <input id="newUserPassword" type="password" placeholder="Temporary password" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <select id="newUserRole" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+
+        <div style="margin-top:8px;padding:17px;border:1px solid #dbe4ea;border-radius:15px;background:white;">
+          <div style="font-weight:850;margin-bottom:12px;color:#0f172a;">Create account</div>
+          <div class="ff-user-grid">
+            <input id="newUserName" placeholder="Full name" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;">
+            <input id="newUserEmail" type="email" placeholder="Email" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;">
+            <input id="newUserPassword" type="password" placeholder="Temporary password (8+ characters)" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;">
+            <select id="newUserRole" style="padding:10px;border:1px solid #cbd5e1;border-radius:10px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
           </div>
-          <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:10px 16px;border:none;border-radius:9px;background:#166534;color:white;font-weight:800;">Create Account</button>
+          <label style="display:flex;align-items:center;gap:9px;margin-top:13px;font-weight:750;color:#334155;">
+            <input id="newUserTemporary" type="checkbox" style="width:19px;height:19px;min-height:auto;"> Temporary account
+          </label>
+          <div id="newUserExpirationWrap" style="display:none;margin-top:10px;max-width:360px;">
+            <label style="display:block;font-size:13px;font-weight:750;color:#475569;margin-bottom:5px;">Access expiration date</label>
+            <input id="newUserExpiration" type="date" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:10px;">
+          </div>
+          <button id="createUserAccountBtn" type="button" style="margin-top:14px;padding:11px 17px;border:none;border-radius:10px;background:#a11375;color:white;font-weight:850;">Create Account</button>
           <div id="usersManagementMessage" style="min-height:20px;margin-top:9px;font-size:13px;color:#475569;"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;"><div style="font-size:18px;font-weight:800;">All users</div><button id="refreshUsersBtn" type="button">Refresh</button></div>
-        <div id="usersManagementList" style="margin-top:10px;max-height:48vh;overflow:auto;"></div>
+
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
+          <div><div style="font-size:19px;font-weight:850;color:#0f172a;">All users</div><div id="usersManagementCount" style="font-size:12px;color:#64748b;margin-top:2px;"></div></div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <input id="usersManagementSearch" type="search" placeholder="Search users" style="padding:9px 11px;border:1px solid #cbd5e1;border-radius:10px;min-width:190px;">
+            <button id="refreshUsersBtn" type="button">Refresh</button>
+          </div>
+        </div>
+        <div id="usersManagementList" style="margin-top:10px;display:grid;gap:10px;"></div>
       </div>`;
     document.body.appendChild(overlay);
-    overlay.querySelector("#closeUsersManagementBtn").addEventListener("click", () => overlay.style.display = "none");
+
+    const close = function () { overlay.style.display = "none"; };
+    overlay.querySelector("#closeUsersManagementBtn").addEventListener("click", close);
+    installSafeBackdropClose(overlay, close);
     overlay.querySelector("#refreshUsersBtn").addEventListener("click", refreshUsersManagement);
     overlay.querySelector("#createUserAccountBtn").addEventListener("click", createUserAccountFromSettings);
+    overlay.querySelector("#newUserTemporary").addEventListener("change", function () {
+        overlay.querySelector("#newUserExpirationWrap").style.display = this.checked ? "block" : "none";
+        if (this.checked && !overlay.querySelector("#newUserExpiration").value) {
+            const date = new Date();
+            date.setDate(date.getDate() + 30);
+            overlay.querySelector("#newUserExpiration").value = date.toISOString().slice(0, 10);
+        }
+    });
+    overlay.querySelector("#usersManagementSearch").addEventListener("input", renderUsersManagementList);
     return overlay;
 }
 
 async function createUserAccountFromSettings() {
     const overlay = ensureUsersManagementModal();
-    const message = overlay.querySelector("#usersManagementMessage");
     const button = overlay.querySelector("#createUserAccountBtn");
-    if (!canManageUsers()) { message.textContent = "Only administrators can create accounts."; return; }
+    if (!canManageUsers()) { setUsersManagementMessage("Only administrators can create accounts.", "error"); return; }
     const full_name = overlay.querySelector("#newUserName").value.trim();
     const email = overlay.querySelector("#newUserEmail").value.trim().toLowerCase();
     const password = overlay.querySelector("#newUserPassword").value;
     const role = normalizeAppRole(overlay.querySelector("#newUserRole").value);
-    if (!full_name || !email || password.length < 8) { message.style.color="#b91c1c"; message.textContent="Enter a name, valid email and a temporary password of at least 8 characters."; return; }
-    button.disabled = true; button.textContent = "Creating..."; message.textContent = "";
+    const temporary = overlay.querySelector("#newUserTemporary").checked;
+    const access_expires_at = temporary ? overlay.querySelector("#newUserExpiration").value : null;
+    if (!full_name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) {
+        setUsersManagementMessage("Enter a name, valid email and a temporary password of at least 8 characters.", "error"); return;
+    }
+    if (temporary && !access_expires_at) {
+        setUsersManagementMessage("Choose an expiration date for the temporary account.", "error"); return;
+    }
+    button.disabled = true; button.textContent = "Creating..."; setUsersManagementMessage("Creating the account...", "working");
     try {
-        const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", { body: { full_name, email, password, role } });
+        const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", {
+            body: { full_name, email, password, role, access_type: temporary ? "temporary" : "permanent", access_expires_at, must_change_password: true }
+        });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
-        message.style.color="#166534"; message.textContent = full_name + " was created successfully.";
-        overlay.querySelector("#newUserName").value=""; overlay.querySelector("#newUserEmail").value=""; overlay.querySelector("#newUserPassword").value=""; overlay.querySelector("#newUserRole").value="user";
+
+        await loadAppUsers();
+        const createdUser = appUsers.find(function (user) { return String(user.email || "").toLowerCase() === email; });
+        if (createdUser?.id) {
+            const { error: profileError } = await supabaseClient.from("app_profiles").update({
+                access_type: temporary ? "temporary" : "permanent",
+                access_expires_at: temporary ? access_expires_at : null,
+                must_change_password: true,
+                active: true
+            }).eq("id", createdUser.id);
+            if (profileError) throw profileError;
+        }
+
+        setUsersManagementMessage(full_name + " was created successfully.", "success");
+        ["#newUserName", "#newUserEmail", "#newUserPassword", "#newUserExpiration"].forEach(function (selector) { overlay.querySelector(selector).value = ""; });
+        overlay.querySelector("#newUserRole").value = "user";
+        overlay.querySelector("#newUserTemporary").checked = false;
+        overlay.querySelector("#newUserExpirationWrap").style.display = "none";
         await refreshUsersManagement();
     } catch (error) {
-        console.error("Create user error:", error); message.style.color="#b91c1c"; message.textContent = error?.message || String(error);
-    } finally { button.disabled=false; button.textContent="Create Account"; }
+        console.error("Create user error:", error);
+        setUsersManagementMessage(error?.message || String(error), "error");
+    } finally { button.disabled = false; button.textContent = "Create Account"; }
+}
+
+async function updateUserProfileFields(userId, changes, successMessage) {
+    const { error } = await supabaseClient.from("app_profiles").update(changes).eq("id", userId);
+    if (error) throw error;
+    setUsersManagementMessage(successMessage || "User updated.", "success");
+    await refreshUsersManagement();
+}
+
+async function resetManagedUserPassword(user) {
+    const password = window.prompt("Enter a new temporary password for " + (user.full_name || user.email) + ". It must contain at least 8 characters.");
+    if (password === null) return;
+    if (password.length < 8) { alert("The temporary password must contain at least 8 characters."); return; }
+    await invokeUserAdminAction("reset_password", { user_id: user.id, password: password });
+    await updateUserProfileFields(user.id, { must_change_password: true }, "Temporary password updated. The user must change it after signing in.");
+}
+
+async function changeManagedUserRole(user, role) {
+    await updateUserProfileFields(user.id, { role: normalizeAppRole(role) }, "Role updated for " + (user.full_name || user.email) + ".");
+}
+
+async function toggleManagedUserActive(user) {
+    const nextActive = user.active === false;
+    if (!nextActive && user.id === getCurrentAuthUserId()) {
+        alert("You cannot deactivate your own account while you are signed in.");
+        return;
+    }
+    await updateUserProfileFields(user.id, { active: nextActive }, (user.full_name || user.email) + (nextActive ? " was activated." : " was deactivated."));
+}
+
+async function makeManagedUserPermanent(user) {
+    await updateUserProfileFields(user.id, { access_type: "permanent", access_expires_at: null, active: true }, (user.full_name || user.email) + " now has permanent access.");
+}
+
+async function extendManagedUserAccess(user) {
+    const current = user.access_expires_at ? String(user.access_expires_at).slice(0, 10) : "";
+    const value = window.prompt("Enter the new expiration date in YYYY-MM-DD format.", current);
+    if (value === null) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) { alert("Use the date format YYYY-MM-DD."); return; }
+    await updateUserProfileFields(user.id, { access_type: "temporary", access_expires_at: value, active: true }, "Temporary access extended until " + formatUserAccessDate(value) + ".");
+}
+
+function renderUsersManagementList() {
+    const list = document.getElementById("usersManagementList");
+    if (!list) return;
+    const query = String(document.getElementById("usersManagementSearch")?.value || "").trim().toLowerCase();
+    const users = (appUsers || []).filter(function (user) {
+        return !query || [user.full_name, user.email, user.role, user.access_type].some(function (value) { return String(value || "").toLowerCase().includes(query); });
+    });
+    const count = document.getElementById("usersManagementCount");
+    if (count) count.textContent = users.length + " user" + (users.length === 1 ? "" : "s");
+    list.innerHTML = "";
+    if (users.length === 0) {
+        list.innerHTML = '<div style="padding:25px;text-align:center;color:#64748b;background:white;border-radius:14px;">No users found.</div>';
+        return;
+    }
+
+    users.forEach(function (user) {
+        const status = getUserVisualStatus(user);
+        const card = document.createElement("div");
+        card.className = "ff-user-card";
+        card.innerHTML = `
+          <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+            <div style="min-width:0;">
+              <div style="font-size:18px;font-weight:850;color:#0f172a;word-break:break-word;">👤 ${escapeProductionPickHtml(user.full_name || user.email || "Unknown user")}</div>
+              <div style="font-size:13px;color:#64748b;margin-top:4px;word-break:break-all;">${escapeProductionPickHtml(user.email || "")}</div>
+            </div>
+            <span style="display:inline-flex;align-items:center;gap:5px;padding:7px 10px;border-radius:999px;background:${status.bg};color:${status.color};border:1px solid ${status.border};font-size:12px;font-weight:850;">${status.icon} ${status.label}</span>
+          </div>
+          <div class="ff-user-grid" style="margin-top:14px;">
+            <label style="font-size:12px;font-weight:800;color:#64748b;">Role
+              <select class="managed-user-role" style="width:100%;margin-top:5px;padding:9px;border:1px solid #cbd5e1;border-radius:9px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+            </label>
+            <div style="font-size:12px;font-weight:800;color:#64748b;">Access
+              <div style="font-size:14px;font-weight:750;color:#334155;margin-top:9px;">${String(user.access_type || "permanent").toLowerCase() === "temporary" ? "Temporary · expires " + formatUserAccessDate(user.access_expires_at) : "Permanent account"}</div>
+            </div>
+          </div>
+          ${user.must_change_password ? '<div style="margin-top:10px;padding:9px 10px;border-radius:9px;background:#eff6ff;color:#1d4ed8;font-size:12px;font-weight:750;">🔑 Password change required at next sign-in</div>' : ""}
+          <div class="ff-user-actions">
+            <button type="button" class="managed-reset-password">🔑 Reset Password</button>
+            ${String(user.access_type || "permanent").toLowerCase() === "temporary" ? '<button type="button" class="managed-make-permanent primary">✓ Make Permanent</button><button type="button" class="managed-extend-access">📅 Extend</button>' : '<button type="button" class="managed-make-temporary">📅 Make Temporary</button>'}
+            <button type="button" class="managed-toggle-active ${user.active === false ? "primary" : "danger"}">${user.active === false ? "✓ Activate" : "🚫 Deactivate"}</button>
+          </div>`;
+
+        const roleSelect = card.querySelector(".managed-user-role");
+        roleSelect.value = normalizeAppRole(user.role);
+        roleSelect.addEventListener("change", async function () {
+            try { await changeManagedUserRole(user, this.value); } catch (error) { alert("Could not update the role: " + (error?.message || error)); await refreshUsersManagement(); }
+        });
+        card.querySelector(".managed-reset-password").addEventListener("click", async function () {
+            try { await resetManagedUserPassword(user); } catch (error) { alert("Could not reset the password: " + (error?.message || error)); }
+        });
+        card.querySelector(".managed-toggle-active").addEventListener("click", async function () {
+            try { await toggleManagedUserActive(user); } catch (error) { alert("Could not update the account: " + (error?.message || error)); }
+        });
+        const permanentButton = card.querySelector(".managed-make-permanent");
+        if (permanentButton) permanentButton.addEventListener("click", async function () {
+            try { await makeManagedUserPermanent(user); } catch (error) { alert("Could not make the account permanent: " + (error?.message || error)); }
+        });
+        const extendButton = card.querySelector(".managed-extend-access");
+        if (extendButton) extendButton.addEventListener("click", async function () {
+            try { await extendManagedUserAccess(user); } catch (error) { alert("Could not extend access: " + (error?.message || error)); }
+        });
+        const temporaryButton = card.querySelector(".managed-make-temporary");
+        if (temporaryButton) temporaryButton.addEventListener("click", async function () {
+            try { await extendManagedUserAccess(user); } catch (error) { alert("Could not make the account temporary: " + (error?.message || error)); }
+        });
+        list.appendChild(card);
+    });
 }
 
 async function refreshUsersManagement() {
+    setUsersManagementMessage("Refreshing users...", "working");
     await loadAppUsers();
-    const list = document.getElementById("usersManagementList");
-    if (!list) return;
-    list.innerHTML="";
-    appUsers.forEach(function (user) {
-        const card=document.createElement("div");
-        card.style.cssText="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white;";
-        card.innerHTML=`<div><div style="font-weight:800;color:#0f172a;">${user.full_name || user.email}</div><div style="font-size:13px;color:#64748b;margin-top:3px;">${user.email || ""}</div></div><div style="display:flex;gap:8px;align-items:center;"><select class="user-role-select" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select><label style="font-size:13px;display:flex;gap:5px;align-items:center;"><input class="user-active-check" type="checkbox"> Active</label></div>`;
-        const roleSelect=card.querySelector(".user-role-select"); const activeCheck=card.querySelector(".user-active-check");
-        roleSelect.value=normalizeAppRole(user.role); activeCheck.checked=user.active!==false;
-        const save=async function(){
-            const { error }=await supabaseClient.from("app_profiles").update({role:normalizeAppRole(roleSelect.value),active:activeCheck.checked}).eq("id",user.id);
-            if(error){alert("Could not update the user: "+error.message); return;} await loadAppUsers();
-        };
-        roleSelect.addEventListener("change",save); activeCheck.addEventListener("change",save); list.appendChild(card);
-    });
+    renderUsersManagementList();
+    setUsersManagementMessage("", "info");
 }
 
 if (usersBtn) {
     usersBtn.addEventListener("click", async function () {
         if (!canManageUsers()) return;
-        const overlay=ensureUsersManagementModal(); overlay.style.display="block"; settingsModal.style.display="none"; await refreshUsersManagement();
+        const overlay = ensureUsersManagementModal();
+        overlay.style.display = "block";
+        settingsModal.style.display = "none";
+        await refreshUsersManagement();
     });
 }
 
