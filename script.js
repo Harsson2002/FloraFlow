@@ -181,6 +181,18 @@ const analyzeProductionBtn = document.getElementById("analyzeProductionBtn");
 let productionImageScale = 1;
 let inventory = JSON.parse(localStorage.getItem("inventory")) || [];
 let history = JSON.parse(localStorage.getItem("history")) || [];
+
+// Inventory performance controls. Keep the complete active inventory available
+// for Production Today, but render only a small block at a time.
+const INVENTORY_FETCH_PAGE_SIZE = 1000;
+const INVENTORY_RENDER_PAGE_SIZE = 75;
+let inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+let removedInventoryLoaded = inventory.some(function (item) {
+    return item.status === "Removed from Inventory";
+});
+let inventoryLoadPromise = null;
+let inventoryRenderQueued = false;
+let inventorySearchTimer = null;
 let nextId = Number(localStorage.getItem("nextId")) || 1;
 let editingIndex = null;
 let rotatingIndex = null;
@@ -2562,14 +2574,20 @@ if (analyzeProductionBtn) {
     });
 }
 
-toggleRemovedBtn.addEventListener("click", function () {
+toggleRemovedBtn.addEventListener("click", async function () {
     showRemoved = !showRemoved;
+    toggleRemovedBtn.disabled = true;
+    toggleRemovedBtn.textContent = showRemoved ? "Loading Removed..." : "Show Removed";
 
-    toggleRemovedBtn.textContent = showRemoved
-        ? "Hide Removed"
-        : "Show Removed";
-
-    renderInventory();
+    try {
+        if (showRemoved && !removedInventoryLoaded) {
+            await loadRemovedInventoryFromSupabase();
+        }
+        toggleRemovedBtn.textContent = showRemoved ? "Hide Removed" : "Show Removed";
+        queueInventoryRender({ resetLimit: true });
+    } finally {
+        toggleRemovedBtn.disabled = false;
+    }
 });
 closeModal.addEventListener("click", function () {
     activityModal.style.display = "none";
@@ -2686,153 +2704,188 @@ setTimeout(function () {
 }, 2500);
 });
 
+function ensureInventoryLoadMoreControls() {
+    let controls = document.getElementById("inventoryLoadMoreControls");
+    if (controls) return controls;
+
+    controls = document.createElement("div");
+    controls.id = "inventoryLoadMoreControls";
+    controls.className = "inventory-load-more-controls";
+    controls.innerHTML = `
+        <div id="inventoryVisibleSummary" class="inventory-visible-summary"></div>
+        <button id="inventoryLoadMoreBtn" type="button">Load more</button>
+    `;
+
+    const anchor = mobileInventoryList || table?.closest("table") || table;
+    if (anchor?.parentNode) {
+        anchor.parentNode.insertBefore(controls, anchor.nextSibling);
+    }
+
+    controls.querySelector("#inventoryLoadMoreBtn").addEventListener("click", function () {
+        inventoryRenderLimit += INVENTORY_RENDER_PAGE_SIZE;
+        renderInventory();
+    });
+
+    return controls;
+}
+
+function queueInventoryRender(options = {}) {
+    if (options.resetLimit) {
+        inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+    }
+    if (inventoryRenderQueued) return;
+    inventoryRenderQueued = true;
+
+    const run = function () {
+        inventoryRenderQueued = false;
+        renderInventory();
+    };
+
+    if ("requestAnimationFrame" in window) {
+        window.requestAnimationFrame(run);
+    } else {
+        setTimeout(run, 0);
+    }
+}
+
+function getVisibleInventoryItems() {
+    const inventorySearch = searchInput.value.toLowerCase().trim();
+
+    return inventory.filter(function (item) {
+        const matchesRemoved = showRemoved || item.status !== "Removed from Inventory";
+        if (!matchesRemoved) return false;
+        if (!inventorySearch) return true;
+
+        return [
+            item.product,
+            item.color,
+            item.caseNumber,
+            item.notes,
+            item.status
+        ].some(function (value) {
+            return String(value ?? "").toLowerCase().includes(inventorySearch);
+        });
+    });
+}
+
 function renderInventory() {
+    const controls = ensureInventoryLoadMoreControls();
+    const summary = controls?.querySelector("#inventoryVisibleSummary");
+    const loadMoreBtn = controls?.querySelector("#inventoryLoadMoreBtn");
+    const visibleInventory = getVisibleInventoryItems();
+    const renderedInventory = visibleInventory.slice(0, inventoryRenderLimit);
+
     table.innerHTML = "";
     mobileInventoryList.innerHTML = "";
-const inventorySearch = searchInput.value.toLowerCase().trim();
 
-const visibleInventory = inventory.filter(function (item) {
+    const tableFragment = document.createDocumentFragment();
+    const mobileFragment = document.createDocumentFragment();
 
-    const matchesRemoved =
-        showRemoved || item.status !== "Removed from Inventory";
+    renderedInventory.forEach(function (item) {
+        const index = inventory.findIndex(function (inventoryItem) {
+            return inventoryItem.id === item.id;
+        });
 
-    const matchesSearch =
-        inventorySearch === "" ||
-        (item.product ?? "").toLowerCase().includes(inventorySearch) ||
-        (item.color ?? "").toLowerCase().includes(inventorySearch) ||
-        String(item.caseNumber ?? "").toLowerCase().includes(inventorySearch) ||
-        (item.notes ?? "").toLowerCase().includes(inventorySearch) ||
-        (item.status ?? "").toLowerCase().includes(inventorySearch);
-
-    return matchesRemoved && matchesSearch;
-});
-
-visibleInventory.forEach(function (item) {
-
-    const index = inventory.findIndex(function (inventoryItem) {
-        return inventoryItem.id === item.id;
-    });
-        const row = table.insertRow();
-
+        const row = document.createElement("tr");
         if (item.status === "Removed from Inventory") {
             row.classList.add("removed-row");
         }
 
-        const productCell = row.insertCell(0);
+        const productCell = document.createElement("td");
+        const productLink = document.createElement("button");
+        productLink.textContent = item.product || "";
+        productLink.className = "product-history-link";
+        productLink.addEventListener("click", function () {
+            openProductHistory(item);
+        });
+        productCell.appendChild(productLink);
+        row.appendChild(productCell);
 
-const productLink = document.createElement("button");
-productLink.innerHTML = item.product;
-productLink.className = "product-history-link";
+        [item.color, item.quantity, item.caseNumber, item.date, item.notes].forEach(function (value) {
+            const cell = document.createElement("td");
+            cell.textContent = value ?? "";
+            row.appendChild(cell);
+        });
 
-productLink.onclick = function () {
-    openProductHistory(item);
-};
+        const statusCell = document.createElement("td");
+        statusCell.innerHTML = getStatusBadge(item.status);
+        row.appendChild(statusCell);
 
-productCell.appendChild(productLink);
-        row.insertCell(1).innerHTML = item.color;
-        row.insertCell(2).innerHTML = item.quantity;
-        row.insertCell(3).innerHTML = item.caseNumber;
-        row.insertCell(4).innerHTML = item.date;
-        row.insertCell(5).innerHTML = item.notes;
-        row.insertCell(6).innerHTML = getStatusBadge(item.status);
-
-        const actionsCell = row.insertCell(7);
-
+        const actionsCell = document.createElement("td");
         if (item.status !== "Removed from Inventory") {
             const rotateBtn = document.createElement("button");
-            rotateBtn.innerHTML = "Rotate";
-            rotateBtn.onclick = function () {
-                rotateProduct(index);
-            };
+            rotateBtn.textContent = "Rotate";
+            rotateBtn.addEventListener("click", function () { rotateProduct(index); });
             actionsCell.appendChild(rotateBtn);
         }
 
         const editBtn = document.createElement("button");
-        editBtn.innerHTML = "Edit";
+        editBtn.textContent = "Edit";
         editBtn.style.marginLeft = "6px";
-        editBtn.onclick = function () {
-            openEditModal(index);
-        };
-
+        editBtn.addEventListener("click", function () { openEditModal(index); });
         actionsCell.appendChild(editBtn);
+        row.appendChild(actionsCell);
+        tableFragment.appendChild(row);
+
         const mobileCard = document.createElement("div");
-mobileCard.className = "mobile-inventory-card";
+        mobileCard.className = "mobile-inventory-card";
+        mobileCard.innerHTML = `
+            <button class="mobile-copy-btn" title="Copy product information">📋</button>
+            <button class="mobile-product-title">🌸 ${escapeProductionPickHtml(item.product || "")}</button>
+            <div class="mobile-product-details">
+                <span>🎨 ${escapeProductionPickHtml(item.color || "")}</span>
+                <span>📦 Case ${escapeProductionPickHtml(item.caseNumber || "")}</span>
+                <span>🌿 ${Number(item.quantity ?? 0)} stems</span>
+                <span>📅 ${escapeProductionPickHtml(item.date || "")}</span>
+            </div>
+            <div class="mobile-product-status">${getStatusBadge(item.status)}</div>
+        `;
 
-mobileCard.innerHTML = `
-    <button class="mobile-copy-btn" title="Copy product information">
-        📋
-    </button>
-    <button class="mobile-product-title">
-        🌸 ${item.product || ""}
-    </button>
+        mobileCard.querySelector(".mobile-copy-btn").addEventListener("click", async function () {
+            const productText = `🌸 ${item.product || ""}\n🎨 ${item.color || ""}\n📦 Case ${item.caseNumber || ""}\n🌿 ${item.quantity ?? 0} stems\n📅 ${item.date || ""}\nStatus: ${item.status || ""}`;
+            try {
+                await navigator.clipboard.writeText(productText);
+                const copyBtn = mobileCard.querySelector(".mobile-copy-btn");
+                copyBtn.textContent = "✓";
+                setTimeout(function () { copyBtn.textContent = "📋"; }, 1200);
+            } catch (error) {
+                alert("Could not copy the product information.");
+            }
+        });
 
-    <div class="mobile-product-details">
-        <span>🎨 ${item.color || ""}</span>
-        <span>📦 Case ${item.caseNumber || ""}</span>
-        <span>🌿 ${item.quantity ?? 0} stems</span>
-        <span>📅 ${item.date || ""}</span>
-    </div>
+        mobileCard.querySelector(".mobile-product-title").addEventListener("click", function () {
+            openProductHistory(item);
+        });
 
-    <div class="mobile-product-status">
-        ${getStatusBadge(item.status)}
-    </div>
-`;
-mobileCard
-    .querySelector(".mobile-copy-btn")
-    .addEventListener("click", async function () {
-        const productText =
-`🌸 ${item.product || ""}
-🎨 ${item.color || ""}
-📦 Case ${item.caseNumber || ""}
-🌿 ${item.quantity ?? 0} stems
-📅 ${item.date || ""}
-Status: ${item.status || ""}`;
-
-        try {
-            await navigator.clipboard.writeText(productText);
-
-            const copyBtn = mobileCard.querySelector(".mobile-copy-btn");
-            copyBtn.textContent = "✓";
-
-            setTimeout(function () {
-                copyBtn.textContent = "📋";
-            }, 1200);
-
-        } catch (error) {
-            alert("Could not copy the product information.");
+        const mobileActions = document.createElement("div");
+        mobileActions.className = "mobile-inventory-actions";
+        if (item.status !== "Removed from Inventory") {
+            const mobileRotateBtn = document.createElement("button");
+            mobileRotateBtn.textContent = "🔄 Rotate";
+            mobileRotateBtn.addEventListener("click", function () { rotateProduct(index); });
+            mobileActions.appendChild(mobileRotateBtn);
         }
+        const mobileEditBtn = document.createElement("button");
+        mobileEditBtn.textContent = "✏️ Edit";
+        mobileEditBtn.addEventListener("click", function () { openEditModal(index); });
+        mobileActions.appendChild(mobileEditBtn);
+        mobileCard.appendChild(mobileActions);
+        mobileFragment.appendChild(mobileCard);
     });
 
-mobileCard
-    .querySelector(".mobile-product-title")
-    .addEventListener("click", function () {
-        openProductHistory(item);
-    });
+    table.appendChild(tableFragment);
+    mobileInventoryList.appendChild(mobileFragment);
 
-const mobileActions = document.createElement("div");
-mobileActions.className = "mobile-inventory-actions";
-
-if (item.status !== "Removed from Inventory") {
-    const mobileRotateBtn = document.createElement("button");
-    mobileRotateBtn.textContent = "🔄 Rotate";
-    mobileRotateBtn.addEventListener("click", function () {
-        rotateProduct(index);
-    });
-
-    mobileActions.appendChild(mobileRotateBtn);
+    if (summary) {
+        summary.textContent = visibleInventory.length === 0
+            ? "No inventory items found"
+            : `Showing ${Math.min(renderedInventory.length, visibleInventory.length)} of ${visibleInventory.length}`;
+    }
+    if (loadMoreBtn) {
+        loadMoreBtn.style.display = renderedInventory.length < visibleInventory.length ? "inline-flex" : "none";
+    }
 }
 
-const mobileEditBtn = document.createElement("button");
-mobileEditBtn.textContent = "✏️ Edit";
-mobileEditBtn.addEventListener("click", function () {
-    openEditModal(index);
-});
-
-mobileActions.appendChild(mobileEditBtn);
-mobileCard.appendChild(mobileActions);
-mobileInventoryList.appendChild(mobileCard);
-    });
-}
 async function rotateProduct(index) {
     const item = inventory[index];
 
@@ -3268,7 +3321,8 @@ async function loadHistoryFromSupabase() {
     const { data, error } = await supabaseClient
         .from("activity")
         .select("*")
-        .order("created_at", { ascending: false });
+        .order("created_at", { ascending: false })
+        .limit(1000);
 
     if (error) {
         alert("Error loading activity: " + error.message);
@@ -3537,7 +3591,12 @@ function getTime() {
     });
 }
 
-searchInput.addEventListener("input", renderInventory);
+searchInput.addEventListener("input", function () {
+    clearTimeout(inventorySearchTimer);
+    inventorySearchTimer = setTimeout(function () {
+        queueInventoryRender({ resetLimit: true });
+    }, 180);
+});
 exportInventorySettingsBtn.addEventListener("click", function () {
     exportToCSV(inventory, "FloraFlow_Inventory.csv");
 });
@@ -3595,19 +3654,8 @@ function updateDashboard() {
     document.getElementById("removedCount").innerHTML = removed;
 
 }
-async function loadInventoryFromSupabase() {
-    const { data, error } = await supabaseClient
-        .from("inventory")
-        .select("*")
-        .order("created_at", { ascending: false });
-
-    if (error) {
-        alert("Error loading inventory from Supabase: " + error.message);
-        console.error(error);
-        return;
-    }
-
-    inventory = data.map(item => ({
+function mapInventoryRow(item) {
+    return {
         id: item.id,
         leftover_code: item.leftover_code,
         product: item.product,
@@ -3616,11 +3664,77 @@ async function loadInventoryFromSupabase() {
         caseNumber: item.case_number,
         date: item.date_received,
         notes: item.notes,
-        status: item.status
-    }));
+        status: item.status,
+        createdAt: item.created_at || ""
+    };
+}
 
-    renderInventory();
-    updateDashboard();
+async function fetchInventoryByStatus(options = {}) {
+    const includeRemoved = Boolean(options.includeRemoved);
+    let start = 0;
+    const rows = [];
+
+    while (true) {
+        let query = supabaseClient
+            .from("inventory")
+            .select("id,leftover_code,product,color,quantity,case_number,date_received,notes,status,created_at")
+            .order("created_at", { ascending: false })
+            .range(start, start + INVENTORY_FETCH_PAGE_SIZE - 1);
+
+        query = includeRemoved
+            ? query.eq("status", "Removed from Inventory")
+            : query.neq("status", "Removed from Inventory");
+
+        const { data, error } = await query;
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+
+        rows.push.apply(rows, data.map(mapInventoryRow));
+        if (data.length < INVENTORY_FETCH_PAGE_SIZE) break;
+        start += INVENTORY_FETCH_PAGE_SIZE;
+
+        // Yield between large pages so phones can paint and remain responsive.
+        await new Promise(function (resolve) { setTimeout(resolve, 0); });
+    }
+
+    return rows;
+}
+
+async function loadRemovedInventoryFromSupabase() {
+    const removedRows = await fetchInventoryByStatus({ includeRemoved: true });
+    const activeRows = inventory.filter(function (item) {
+        return item.status !== "Removed from Inventory";
+    });
+    inventory = activeRows.concat(removedRows);
+    removedInventoryLoaded = true;
+    return removedRows;
+}
+
+async function loadInventoryFromSupabase() {
+    if (inventoryLoadPromise) return inventoryLoadPromise;
+
+    inventoryLoadPromise = (async function () {
+        try {
+            const activeRows = await fetchInventoryByStatus({ includeRemoved: false });
+            const existingRemovedRows = removedInventoryLoaded
+                ? inventory.filter(function (item) { return item.status === "Removed from Inventory"; })
+                : [];
+
+            inventory = activeRows.concat(existingRemovedRows);
+            inventoryRenderLimit = INVENTORY_RENDER_PAGE_SIZE;
+            renderInventory();
+            updateDashboard();
+            return inventory;
+        } catch (error) {
+            alert("Error loading inventory from Supabase: " + error.message);
+            console.error(error);
+            return inventory;
+        } finally {
+            inventoryLoadPromise = null;
+        }
+    })();
+
+    return inventoryLoadPromise;
 }
 historySearch.addEventListener("input", renderHistory);
 historyDate.addEventListener("change", renderHistory);

@@ -933,3 +933,40 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
         grid-template-columns: 1fr;
     }
 }
+
+/* ===== Inventory performance controls ===== */
+.inventory-load-more-controls {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 14px;
+    flex-wrap: wrap;
+    padding: 18px 0 4px;
+}
+.inventory-visible-summary {
+    color: #68756f;
+    font-size: 13px;
+    font-weight: 700;
+}
+#inventoryLoadMoreBtn {
+    min-width: 130px;
+    min-height: 42px;
+    justify-content: center;
+}
+@media (max-width: 650px) {
+    .inventory-load-more-controls {
+        position: sticky;
+        bottom: 84px;
+        z-index: 20;
+        margin: 8px 0;
+        padding: 10px;
+        border: 1px solid var(--ff-line, #dbe5df);
+        border-radius: 14px;
+        background: rgba(255,255,255,.96);
+        box-shadow: 0 8px 24px rgba(28,58,47,.10);
+        backdrop-filter: blur(10px);
+    }
+    #inventoryLoadMoreBtn {
+        width: 100%;
+    }
+}
