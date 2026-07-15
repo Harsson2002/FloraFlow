@@ -8494,9 +8494,22 @@ async function openProductionPickListFromUrl() {
 let floraFlowPdfJsPromise = null;
 let floraFlowLastPdfAnalysis = null;
 
+function configureFloraFlowPdfWorker(pdfjs) {
+    if (!pdfjs || !pdfjs.GlobalWorkerOptions) {
+        return pdfjs;
+    }
+
+    pdfjs.GlobalWorkerOptions.workerSrc =
+        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+
+    return pdfjs;
+}
+
 function loadFloraFlowPdfJs() {
     if (window.pdfjsLib) {
-        return Promise.resolve(window.pdfjsLib);
+        return Promise.resolve(
+            configureFloraFlowPdfWorker(window.pdfjsLib)
+        );
     }
 
     if (floraFlowPdfJsPromise) {
@@ -8505,15 +8518,18 @@ function loadFloraFlowPdfJs() {
 
     floraFlowPdfJsPromise = new Promise(function (resolve, reject) {
         const script = document.createElement("script");
-        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
-        script.type = "module";
+        script.src =
+            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
 
         script.onload = function () {
-            if (window.pdfjsLib) {
-                resolve(window.pdfjsLib);
+            if (!window.pdfjsLib) {
+                reject(new Error("PDF reader did not initialize."));
                 return;
             }
-            reject(new Error("PDF reader did not initialize."));
+
+            resolve(
+                configureFloraFlowPdfWorker(window.pdfjsLib)
+            );
         };
 
         script.onerror = function () {
@@ -8521,25 +8537,6 @@ function loadFloraFlowPdfJs() {
         };
 
         document.head.appendChild(script);
-    }).catch(async function () {
-        // Fallback to the classic build for browsers that do not expose the module globally.
-        return new Promise(function (resolve, reject) {
-            const fallback = document.createElement("script");
-            fallback.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-            fallback.onload = function () {
-                if (!window.pdfjsLib) {
-                    reject(new Error("PDF reader did not initialize."));
-                    return;
-                }
-                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
-                    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-                resolve(window.pdfjsLib);
-            };
-            fallback.onerror = function () {
-                reject(new Error("PDF reader could not be loaded."));
-            };
-            document.head.appendChild(fallback);
-        });
     });
 
     return floraFlowPdfJsPromise;
