@@ -3,37 +3,52 @@ const productsCatalog = [
     "ACHILLEA",
     "AGAPANTHUS",
     "ALLIUM",
-    "ALSTROEMERIA",
+    "ALSTROMERIA",
     "AMARANTHUS",
     "AMMI",
     "ANEMONE",
     "ARALIA",
     "ASTER",
+    "BUPLEURUM",
+    "BUTTON POM",
     "CALLA",
     "CARNATION STANDARD",
     "CHRYSANTHEMUM",
+    "COCCULUS",
+    "CRASPEDIA",
+    "CURLY WILLOW",
     "CUSHION POM",
+    "DAISY POM",
     "DELPHINIUM",
+    "DENDROBIUM",
     "DISBUD",
     "DUSTY MILLER",
+    "ERYNGIUM",
     "EUCALYPTUS",
     "FREESIA",
     "GERBERA",
     "GYPSOPHILA",
-    "HYPERICUM",
     "HYDRANGEA",
-    "MINI GREEN",
+    "HYPERICUM",
     "IRIS",
     "LEPIDIUM",
     "LEUCADENDRON",
-    "LISIANTHUS",
+    "LILY GRASS",
     "LIMONIUM",
+    "LISIANTHUS",
+    "MATRICARIA",
+    "MICRO POM",
+    "MINI CALLA",
+    "MINI GREEN",
+    "MINI HYDRANGEA",
     "MOLUCELLA",
     "PEONY",
     "PINCUSHION",
+    "PISTACIA",
     "PITTOSPORUM",
     "PROTEA",
     "RANUNCULUS",
+    "ROBELINI",
     "ROSE",
     "RUSCUS",
     "SCABIOSA",
@@ -41,8 +56,11 @@ const productsCatalog = [
     "SOLIDAGO",
     "SPRAY CARNATION",
     "SPRAY ROSE",
+    "STATICE",
     "STOCK",
+    "SUNFLOWER",
     "TULIP",
+    "TWEEDIA",
     "VERONICA",
     "WAXFLOWER"
 ];
@@ -151,7 +169,7 @@ const todayProductionBtn = document.getElementById("todayProductionBtn");
 const todayProductionModal = document.getElementById("todayProductionModal");
 const closeTodayProductionModal = document.getElementById("closeTodayProductionModal");
 
-const productionPreview = document.getElementById("productionPreview");
+const productionPreview = document.getElementById("productionPreview") || new Image();
 const productionPlaceholder = document.getElementById("productionPlaceholder");
 const productionDropZone = document.getElementById("productionDropZone");
 const clearProductionImageBtn = document.getElementById("clearProductionImageBtn");
@@ -475,48 +493,64 @@ function replaceFamilyAliasesInLine(line) {
 }
 function extractProductionColor(line) {
 
-    const text = String(line || "")
-        .toUpperCase()
-        .replace(/[^A-Z0-9\s]/g, " ")
-        .replace(/\s+/g, " ")
-        .trim();
+    const text = normalizeMatchText(line);
+
+    if (!text) {
+        return "";
+    }
 
     const colorRules = [
         {
             color: "HOT PINK",
-            aliases: ["HOT PINK", "HOTPNK", "HPINK", "HPNK"]
+            aliases: ["HOT PINK", "HOTPNK", "HPINK", "HPNK", "HTP"]
+        },
+        {
+            color: "DARK PINK",
+            aliases: ["DARK PINK", "DK PINK", "DPI"]
         },
         {
             color: "LIGHT PINK",
             aliases: ["LIGHT PINK", "LT PINK", "LTPINK"]
         },
         {
+            color: "PINK",
+            aliases: ["PASTEL PINK", "PINK", "PNK", "PK"]
+        },
+        {
+            color: "YELLOW ORANGE",
+            aliases: ["YELLOW ORANGE", "YEL ORANGE", "YLW ORANGE"]
+        },
+        {
+            color: "OLIVE GREEN",
+            aliases: ["OLIVE GREEN"]
+        },
+        {
+            color: "BLUE PURPLE",
+            aliases: ["BLUE PURPLE"]
+        },
+        {
             color: "YELLOW",
-            aliases: ["YELLOW", "YELLO", "YEL", "YLLW"]
+            aliases: ["YELLOW", "YELLO", "YELOW", "VELLOW", "YEL", "YLW", "YLLW"]
         },
         {
             color: "WHITE",
-            aliases: ["WHITE", "WHIT", "WHT", "WH"]
-        },
-        {
-            color: "PINK",
-            aliases: ["PINK", "PNK"]
+            aliases: ["WHITE", "WHIITE", "WHITTE", "WIRTTE", "WHIT", "WHT", "WI"]
         },
         {
             color: "PURPLE",
-            aliases: ["PURPLE", "PURP", "PRPL"]
+            aliases: ["PURPLE", "PURALE", "PLRPLE", "PRPLE", "PURP", "PRPL", "PU"]
         },
         {
             color: "LAVENDER",
-            aliases: ["LAVENDER", "LAV", "LAVNDR"]
+            aliases: ["LAVENDER", "LAVANDER", "LAV", "LAVNDR"]
         },
         {
             color: "ORANGE",
-            aliases: ["ORANGE", "ORG", "ORNGE"]
+            aliases: ["ORANGE", "ORNGE", "ORG"]
         },
         {
             color: "GREEN",
-            aliases: ["GREEN", "GRN"]
+            aliases: ["GREEN", "GRN", "GR"]
         },
         {
             color: "CREAM",
@@ -524,7 +558,35 @@ function extractProductionColor(line) {
         },
         {
             color: "BLUE",
-            aliases: ["BLUE", "BLU"]
+            aliases: ["BLUE", "BLU", "BL"]
+        },
+        {
+            color: "BURGUNDY",
+            aliases: ["BURGUNDY", "BURG", "BU"]
+        },
+        {
+            color: "BRONZE",
+            aliases: ["BRONZE", "BZ"]
+        },
+        {
+            color: "BROWN",
+            aliases: ["BROWN"]
+        },
+        {
+            color: "PEACH",
+            aliases: ["PEACH"]
+        },
+        {
+            color: "CORAL",
+            aliases: ["CORAL"]
+        },
+        {
+            color: "GOLD",
+            aliases: ["GOLD", "GOL"]
+        },
+        {
+            color: "GRAY",
+            aliases: ["GRAY", "GREY"]
         },
         {
             color: "RED",
@@ -533,20 +595,14 @@ function extractProductionColor(line) {
     ];
 
     for (const rule of colorRules) {
-
         for (const alias of rule.aliases) {
+            const normalizedAlias = normalizeMatchText(alias);
 
-            const escapedAlias = alias.replace(
-                /[.*+?^${}()|[\]\\]/g,
-                "\\$&"
-            );
-
-            const pattern = new RegExp(
-                "\\b" + escapedAlias + "\\b",
-                "i"
-            );
-
-            if (pattern.test(text)) {
+            if (
+                (" " + text + " ").includes(
+                    " " + normalizedAlias + " "
+                )
+            ) {
                 return rule.color;
             }
         }
@@ -578,16 +634,634 @@ window.addEventListener("click", function (event) {
 
 });
 
+const PRODUCTION_SELECTION_STORAGE_KEY = "floraFlowProductionSelection";
+
+let productionSelectionImage = null;
+let productionSelection = null;
+let productionSelectionDraft = null;
+let productionSelectionDragging = false;
+let productionSelectionEnabled = false;
+let productionSelectionPointerId = null;
+let productionSelectionCanvas = null;
+let productionSelectionContext = null;
+let productionDetectedText = null;
+let productionSelectionStatus = null;
+let productionRememberArea = null;
+let productionReadAreaBtn = null;
+let productionFindLeftoversBtn = null;
+let productionSelectAreaBtn = null;
+let productionSelectAgainBtn = null;
+
+function ensureProductionSelectionUI() {
+
+    let tool = document.getElementById("productionSelectionTool");
+
+    if (tool) {
+        return tool;
+    }
+
+    tool = document.createElement("div");
+    tool.id = "productionSelectionTool";
+    tool.innerHTML = `
+        <div style="
+            margin-top:16px;
+            padding:16px;
+            background:#f8fafc;
+            border:1px solid #dbe4ea;
+            border-radius:14px;
+        ">
+            <div style="font-size:18px;font-weight:700;margin-bottom:6px;">
+                Select the product area
+            </div>
+
+            <div style="font-size:14px;color:#52606d;line-height:1.5;margin-bottom:12px;">
+                Paste the screenshot, press <strong>Select Product Area</strong>,
+                and drag a rectangle only around the product names.
+            </div>
+
+            <div id="productionSelectionStage" style="
+                display:none;
+                position:relative;
+                width:100%;
+                max-height:62vh;
+                overflow:auto;
+                background:#111827;
+                border-radius:12px;
+                border:1px solid #cbd5e1;
+                touch-action:none;
+            ">
+                <canvas id="productionSelectionCanvas" style="
+                    display:block;
+                    max-width:none;
+                    cursor:crosshair;
+                    touch-action:none;
+                "></canvas>
+            </div>
+
+            <div style="
+                display:flex;
+                flex-wrap:wrap;
+                gap:8px;
+                margin-top:12px;
+                align-items:center;
+            ">
+                <button type="button" id="productionSelectAreaBtn">
+                    Select Product Area
+                </button>
+
+                <button type="button" id="productionSelectAgainBtn" disabled>
+                    Select Area Again
+                </button>
+
+                <button type="button" id="productionReadAreaBtn" disabled>
+                    Read Selected Area
+                </button>
+
+                <button type="button" id="productionFindLeftoversBtn" disabled>
+                    Find Leftovers
+                </button>
+
+                <label style="
+                    display:flex;
+                    gap:6px;
+                    align-items:center;
+                    font-size:14px;
+                    margin-left:4px;
+                ">
+                    <input type="checkbox" id="productionRememberArea">
+                    Remember this area
+                </label>
+            </div>
+
+            <div id="productionSelectionStatus" style="
+                margin-top:10px;
+                min-height:22px;
+                font-size:14px;
+                color:#475569;
+            "></div>
+
+            <label for="productionDetectedText" style="
+                display:block;
+                margin-top:14px;
+                margin-bottom:6px;
+                font-weight:700;
+            ">
+                Text detected — correct it here before searching
+            </label>
+
+            <textarea id="productionDetectedText" rows="8" spellcheck="false" style="
+                width:100%;
+                box-sizing:border-box;
+                resize:vertical;
+                padding:12px;
+                border:1px solid #cbd5e1;
+                border-radius:10px;
+                font-family:Consolas, Monaco, monospace;
+                font-size:14px;
+                line-height:1.45;
+                background:white;
+            " placeholder="The text read from the selected area will appear here."></textarea>
+        </div>
+    `;
+
+    const referenceNode =
+        document.getElementById("productionRecommendations") ||
+        productionLoaded ||
+        analyzeProductionBtn;
+
+    if (referenceNode && referenceNode.parentNode) {
+        referenceNode.parentNode.insertBefore(tool, referenceNode.nextSibling);
+    } else {
+        todayProductionModal.appendChild(tool);
+    }
+
+    productionSelectionCanvas =
+        document.getElementById("productionSelectionCanvas");
+
+    productionSelectionContext =
+        productionSelectionCanvas.getContext("2d");
+
+    productionDetectedText =
+        document.getElementById("productionDetectedText");
+
+    productionSelectionStatus =
+        document.getElementById("productionSelectionStatus");
+
+    productionRememberArea =
+        document.getElementById("productionRememberArea");
+
+    productionReadAreaBtn =
+        document.getElementById("productionReadAreaBtn");
+
+    productionFindLeftoversBtn =
+        document.getElementById("productionFindLeftoversBtn");
+
+    productionSelectAreaBtn =
+        document.getElementById("productionSelectAreaBtn");
+
+    productionSelectAgainBtn =
+        document.getElementById("productionSelectAgainBtn");
+
+    productionSelectAreaBtn.addEventListener("click", function () {
+        beginProductionAreaSelection();
+    });
+
+    productionSelectAgainBtn.addEventListener("click", function () {
+        beginProductionAreaSelection();
+    });
+
+    productionReadAreaBtn.addEventListener("click", async function () {
+        await readSelectedProductionArea();
+    });
+
+    productionFindLeftoversBtn.addEventListener("click", async function () {
+        await findLeftoversFromDetectedText();
+    });
+
+    productionDetectedText.addEventListener("input", function () {
+        productionFindLeftoversBtn.disabled =
+            productionDetectedText.value.trim() === "";
+    });
+
+    productionSelectionCanvas.addEventListener(
+        "pointerdown",
+        handleProductionSelectionPointerDown
+    );
+
+    productionSelectionCanvas.addEventListener(
+        "pointermove",
+        handleProductionSelectionPointerMove
+    );
+
+    productionSelectionCanvas.addEventListener(
+        "pointerup",
+        handleProductionSelectionPointerUp
+    );
+
+    productionSelectionCanvas.addEventListener(
+        "pointercancel",
+        handleProductionSelectionPointerUp
+    );
+
+    if (analyzeProductionBtn) {
+        analyzeProductionBtn.style.display = "none";
+    }
+
+    if (viewProductionImageBtn) {
+        viewProductionImageBtn.style.display = "none";
+    }
+
+    if (viewOcrCropBtn) {
+        viewOcrCropBtn.style.display = "none";
+    }
+
+    if (productionPreviewViewport) {
+        productionPreviewViewport.style.display = "none";
+    }
+
+    return tool;
+}
+
+function setProductionSelectionStatus(message, type) {
+
+    ensureProductionSelectionUI();
+
+    const colors = {
+        success: "#166534",
+        error: "#b91c1c",
+        working: "#1d4ed8",
+        info: "#475569"
+    };
+
+    productionSelectionStatus.style.color =
+        colors[type] || colors.info;
+
+    productionSelectionStatus.textContent = message || "";
+}
+
+function getRememberedProductionSelection() {
+
+    try {
+        const stored = JSON.parse(
+            localStorage.getItem(PRODUCTION_SELECTION_STORAGE_KEY)
+        );
+
+        if (
+            stored &&
+            Number.isFinite(stored.x) &&
+            Number.isFinite(stored.y) &&
+            Number.isFinite(stored.width) &&
+            Number.isFinite(stored.height) &&
+            stored.width > 0 &&
+            stored.height > 0
+        ) {
+            return stored;
+        }
+    } catch (error) {
+        console.warn("Could not read the remembered production area.", error);
+    }
+
+    return null;
+}
+
+function saveRememberedProductionSelection() {
+
+    if (!productionSelection || !productionRememberArea?.checked) {
+        return;
+    }
+
+    localStorage.setItem(
+        PRODUCTION_SELECTION_STORAGE_KEY,
+        JSON.stringify(productionSelection)
+    );
+}
+
+function clearRememberedProductionSelection() {
+    localStorage.removeItem(PRODUCTION_SELECTION_STORAGE_KEY);
+}
+
+function resetProductionSelectionTool(options = {}) {
+
+    ensureProductionSelectionUI();
+
+    productionSelectionEnabled = false;
+    productionSelectionDragging = false;
+    productionSelectionPointerId = null;
+    productionSelectionDraft = null;
+
+    if (options.clearSelection !== false) {
+        productionSelection = null;
+    }
+
+    if (options.clearText !== false) {
+        productionDetectedText.value = "";
+    }
+
+    productionReadAreaBtn.disabled = !productionSelection;
+    productionFindLeftoversBtn.disabled = true;
+    productionSelectAgainBtn.disabled = !productionSelectionImage;
+
+    drawProductionSelectionCanvas();
+}
+
+function getProductionCanvasPoint(event) {
+
+    const rect = productionSelectionCanvas.getBoundingClientRect();
+
+    const scaleX = rect.width
+        ? productionSelectionCanvas.width / rect.width
+        : 1;
+
+    const scaleY = rect.height
+        ? productionSelectionCanvas.height / rect.height
+        : 1;
+
+    return {
+        x: Math.max(
+            0,
+            Math.min(
+                productionSelectionCanvas.width,
+                (event.clientX - rect.left) * scaleX
+            )
+        ),
+        y: Math.max(
+            0,
+            Math.min(
+                productionSelectionCanvas.height,
+                (event.clientY - rect.top) * scaleY
+            )
+        )
+    };
+}
+
+function normalizeProductionSelectionRect(startPoint, endPoint) {
+
+    const left = Math.min(startPoint.x, endPoint.x);
+    const top = Math.min(startPoint.y, endPoint.y);
+    const right = Math.max(startPoint.x, endPoint.x);
+    const bottom = Math.max(startPoint.y, endPoint.y);
+
+    return {
+        x: left / productionSelectionCanvas.width,
+        y: top / productionSelectionCanvas.height,
+        width: (right - left) / productionSelectionCanvas.width,
+        height: (bottom - top) / productionSelectionCanvas.height
+    };
+}
+
+function handleProductionSelectionPointerDown(event) {
+
+    if (!productionSelectionEnabled || !productionSelectionImage) {
+        return;
+    }
+
+    event.preventDefault();
+
+    productionSelectionPointerId = event.pointerId;
+    productionSelectionCanvas.setPointerCapture(event.pointerId);
+
+    const point = getProductionCanvasPoint(event);
+
+    productionSelectionDragging = true;
+    productionSelectionDraft = {
+        start: point,
+        end: point
+    };
+
+    drawProductionSelectionCanvas();
+}
+
+function handleProductionSelectionPointerMove(event) {
+
+    if (
+        !productionSelectionDragging ||
+        event.pointerId !== productionSelectionPointerId
+    ) {
+        return;
+    }
+
+    event.preventDefault();
+
+    productionSelectionDraft.end =
+        getProductionCanvasPoint(event);
+
+    drawProductionSelectionCanvas();
+}
+
+function handleProductionSelectionPointerUp(event) {
+
+    if (
+        !productionSelectionDragging ||
+        event.pointerId !== productionSelectionPointerId
+    ) {
+        return;
+    }
+
+    event.preventDefault();
+
+    productionSelectionDraft.end =
+        getProductionCanvasPoint(event);
+
+    const normalizedRect = normalizeProductionSelectionRect(
+        productionSelectionDraft.start,
+        productionSelectionDraft.end
+    );
+
+    productionSelectionDragging = false;
+    productionSelectionPointerId = null;
+    productionSelectionDraft = null;
+
+    if (
+        normalizedRect.width < 0.02 ||
+        normalizedRect.height < 0.02
+    ) {
+        setProductionSelectionStatus(
+            "The selected area is too small. Drag a larger rectangle.",
+            "error"
+        );
+        drawProductionSelectionCanvas();
+        return;
+    }
+
+    productionSelection = normalizedRect;
+    productionSelectionEnabled = false;
+    productionReadAreaBtn.disabled = false;
+    productionSelectAgainBtn.disabled = false;
+
+    saveRememberedProductionSelection();
+    drawProductionSelectionCanvas();
+
+    setProductionSelectionStatus(
+        "Area selected. Press Read Selected Area.",
+        "success"
+    );
+}
+
+function drawProductionSelectionCanvas() {
+
+    if (
+        !productionSelectionCanvas ||
+        !productionSelectionContext ||
+        !productionSelectionImage
+    ) {
+        return;
+    }
+
+    const canvas = productionSelectionCanvas;
+    const ctx = productionSelectionContext;
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.drawImage(
+        productionSelectionImage,
+        0,
+        0,
+        canvas.width,
+        canvas.height
+    );
+
+    let rect = productionSelection;
+
+    if (productionSelectionDraft) {
+        rect = normalizeProductionSelectionRect(
+            productionSelectionDraft.start,
+            productionSelectionDraft.end
+        );
+    }
+
+    if (!rect) {
+        return;
+    }
+
+    const x = rect.x * canvas.width;
+    const y = rect.y * canvas.height;
+    const width = rect.width * canvas.width;
+    const height = rect.height * canvas.height;
+
+    ctx.save();
+    ctx.fillStyle = "rgba(15, 23, 42, 0.58)";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.clearRect(x, y, width, height);
+    ctx.drawImage(
+        productionSelectionImage,
+        x / canvas.width * productionSelectionImage.naturalWidth,
+        y / canvas.height * productionSelectionImage.naturalHeight,
+        width / canvas.width * productionSelectionImage.naturalWidth,
+        height / canvas.height * productionSelectionImage.naturalHeight,
+        x,
+        y,
+        width,
+        height
+    );
+    ctx.strokeStyle = "#22c55e";
+    ctx.lineWidth = Math.max(3, canvas.width / 350);
+    ctx.setLineDash([12, 8]);
+    ctx.strokeRect(x, y, width, height);
+    ctx.restore();
+}
+
+async function loadProductionImageIntoSelector(imageUrl) {
+
+    ensureProductionSelectionUI();
+
+    const image = new Image();
+    image.src = imageUrl;
+
+    await new Promise(function (resolve, reject) {
+        image.onload = resolve;
+        image.onerror = reject;
+    });
+
+    productionSelectionImage = image;
+
+    const stage = document.getElementById("productionSelectionStage");
+    const maximumDisplayWidth = Math.min(
+        1200,
+        Math.max(640, todayProductionModal.clientWidth - 60)
+    );
+
+    const displayWidth = Math.min(
+        image.naturalWidth,
+        maximumDisplayWidth
+    );
+
+    const displayHeight = Math.round(
+        displayWidth * image.naturalHeight / image.naturalWidth
+    );
+
+    productionSelectionCanvas.width = displayWidth;
+    productionSelectionCanvas.height = displayHeight;
+    productionSelectionCanvas.style.width = displayWidth + "px";
+    productionSelectionCanvas.style.height = displayHeight + "px";
+
+    stage.style.display = "block";
+
+    const rememberedSelection =
+        getRememberedProductionSelection();
+
+    if (rememberedSelection) {
+        productionSelection = rememberedSelection;
+        productionRememberArea.checked = true;
+        productionReadAreaBtn.disabled = false;
+        productionSelectAgainBtn.disabled = false;
+
+        setProductionSelectionStatus(
+            "The remembered area was applied. Review the green rectangle or select it again.",
+            "info"
+        );
+    } else {
+        productionSelection = null;
+        productionRememberArea.checked = false;
+        productionReadAreaBtn.disabled = true;
+        productionSelectAgainBtn.disabled = false;
+
+        setProductionSelectionStatus(
+            "Press Select Product Area and drag around the product names.",
+            "info"
+        );
+    }
+
+    productionDetectedText.value = "";
+    productionFindLeftoversBtn.disabled = true;
+    drawProductionSelectionCanvas();
+}
+
+function beginProductionAreaSelection() {
+
+    ensureProductionSelectionUI();
+
+    if (!productionSelectionImage) {
+        alert("Please paste a production screenshot first.");
+        return;
+    }
+
+    productionSelection = null;
+    productionSelectionDraft = null;
+    productionSelectionEnabled = true;
+    productionReadAreaBtn.disabled = true;
+    productionFindLeftoversBtn.disabled = true;
+    productionDetectedText.value = "";
+
+    if (!productionRememberArea.checked) {
+        clearRememberedProductionSelection();
+    }
+
+    drawProductionSelectionCanvas();
+
+    setProductionSelectionStatus(
+        "Drag from one corner to the opposite corner around only the product names.",
+        "working"
+    );
+}
+
+function cleanDetectedProductionText(value) {
+
+    return String(value || "")
+        .split(/\r?\n/)
+        .map(function (line) {
+            return line
+                .replace(/[|]/g, "I")
+                .replace(/\s+/g, " ")
+                .trim();
+        })
+        .filter(Boolean)
+        .join("\n")
+        .trim();
+}
+
 todayProductionBtn.addEventListener("click", function () {
     todayProductionModal.style.display = "block";
+    ensureProductionSelectionUI();
 });
 
 closeTodayProductionModal.addEventListener("click", function () {
     todayProductionModal.style.display = "none";
 });
+
 clearProductionImageBtn.addEventListener("click", function () {
 
     productionPreview.src = "";
+    window.originalProductionImage = "";
+    window.lastOcrCrop = "";
 
     productionPlaceholder.style.display = "block";
     productionLoaded.style.display = "none";
@@ -598,9 +1272,34 @@ clearProductionImageBtn.addEventListener("click", function () {
     productionImageScale = 1;
     productionPreview.style.transform = "scale(1)";
 
-    viewProductionImageBtn.textContent = "👁 View Screenshot";
+    productionSelectionImage = null;
+    productionSelection = null;
+
+    ensureProductionSelectionUI();
+
+    const stage = document.getElementById("productionSelectionStage");
+    stage.style.display = "none";
+
+    resetProductionSelectionTool({
+        clearSelection: true,
+        clearText: true
+    });
+
+    setProductionSelectionStatus(
+        "Paste a production screenshot to begin.",
+        "info"
+    );
+
+    const resultsContainer =
+        document.getElementById("productionRecommendations");
+
+    if (resultsContainer) {
+        resultsContainer.innerHTML = "";
+    }
 });
-document.addEventListener("paste", function (event) {
+
+document.addEventListener("paste", async function (event) {
+
     if (todayProductionModal.style.display !== "block") {
         return;
     }
@@ -612,83 +1311,47 @@ document.addEventListener("paste", function (event) {
     }
 
     for (const item of items) {
-        if (item.type.startsWith("image/")) {
-            const imageFile = item.getAsFile();
 
-            if (!imageFile) {
-                return;
-            }
+        if (!item.type.startsWith("image/")) {
+            continue;
+        }
 
-            const imageUrl = URL.createObjectURL(imageFile);
+        const imageFile = item.getAsFile();
 
-            productionPreview.src = imageUrl;
-            window.originalProductionImage = imageUrl;
-
-            productionPlaceholder.style.display = "none";
-            productionLoaded.style.display = "block";
-
-            productionPreview.style.display = "none";
-            productionPreviewViewport.style.display = "none";
+        if (!imageFile) {
             return;
         }
+
+        const imageUrl = URL.createObjectURL(imageFile);
+
+        productionPreview.src = imageUrl;
+        window.originalProductionImage = imageUrl;
+
+        productionPlaceholder.style.display = "none";
+        productionLoaded.style.display = "block";
+
+        productionPreview.style.display = "none";
+        productionPreviewViewport.style.display = "none";
+
+        try {
+            await loadProductionImageIntoSelector(imageUrl);
+        } catch (error) {
+            console.error("Could not load the production screenshot.", error);
+            alert("The pasted image could not be loaded.");
+        }
+
+        return;
     }
 
     alert("No image was found in the clipboard. Press Prt Sc first.");
 });
-viewProductionImageBtn.addEventListener("click", function () {
 
-    if (productionPreviewViewport.style.display === "none") {
+if (analyzeProductionBtn) {
+    analyzeProductionBtn.addEventListener("click", async function () {
+        await readSelectedProductionArea();
+    });
+}
 
-        productionPreviewViewport.style.display = "block";
-        productionPreview.style.display = "block";
-
-        viewProductionImageBtn.textContent = "🙈 Hide Screenshot";
-
-    } else {
-
-        productionPreviewViewport.style.display = "none";
-        productionPreview.style.display = "none";
-
-        viewProductionImageBtn.textContent = "👁 View Screenshot";
-
-    }
-
-});
-viewOcrCropBtn.addEventListener("click", function () {
-
-    if (!window.lastOcrCrop) {
-        alert("No OCR crop available yet.");
-        return;
-    }
-
-    productionPreview.src = window.lastOcrCrop;
-
-    productionPreviewViewport.style.display = "block";
-    productionPreview.style.display = "block";
-
-});
-
-analyzeProductionBtn.addEventListener("click", async function () {
-
-    await analyzeProduction();
-
-});
-productionPreview.addEventListener("wheel", function (event) {
-
-    event.preventDefault();
-
-    if (event.deltaY < 0) {
-        productionImageScale += 0.1;
-    } else {
-        productionImageScale -= 0.1;
-    }
-
-    productionImageScale = Math.max(0.5, Math.min(5, productionImageScale));
-
-    productionPreview.style.transform = `scale(${productionImageScale})`;
-    productionPreview.style.transformOrigin = "top left";
-
-});
 toggleRemovedBtn.addEventListener("click", function () {
     showRemoved = !showRemoved;
 
@@ -1790,15 +2453,179 @@ document.addEventListener("touchmove", function (event) {
     }
 }, { passive: false });
 async function analyzeProduction() {
+    await readSelectedProductionArea();
+}
 
-    if (!productionPreview.src) {
+async function startProductionAnalysis() {
+    await findLeftoversFromDetectedText();
+}
+
+function getSelectedProductionSourceRect() {
+
+    if (!productionSelectionImage || !productionSelection) {
+        return null;
+    }
+
+    const imageWidth = productionSelectionImage.naturalWidth;
+    const imageHeight = productionSelectionImage.naturalHeight;
+
+    const x = Math.max(
+        0,
+        Math.round(productionSelection.x * imageWidth)
+    );
+
+    const y = Math.max(
+        0,
+        Math.round(productionSelection.y * imageHeight)
+    );
+
+    const width = Math.max(
+        1,
+        Math.min(
+            imageWidth - x,
+            Math.round(productionSelection.width * imageWidth)
+        )
+    );
+
+    const height = Math.max(
+        1,
+        Math.min(
+            imageHeight - y,
+            Math.round(productionSelection.height * imageHeight)
+        )
+    );
+
+    return {
+        x: x,
+        y: y,
+        width: width,
+        height: height
+    };
+}
+
+function calculateProductionOcrScale(sourceWidth, sourceHeight) {
+
+    const widthScale = 1800 / Math.max(1, sourceWidth);
+    const heightScale = 900 / Math.max(1, sourceHeight);
+
+    return Math.max(
+        2,
+        Math.min(5, Math.max(widthScale, heightScale))
+    );
+}
+
+async function readSelectedProductionArea() {
+
+    ensureProductionSelectionUI();
+
+    if (!window.originalProductionImage || !productionSelectionImage) {
         alert("Please paste a production screenshot first.");
         return;
     }
 
-    await startProductionAnalysis();
+    if (!productionSelection) {
+        alert("Please select the product area first.");
+        return;
+    }
+
+    const sourceRect = getSelectedProductionSourceRect();
+
+    if (!sourceRect) {
+        alert("The selected area is not valid.");
+        return;
+    }
+
+    productionReadAreaBtn.disabled = true;
+    productionFindLeftoversBtn.disabled = true;
+
+    setProductionSelectionStatus(
+        "Reading only the selected product area...",
+        "working"
+    );
+
+    try {
+        const scale = calculateProductionOcrScale(
+            sourceRect.width,
+            sourceRect.height
+        );
+
+        const selectedCanvas = createEnhancedOcrCanvas(
+            productionSelectionImage,
+            sourceRect.x,
+            sourceRect.y,
+            sourceRect.width,
+            sourceRect.height,
+            scale
+        );
+
+        window.lastOcrCrop = selectedCanvas.toDataURL("image/png");
+
+        const articleResult = await Tesseract.recognize(
+            selectedCanvas,
+            "eng",
+            {
+                preserve_interword_spaces: "1",
+                tessedit_pageseg_mode: 6,
+                tessedit_char_whitelist:
+                    "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 -/"
+            }
+        );
+
+        const detectedText = cleanDetectedProductionText(
+            articleResult?.data?.text || ""
+        );
+
+        productionDetectedText.value = detectedText;
+        productionFindLeftoversBtn.disabled = detectedText === "";
+
+        saveRememberedProductionSelection();
+
+        if (!detectedText) {
+            setProductionSelectionStatus(
+                "No readable text was found. Select the product area again or make the rectangle tighter.",
+                "error"
+            );
+            return;
+        }
+
+        const lineCount = detectedText
+            .split(/\r?\n/)
+            .filter(Boolean)
+            .length;
+
+        setProductionSelectionStatus(
+            "Text detected in " + lineCount +
+            " line(s). Review it below, correct any letter if necessary, then press Find Leftovers.",
+            "success"
+        );
+
+    } catch (error) {
+        console.error("Selected-area OCR error:", error);
+
+        setProductionSelectionStatus(
+            "The selected area could not be read.",
+            "error"
+        );
+
+        alert(
+            "The selected area could not be read. " +
+            (error?.message || String(error))
+        );
+    } finally {
+        productionReadAreaBtn.disabled = false;
+    }
 }
-async function startProductionAnalysis() {
+
+async function findLeftoversFromDetectedText() {
+
+    ensureProductionSelectionUI();
+
+    const editedText = productionDetectedText.value.trim();
+
+    if (!editedText) {
+        alert("Read the selected area or type the product lines first.");
+        return;
+    }
 
     if (
         !Array.isArray(lexiflorSearchCatalog) ||
@@ -1807,42 +2634,51 @@ async function startProductionAnalysis() {
         await loadLexiflorCatalog();
     }
 
-    if (lexiflorSearchCatalog.length === 0) {
-        alert("The Lexiflor article catalog could not be loaded.");
-        return;
-    }
+    productionFindLeftoversBtn.disabled = true;
 
-    analyzeProductionBtn.disabled = true;
-    const previousButtonText = analyzeProductionBtn.textContent;
-    analyzeProductionBtn.textContent = "Analyzing...";
+    setProductionSelectionStatus(
+        "Comparing the confirmed text with product rules and inventory...",
+        "working"
+    );
 
     try {
-        const ocrResult = await readProductionScreenshot();
-
-        const productionOrderNumber =
-            extractProductionLot(ocrResult.lotText) ||
-            extractProductionLot(ocrResult.articleText);
-
-        const products = normalizeProductionText(
-            ocrResult.articleText
-        );
-
+        const products = normalizeProductionText(editedText);
         const matches = findInventoryMatches(products);
+        const productionOrderNumber = extractProductionLot(editedText);
 
         showProductionRecommendations(
             matches,
             productionOrderNumber
         );
 
+        if (products.length === 0) {
+            setProductionSelectionStatus(
+                "No flower lines were recognized. Check the text and try again.",
+                "error"
+            );
+            return;
+        }
+
+        setProductionSelectionStatus(
+            "Analysis completed using the confirmed text below.",
+            "success"
+        );
+
     } catch (error) {
-        console.error("Production analysis error:", error);
+        console.error("Production text analysis error:", error);
+
+        setProductionSelectionStatus(
+            "The confirmed text could not be analyzed.",
+            "error"
+        );
+
         alert(
-            "Production analysis could not be completed. " +
+            "The confirmed text could not be analyzed. " +
             (error?.message || String(error))
         );
     } finally {
-        analyzeProductionBtn.disabled = false;
-        analyzeProductionBtn.textContent = previousButtonText;
+        productionFindLeftoversBtn.disabled =
+            productionDetectedText.value.trim() === "";
     }
 }
 
@@ -1855,52 +2691,48 @@ function showProductionRecommendations(
         document.getElementById("productionRecommendations");
 
     if (!resultsContainer) {
-
         resultsContainer = document.createElement("div");
         resultsContainer.id = "productionRecommendations";
-
         resultsContainer.style.marginTop = "20px";
         resultsContainer.style.padding = "15px";
         resultsContainer.style.background = "#f8f9fa";
         resultsContainer.style.borderRadius = "12px";
         resultsContainer.style.maxHeight = "450px";
         resultsContainer.style.overflowY = "auto";
-
         todayProductionModal.appendChild(resultsContainer);
     }
 
     resultsContainer.innerHTML = "";
+
     const orderHeader = document.createElement("div");
 
-orderHeader.innerHTML = `
-    <div style="
-        background:#e8f5e9;
-        border:1px solid #2e7d32;
-        border-radius:10px;
-        padding:14px;
-        margin-bottom:15px;
-        font-size:18px;
-        font-weight:bold;
-    ">
-        📋 Production Order:
-        ${productionOrderNumber || "Not detected"}
-    </div>
-`;
+    orderHeader.innerHTML = `
+        <div style="
+            background:#e8f5e9;
+            border:1px solid #2e7d32;
+            border-radius:10px;
+            padding:14px;
+            margin-bottom:15px;
+            font-size:18px;
+            font-weight:bold;
+        ">
+            📋 Production Order:
+            ${productionOrderNumber || "Not detected"}
+        </div>
+    `;
 
-resultsContainer.appendChild(orderHeader);
+    resultsContainer.appendChild(orderHeader);
 
     if (!Array.isArray(matches) || matches.length === 0) {
-
         resultsContainer.innerHTML += `
             <div style="
                 text-align:center;
                 padding:20px;
                 color:#777;
             ">
-                No production products were detected.
+                No production flowers were detected.
             </div>
         `;
-
         return;
     }
 
@@ -1921,78 +2753,95 @@ resultsContainer.appendChild(orderHeader);
                     font-size:18px;
                     font-weight:bold;
                     margin-bottom:10px;
+                    color:#166534;
                 ">
-                    🌸 ${match.product || ""}
+                    ✅ ${match.product || ""}
                 </div>
 
                 <div style="
                     line-height:1.8;
                     font-size:14px;
                 ">
-                    🎨 Color: ${match.color || "Not specified"}<br>
+                    🎨 Color: ${match.color || match.requestedColor || "Not specified"}<br>
                     📦 Case: ${match.caseNumber || "Not specified"}<br>
                     🌿 Available: ${match.quantity ?? 0} stems<br>
-                    📊 Confidence: ${match.confidence ?? 0}%<br>
+                    ${
+                        match.articleName
+                            ? `📝 Article: ${match.articleName}<br>`
+                            : ""
+                    }
                     🔎 OCR: ${match.originalOcrLine || ""}
                 </div>
             `;
 
-} else {
+        } else {
 
-    const recognizedArticle =
-        match.articleName || match.product || "";
+            const recognizedArticle =
+                match.articleName || "";
 
-    card.innerHTML = `
-        <div style="
-            font-size:18px;
-            font-weight:bold;
-            margin-bottom:8px;
-            color:#b45309;
-        ">
-            ⚠️ ${match.product || "Unrecognized product"}
-        </div>
+            let message = "No leftover found";
 
-        ${
-            recognizedArticle &&
-            recognizedArticle !== match.product
-                ? `
-                    <div style="
-                        font-size:14px;
-                        color:#444;
-                        margin-bottom:5px;
-                    ">
-                        Article: ${recognizedArticle}
-                    </div>
-                `
-                : ""
-        }
-
-        ${
-            match.color
-                ? `
-                    <div style="
-                        font-size:14px;
-                        color:#444;
-                        margin-bottom:5px;
-                    ">
-                        Color: ${match.color}
-                    </div>
-                `
-                : ""
-        }
-
-        <div style="
-            font-size:14px;
-            color:#777;
-        ">
-            ${
-                match.needsReview
-                    ? "Product needs review"
-                    : "No leftover found"
+            if (match.needsReview) {
+                message = "Product not recognized — review this line";
+            } else if (match.colorMismatch) {
+                message = "No leftover found for this color";
             }
-        </div>
-    `;
-}
+
+            card.innerHTML = `
+                <div style="
+                    font-size:18px;
+                    font-weight:bold;
+                    margin-bottom:8px;
+                    color:#b45309;
+                ">
+                    ⚠️ ${match.product || "Unrecognized product"}
+                </div>
+
+                ${
+                    recognizedArticle
+                        ? `
+                            <div style="
+                                font-size:14px;
+                                color:#444;
+                                margin-bottom:5px;
+                            ">
+                                Article: ${recognizedArticle}
+                            </div>
+                        `
+                        : ""
+                }
+
+                ${
+                    match.color
+                        ? `
+                            <div style="
+                                font-size:14px;
+                                color:#444;
+                                margin-bottom:5px;
+                            ">
+                                Color: ${match.color}
+                            </div>
+                        `
+                        : ""
+                }
+
+                <div style="
+                    font-size:14px;
+                    color:#777;
+                    margin-bottom:5px;
+                ">
+                    ${message}
+                </div>
+
+                <div style="
+                    font-size:13px;
+                    color:#999;
+                ">
+                    OCR: ${match.originalOcrLine || ""}
+                </div>
+            `;
+        }
+
         resultsContainer.appendChild(card);
     });
 }
@@ -2107,73 +2956,18 @@ function createEnhancedOcrCanvas(
 
 async function readProductionScreenshot() {
 
-    if (!window.originalProductionImage) {
+    ensureProductionSelectionUI();
+
+    if (!productionDetectedText) {
         return {
             lotText: "",
             articleText: ""
         };
     }
 
-    const img = new Image();
-    img.src = window.originalProductionImage;
-
-    await new Promise(function (resolve, reject) {
-        img.onload = resolve;
-        img.onerror = reject;
-    });
-
-    const lotX = img.width * 0.255;
-    const lotY = img.height * 0.175;
-    const lotWidth = img.width * 0.075;
-    const lotHeight = img.height * 0.035;
-
-    const articleX = img.width * 0.180;
-    const articleY = img.height * 0.175;
-    const articleWidth = img.width * 0.185;
-    const articleHeight = img.height * 0.30;
-
-    const lotCanvas = createEnhancedOcrCanvas(
-        img,
-        lotX,
-        lotY,
-        lotWidth,
-        lotHeight,
-        3
-    );
-
-    const articleCanvas = createEnhancedOcrCanvas(
-        img,
-        articleX,
-        articleY,
-        articleWidth,
-        articleHeight,
-        2.5
-    );
-
-    window.lastLotCrop = lotCanvas.toDataURL();
-    window.lastOcrCrop = articleCanvas.toDataURL();
-
-    const lotResult = await Tesseract.recognize(
-        lotCanvas,
-        "eng",
-        {
-            tessedit_char_whitelist: "0123456789",
-            tessedit_pageseg_mode: 7
-        }
-    );
-
-    const articleResult = await Tesseract.recognize(
-        articleCanvas,
-        "eng",
-        {
-            preserve_interword_spaces: "1",
-            tessedit_pageseg_mode: 6
-        }
-    );
-
     return {
-        lotText: lotResult.data.text || "",
-        articleText: articleResult.data.text || ""
+        lotText: "",
+        articleText: productionDetectedText.value || ""
     };
 }
 
@@ -2182,44 +2976,64 @@ function normalizeProductionText(text) {
     const normalizedProducts = String(text || "")
         .split("\n")
         .map(function (rawLine) {
+
+            const raw = normalizeMatchText(rawLine);
+
+            if (!raw || isProductionMaterialLine(raw)) {
+                return null;
+            }
+
+            const cleaned = cleanProductionLine(rawLine);
+
             return {
-                raw: normalizeMatchText(rawLine),
-                cleaned: cleanProductionLine(rawLine)
+                raw: raw,
+                cleaned: cleaned
             };
         })
+        .filter(Boolean)
         .filter(function (lineInfo) {
 
             const cleanLine = normalizeMatchText(
                 lineInfo.cleaned
             );
 
-            if (!cleanLine || cleanLine.length < 4) {
+            if (!cleanLine || cleanLine.length < 3) {
                 return false;
             }
 
             if (
                 cleanLine.includes("PRODUCTION ORDER") ||
                 cleanLine.includes("BILL OF MATERIAL") ||
-                cleanLine.includes("GENERAL BILL")
+                cleanLine.includes("GENERAL BILL") ||
+                cleanLine.includes("ARTICLE COLOR REQUIRED") ||
+                cleanLine === "ARTICLE" ||
+                cleanLine === "COLOR" ||
+                cleanLine === "REQUIRED"
             ) {
                 return false;
             }
 
-            const preparedLine = prepareArticleSearchText(cleanLine);
-            const preparedTokens = getUsefulArticleTokens(preparedLine);
+            const directFamily =
+                detectOperationalFamilyFromLine(cleanLine);
+
+            if (directFamily) {
+                return true;
+            }
+
+            const preparedLine =
+                prepareArticleSearchText(cleanLine);
+
+            const preparedTokens =
+                getUsefulArticleTokens(preparedLine);
 
             if (preparedTokens.length === 0) {
                 return false;
             }
 
-            const hasRowSignal =
-                /\b\d{2,3}\s*(?:CM|MM|AM)\b/.test(
-                    lineInfo.raw
-                ) ||
-                Boolean(extractProductionColor(cleanLine)) ||
-                Boolean(detectBestCatalogFamily(preparedLine));
+            const catalogFamily =
+                detectBestCatalogFamily(preparedLine);
 
-            return hasRowSignal;
+            return Boolean(catalogFamily);
         })
         .map(function (lineInfo) {
             return normalizeProductionLine(
@@ -2237,7 +3051,10 @@ function normalizeProductionText(text) {
     const seenLines = new Set();
 
     normalizedProducts.forEach(function (product) {
-        const key = prepareArticleSearchText(product.original);
+
+        const key = prepareArticleSearchText(
+            product.original
+        );
 
         if (!key || seenLines.has(key)) {
             return;
@@ -2252,52 +3069,112 @@ function normalizeProductionText(text) {
 
 function normalizeProductionLine(line) {
 
-    const cleanedOriginal = window.flowerBrain.cleanOCRText(
-        String(line || "")
-    );
+    const rawLine = String(line || "");
 
-    const colorInfo = window.flowerBrain.extractColorCode(
-        cleanedOriginal
-    );
+    const cleanOcrText =
+        window.flowerBrain &&
+        typeof window.flowerBrain.cleanOCRText === "function"
+            ? window.flowerBrain.cleanOCRText(rawLine)
+            : normalizeMatchText(rawLine);
 
-    let articleLine =
-        colorInfo.articleText || cleanedOriginal;
+    const correctedLine =
+        window.flowerBrain &&
+        typeof window.flowerBrain.fixCommonOcrErrors === "function"
+            ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
+            : cleanOcrText;
 
-    articleLine = window.flowerBrain.fixCommonOcrErrors(
-        articleLine
-    );
-
-    articleLine = replaceFamilyAliasesInLine(articleLine);
-
-    const detectedColor =
-        normalizeMatchText(
-            colorInfo.color ||
-            colorInfo.colorName ||
-            ""
-        ) ||
-        extractProductionColor(cleanedOriginal);
+    let articleLine = correctedLine;
+    let colorCode = "";
 
     if (
-        !window.flowerBrain ||
-        typeof window.flowerBrain.parseLine !== "function"
+        window.flowerBrain &&
+        typeof window.flowerBrain.extractColorCode === "function"
     ) {
-        return {
-            original: cleanedOriginal,
-            product: "",
-            variety: articleLine,
-            color: detectedColor,
-            length: null
-        };
+        const colorInfo =
+            window.flowerBrain.extractColorCode(
+                correctedLine
+            ) || {};
+
+        articleLine =
+            colorInfo.articleText || correctedLine;
+
+        colorCode =
+            colorInfo.colorCode || "";
+    } else {
+
+        const words = normalizeMatchText(correctedLine)
+            .split(" ")
+            .filter(Boolean);
+
+        const possibleCode =
+            words[words.length - 1] || "";
+
+        if (getProductionColorFromCode(possibleCode)) {
+            colorCode = possibleCode;
+            words.pop();
+            articleLine = words.join(" ");
+        }
     }
 
-    const parsed = window.flowerBrain.parseLine(articleLine) || {};
+    const learnedAlias =
+        getLearnedProductAlias(
+            normalizeMatchText(articleLine)
+        );
+
+    if (learnedAlias) {
+        articleLine = learnedAlias;
+    }
+
+    let parsed = {};
+
+    if (
+        window.flowerBrain &&
+        typeof window.flowerBrain.parseLine === "function"
+    ) {
+        parsed =
+            window.flowerBrain.parseLine(articleLine) || {};
+    }
+
+    const directFamily =
+        detectOperationalFamilyFromLine(articleLine) ||
+        detectOperationalFamilyFromLine(
+            parsed.product || ""
+        );
+
+    const explicitColor =
+        extractProductionColor(articleLine) ||
+        extractProductionColor(parsed.color || "");
+
+    const codedColor =
+        getProductionColorFromCode(colorCode);
+
+    const detectedColor =
+        explicitColor ||
+        codedColor ||
+        "";
 
     return {
-        original: cleanedOriginal,
-        product: parsed.product || "",
-        variety: parsed.variety || articleLine,
-        color: parsed.color || detectedColor || "",
-        length: null
+        original: normalizeMatchText(correctedLine),
+        cleanedArticle: normalizeMatchText(articleLine),
+        product:
+            directFamily?.family ||
+            normalizeMatchText(parsed.product || ""),
+        family:
+            directFamily?.family || "",
+        familyAlias:
+            directFamily?.alias || "",
+        familySource:
+            directFamily?.source || "",
+        familyConfidence:
+            directFamily?.score || 0,
+        variety:
+            normalizeMatchText(
+                parsed.variety || articleLine
+            ),
+        color: detectedColor,
+        colorCode: normalizeMatchText(colorCode),
+        length:
+            parsed.length || null
     };
 }
 
@@ -2510,76 +3387,802 @@ function getConfidenceLevel(score) {
     return "REVIEW";
 }
 function getOperationalFamilyRules() {
+
     return [
         {
+            family: "MINI HYDRANGEA",
+            names: [
+                "MINI HYDRANGEA",
+                "HYDRANGEA MINI",
+                "HYDR MINI",
+                "HYOR MINI",
+                "HDR MINI",
+                "MINI HYDR",
+                "HYDR M",
+                "HYOR M",
+                "HDR M"
+            ]
+        },
+        {
             family: "CUSHION POM",
-            names: ["CUSHION POM", "POM CUSHION"]
+            names: [
+                "CUSHION POM",
+                "POM CUSHION",
+                "CUSHION"
+            ]
         },
         {
             family: "BUTTON POM",
-            names: ["BUTTON POM", "POM BUTTON"]
+            names: [
+                "BUTTON POM",
+                "POM BUTTON"
+            ]
         },
         {
             family: "MICRO POM",
-            names: ["MICRO POM", "POM MICRO"]
+            names: [
+                "MICRO POM",
+                "POM MICRO"
+            ]
         },
         {
             family: "DAISY POM",
-            names: ["DAISY POM", "POM DAISY"]
+            names: [
+                "DAISY POM",
+                "POM DAISY"
+            ]
         },
         {
             family: "SPRAY ROSE",
-            names: ["SPRAY ROSE", "ROSE SPRAY"]
+            names: [
+                "SPRAY ROSES",
+                "SPRAY ROSE",
+                "ROSE SPRAY",
+                "SPRY ROSE",
+                "SPRAI ROSE"
+            ]
         },
         {
             family: "SPRAY CARNATION",
-            names: ["SPRAY CARNATION", "CARNATION SPRAY"]
+            names: [
+                "SPRAY CARNATION",
+                "CARNATION SPRAY"
+            ]
+        },
+        {
+            family: "CARNATION STANDARD",
+            names: [
+                "CARNATION STANDARD",
+                "STANDARD CARNATION",
+                "CARNATION"
+            ]
+        },
+        {
+            family: "EUCALYPTUS",
+            names: [
+                "EUCALYPTUS SILVER DOLLAR",
+                "EUCALYPTUS",
+                "EUCALIPTUS",
+                "ECA CINEREA",
+                "SILVER DOLLAR",
+                "CINEREA",
+                "EUCAL",
+                "ECA"
+            ]
+        },
+        {
+            family: "LEUCADENDRON",
+            names: [
+                "LEUCADENDRON",
+                "LEUCAD",
+                "LEUCA"
+            ]
+        },
+        {
+            family: "HYDRANGEA",
+            names: [
+                "HYDRANGEA",
+                "HYDR",
+                "HYOR",
+                "HDR"
+            ]
+        },
+        {
+            family: "SUNFLOWER",
+            names: [
+                "SUNFLOWER",
+                "SUNFL",
+                "SUNE",
+                "SUNF"
+            ]
+        },
+        {
+            family: "SOLIDAGO",
+            names: [
+                "SOLIDAGO GOLDEN GLORY",
+                "GOLDEN GLORY",
+                "SOLIDAGO",
+                "SOLI"
+            ]
+        },
+        {
+            family: "STOCK",
+            names: [
+                "STOCK",
+                "STOC"
+            ]
+        },
+        {
+            family: "PISTACIA",
+            names: [
+                "PISTACHIA",
+                "PISTACIA",
+                "PIST"
+            ]
+        },
+        {
+            family: "CURLY WILLOW",
+            names: [
+                "CURLY WILLOW",
+                "CURLY WILOW"
+            ]
+        },
+        {
+            family: "HYPERICUM",
+            names: [
+                "HYPERICUM",
+                "HYPERIC",
+                "HYPER",
+                "HYP"
+            ]
+        },
+        {
+            family: "DELPHINIUM",
+            names: [
+                "DELPHINIUM",
+                "DELPH",
+                "DELP"
+            ]
+        },
+        {
+            family: "DENDROBIUM",
+            names: [
+                "DENDROBIUM",
+                "DENDR"
+            ]
+        },
+        {
+            family: "ROBELINI",
+            names: [
+                "ROBELIN PHOENIX",
+                "ROBELINI",
+                "ROBELIN"
+            ]
+        },
+        {
+            family: "MINI CALLA",
+            names: [
+                "MINI CALLA",
+                "CALLA MINI"
+            ]
+        },
+        {
+            family: "ERYNGIUM",
+            names: [
+                "ERYNGIUM",
+                "ERYNG",
+                "ERINGYM",
+                "ERYNGYM",
+                "ERG"
+            ]
+        },
+        {
+            family: "SCABIOSA",
+            names: [
+                "SCABIOSA",
+                "SCAB"
+            ]
+        },
+        {
+            family: "TWEEDIA",
+            names: [
+                "TWEEDIA",
+                "TWEEDA"
+            ]
+        },
+        {
+            family: "AGAPANTHUS",
+            names: [
+                "AGAPANTHUS",
+                "AGAPANTUS"
+            ]
+        },
+        {
+            family: "ALSTROMERIA",
+            names: [
+                "ALSTROMERIA",
+                "ALSTROE",
+                "ALSTRO"
+            ]
+        },
+        {
+            family: "LIMONIUM",
+            names: [
+                "LIMONIUM",
+                "LIM"
+            ]
+        },
+        {
+            family: "LEPIDIUM",
+            names: [
+                "LEPIDIUM",
+                "LIPIDIUM",
+                "LEPID"
+            ]
+        },
+        {
+            family: "PITTOSPORUM",
+            names: [
+                "PITTOSPORUM",
+                "PITOSPORUM",
+                "PITTOS"
+            ]
+        },
+        {
+            family: "COCCULUS",
+            names: [
+                "COCCULUS",
+                "COCCULOS",
+                "COCULUS"
+            ]
+        },
+        {
+            family: "MOLUCELLA",
+            names: [
+                "MOLUCELLA",
+                "MOLUCELAS",
+                "MOLUCELLA"
+            ]
+        },
+        {
+            family: "LISIANTHUS",
+            names: [
+                "LISIANTHUS",
+                "LISIANTHUS",
+                "LISI"
+            ]
+        },
+        {
+            family: "RUSCUS",
+            names: [
+                "RUSCUS ISRAELI",
+                "RUSCUS ISRAILI",
+                "RUSCUS"
+            ]
+        },
+        {
+            family: "ROSE",
+            names: [
+                "ROSES HTP",
+                "ROSES",
+                "ROSE"
+            ]
+        },
+        {
+            family: "CALLA",
+            names: [
+                "CALLAS",
+                "CALLA"
+            ]
+        },
+        {
+            family: "MINI GREEN",
+            names: [
+                "MINI GREEN"
+            ]
         },
         {
             family: "DUSTY MILLER",
-            names: ["DUSTY MILLER"]
+            names: [
+                "DUSTY MILLER"
+            ]
         },
         {
-    family: "EUCALYPTUS",
-    names: [
-        "EUCALYPTUS",
-        "EUCALYPTUS SILVER DOLLAR"
-    ]
-},
-{
-    family: "CUSHION POM",
-    names: [
-        "POM CUSHION",
-        "CUSHION POM"
-    ]
-},
-    {
-        family: "MINI HYDRANGEA",
-        names: [
-            "MINI HYDRANGEA",
-            "HYDRANGEA MINI",
-            "HYDR M",
-            "HYDR MINI"
-        ]
-    }
-];
+            family: "LILY GRASS",
+            names: [
+                "LILY GRASS"
+            ]
+        },
+        {
+            family: "BUPLEURUM",
+            names: [
+                "BUPLEURUM"
+            ]
+        },
+        {
+            family: "CRASPEDIA",
+            names: [
+                "CRASPEDIA",
+                "CRASPEDA"
+            ]
+        },
+        {
+            family: "MATRICARIA",
+            names: [
+                "MATRICARIA"
+            ]
+        },
+        {
+            family: "PINCUSHION",
+            names: [
+                "PINCUSHION"
+            ]
+        },
+        {
+            family: "STATICE",
+            names: [
+                "STATICE"
+            ]
+        },
+        {
+            family: "ACHILLEA",
+            names: ["ACHILLEA", "ACHIL"]
+        },
+        {
+            family: "ARALIA",
+            names: ["ARALIA"]
+        },
+        {
+            family: "ASTER",
+            names: ["ASTER", "JASTER"]
+        },
+        {
+            family: "DISBUD",
+            names: ["DISBUD"]
+        },
+        {
+            family: "FREESIA",
+            names: ["FREESIA"]
+        },
+        {
+            family: "GERBERA",
+            names: ["GERBERA"]
+        },
+        {
+            family: "GYPSOPHILA",
+            names: ["GYPSOPHILA", "GYPSO"]
+        },
+        {
+            family: "IRIS",
+            names: ["IRIS"]
+        },
+        {
+            family: "PEONY",
+            names: ["PEONY"]
+        },
+        {
+            family: "PROTEA",
+            names: ["PROTEA"]
+        },
+        {
+            family: "RANUNCULUS",
+            names: ["RANUNCULUS"]
+        },
+        {
+            family: "SNAPDRAGON",
+            names: ["SNAPDRAGON", "SNAP"]
+        },
+        {
+            family: "TULIP",
+            names: ["TULIP"]
+        },
+        {
+            family: "VERONICA",
+            names: ["VERONICA"]
+        },
+        {
+            family: "WAXFLOWER",
+            names: ["WAXFLOWER", "WAX FLOWER"]
+        },
+        {
+            family: "CHRYSANTHEMUM",
+            names: ["CHRYSANTHEMUM", "CHRYS"]
+        }
+    ];
 }
-function resolveOperationalFamily(articleName, proposedFamily) {
 
-    const normalizedArticle = normalizeMatchText(articleName);
+function addFamilyRuleName(ruleMap, family, name) {
 
-    const operationalRule = getOperationalFamilyRules()
-        .find(function (rule) {
-            return rule.names.some(function (name) {
-                return normalizedArticle.includes(name);
+    const normalizedFamily =
+        normalizeMatchText(family);
+
+    const normalizedName =
+        normalizeMatchText(name);
+
+    if (!normalizedFamily || !normalizedName) {
+        return;
+    }
+
+    if (!ruleMap.has(normalizedFamily)) {
+        ruleMap.set(normalizedFamily, new Set());
+    }
+
+    ruleMap.get(normalizedFamily).add(
+        normalizedName
+    );
+}
+
+function getRuntimeOperationalFamilyRules() {
+
+    const ruleMap = new Map();
+
+    getOperationalFamilyRules().forEach(function (rule) {
+
+        addFamilyRuleName(
+            ruleMap,
+            rule.family,
+            rule.family
+        );
+
+        (rule.names || []).forEach(function (name) {
+            addFamilyRuleName(
+                ruleMap,
+                rule.family,
+                name
+            );
+        });
+    });
+
+    (flowerFamilies || []).forEach(function (item) {
+
+        addFamilyRuleName(
+            ruleMap,
+            item.family,
+            item.family
+        );
+
+        (item.aliases || []).forEach(function (alias) {
+            addFamilyRuleName(
+                ruleMap,
+                item.family,
+                alias
+            );
+        });
+    });
+
+    if (window.flowerBrain) {
+
+        (window.flowerBrain.productFamilies || [])
+            .forEach(function (item) {
+
+                addFamilyRuleName(
+                    ruleMap,
+                    item.product,
+                    item.product
+                );
+
+                (item.aliases || [])
+                    .forEach(function (alias) {
+                        addFamilyRuleName(
+                            ruleMap,
+                            item.product,
+                            alias
+                        );
+                    });
+            });
+
+        Object.entries(
+            window.flowerBrain.productPhrases || {}
+        ).forEach(function (entry) {
+            addFamilyRuleName(
+                ruleMap,
+                entry[1],
+                entry[0]
+            );
+        });
+
+        Object.entries(
+            window.flowerBrain.productAliases || {}
+        ).forEach(function (entry) {
+            addFamilyRuleName(
+                ruleMap,
+                entry[1],
+                entry[0]
+            );
+        });
+    }
+
+    productsCatalog.forEach(function (product) {
+        addFamilyRuleName(
+            ruleMap,
+            product,
+            product
+        );
+    });
+
+    return Array.from(ruleMap.entries())
+        .map(function (entry) {
+            return {
+                family: entry[0],
+                names: Array.from(entry[1])
+            };
+        });
+}
+
+function containsNormalizedPhrase(text, phrase) {
+
+    const normalizedText =
+        normalizeMatchText(text);
+
+    const normalizedPhrase =
+        normalizeMatchText(phrase);
+
+    if (!normalizedText || !normalizedPhrase) {
+        return false;
+    }
+
+    return (
+        " " + normalizedText + " "
+    ).includes(
+        " " + normalizedPhrase + " "
+    );
+}
+
+function detectOperationalFamilyFromLine(value) {
+
+    const normalizedLine =
+        normalizeMatchText(value);
+
+    if (!normalizedLine) {
+        return null;
+    }
+
+    const candidates = [];
+
+    getRuntimeOperationalFamilyRules()
+        .forEach(function (rule, ruleIndex) {
+
+            (rule.names || []).forEach(function (name) {
+
+                const normalizedName =
+                    normalizeMatchText(name);
+
+                if (
+                    !normalizedName ||
+                    !containsNormalizedPhrase(
+                        normalizedLine,
+                        normalizedName
+                    )
+                ) {
+                    return;
+                }
+
+                candidates.push({
+                    family:
+                        normalizeMatchText(rule.family),
+                    alias: normalizedName,
+                    source: "ALIAS_RULE",
+                    score: 100,
+                    priority: ruleIndex,
+                    wordCount:
+                        normalizedName.split(" ").length,
+                    length:
+                        normalizedName.length
+                });
             });
         });
 
-    if (operationalRule) {
-        return operationalRule.family;
+    if (candidates.length === 0) {
+        return null;
     }
 
-    return normalizeMatchText(proposedFamily);
+    candidates.sort(function (a, b) {
+
+        if (b.wordCount !== a.wordCount) {
+            return b.wordCount - a.wordCount;
+        }
+
+        if (a.priority !== b.priority) {
+            return a.priority - b.priority;
+        }
+
+        return b.length - a.length;
+    });
+
+    return candidates[0];
+}
+
+function resolveInventoryFamilyName(value) {
+
+    const detected =
+        detectOperationalFamilyFromLine(value);
+
+    return detected
+        ? detected.family
+        : normalizeMatchText(value);
+}
+
+function getProductionColorFromCode(code) {
+
+    const normalizedCode =
+        normalizeMatchText(code);
+
+    const colorCodes = {
+        AN: "ANTIQUE",
+        BL: "BLUE",
+        BP: "BLUE PURPLE",
+        BR: "BROWN",
+        BU: "BURGUNDY",
+        BZ: "BRONZE",
+        CR: "CREAM",
+        DPI: "DARK PINK",
+        GE: "YELLOW",
+        GO: "YELLOW ORANGE",
+        GOL: "GOLD",
+        GR: "GREEN",
+        GRN: "GREEN",
+        HP: "HOT PINK",
+        HPNK: "HOT PINK",
+        LV: "LAVENDER",
+        OR: "ORANGE",
+        ORG: "ORANGE",
+        PE: "PEACH",
+        PI: "PINK",
+        PK: "PINK",
+        PNK: "PINK",
+        PR: "PURPLE",
+        PU: "PURPLE",
+        RD: "RED",
+        RE: "RED",
+        WH: "WHITE",
+        WI: "WHITE",
+        WHT: "WHITE",
+        YE: "YELLOW",
+        YEL: "YELLOW",
+        YLW: "YELLOW"
+    };
+
+    return colorCodes[normalizedCode] || "";
+}
+
+function normalizeColorForMatching(value) {
+
+    const normalized =
+        normalizeMatchText(value)
+            .replace(/\bLAVANDER\b/g, "LAVENDER");
+
+    return extractProductionColor(normalized) ||
+        normalized;
+}
+
+function doProductionColorsMatch(
+    requestedColor,
+    inventoryColor
+) {
+
+    const requested =
+        normalizeColorForMatching(requestedColor);
+
+    const available =
+        normalizeColorForMatching(inventoryColor);
+
+    if (!requested) {
+        return true;
+    }
+
+    if (!available) {
+        return false;
+    }
+
+    if (requested === available) {
+        return true;
+    }
+
+    return (
+        containsNormalizedPhrase(
+            inventoryColor,
+            requested
+        ) &&
+        !(
+            requested === "PINK" &&
+            available === "HOT PINK"
+        )
+    );
+}
+
+function isProductionMaterialLine(line) {
+
+    const text = normalizeMatchText(line);
+
+    if (!text) {
+        return false;
+    }
+
+    const materialPatterns = [
+        /\bSHEET\b/,
+        /\bPAPER\b/,
+        /\bSL CLEAR\b/,
+        /\bNONWOVEN\b/,
+        /\bSLEEVE\b/,
+        /\bBOXES?\b/,
+        /\bCARTONS?\b/,
+        /\bLABELS?\b/,
+        /\bFLOWER FOOD\b/,
+        /\bFLOWERFOOD\b/,
+        /\bPRESERVATIVE\b/,
+        /\bCHRYSAL\b/,
+        /\bFLORALIFE\b/,
+        /\bCELLOPHANE\b/,
+        /\bRIBBON\b/,
+        /\bTAPE\b/,
+        /\bWIRE\b/,
+        /\bFOAM\b/,
+        /\bBAGS?\b/
+    ];
+
+    return materialPatterns.some(function (pattern) {
+        return pattern.test(text);
+    });
+}
+function resolveOperationalFamily(
+    articleName,
+    proposedFamily
+) {
+
+    const normalizedArticle =
+        normalizeMatchText(articleName);
+
+    const normalizedProposed =
+        normalizeMatchText(proposedFamily);
+
+    const sortedRules =
+        getOperationalFamilyRules()
+            .flatMap(function (rule) {
+                return (rule.names || [])
+                    .concat([rule.family])
+                    .map(function (name) {
+                        return {
+                            family:
+                                normalizeMatchText(
+                                    rule.family
+                                ),
+                            name:
+                                normalizeMatchText(name)
+                        };
+                    });
+            })
+            .filter(function (rule) {
+                return rule.name;
+            })
+            .sort(function (a, b) {
+                return b.name.length - a.name.length;
+            });
+
+    const articleRule =
+        sortedRules.find(function (rule) {
+            return containsNormalizedPhrase(
+                normalizedArticle,
+                rule.name
+            );
+        });
+
+    if (articleRule) {
+        return articleRule.family;
+    }
+
+    const proposedRule =
+        sortedRules.find(function (rule) {
+            return (
+                normalizedProposed === rule.family ||
+                normalizedProposed === rule.name
+            );
+        });
+
+    if (proposedRule) {
+        return proposedRule.family;
+    }
+
+    return normalizedProposed;
 }
 
 function isArticleMeasurementToken(token) {
@@ -2931,42 +4534,50 @@ function detectBestCatalogFamily(value) {
         prepareArticleSearchText(value)
     );
 
-    if (!identityText || lexiflorFamilyProfiles.length === 0) {
+    if (
+        !identityText ||
+        lexiflorFamilyProfiles.length === 0
+    ) {
         return null;
+    }
+
+    const directFamily =
+        detectOperationalFamilyFromLine(identityText);
+
+    if (directFamily) {
+        return {
+            family: directFamily.family,
+            score: 100,
+            directMatch: true,
+            source: directFamily.source
+        };
     }
 
     const results = lexiflorFamilyProfiles
         .map(function (profile) {
 
             let bestScore = 0;
-            let directMatch = false;
 
             profile.clues.forEach(function (clue) {
 
-                const normalizedClue = prepareArticleSearchText(clue);
+                const normalizedClue =
+                    prepareArticleSearchText(clue);
 
                 if (!normalizedClue) {
                     return;
                 }
 
-                if (
-                    identityText === normalizedClue ||
-                    identityText.includes(normalizedClue)
-                ) {
-                    bestScore = Math.max(bestScore, 100);
-                    directMatch = true;
-                    return;
-                }
+                const fuzzyScore =
+                    calculateFuzzyTokenSimilarity(
+                        identityText,
+                        normalizedClue
+                    );
 
-                const fuzzyScore = calculateFuzzyTokenSimilarity(
-                    identityText,
-                    normalizedClue
-                );
-
-                const directScore = calculateStringSimilarity(
-                    identityText,
-                    normalizedClue
-                );
+                const directScore =
+                    calculateStringSimilarity(
+                        identityText,
+                        normalizedClue
+                    );
 
                 bestScore = Math.max(
                     bestScore,
@@ -2978,7 +4589,8 @@ function detectBestCatalogFamily(value) {
             return {
                 family: profile.family,
                 score: bestScore,
-                directMatch: directMatch
+                directMatch: false,
+                source: "STRICT_CATALOG_FALLBACK"
             };
         })
         .sort(function (a, b) {
@@ -2996,10 +4608,7 @@ function detectBestCatalogFamily(value) {
         ? best.score - second.score
         : best.score;
 
-    if (
-        best.directMatch ||
-        (best.score >= 74 && margin >= 4)
-    ) {
+    if (best.score >= 90 && margin >= 12) {
         return best;
     }
 
@@ -3080,11 +4689,15 @@ function calculateCatalogArticleScore(
     );
 }
 
-function findBestCatalogProduct(productionProduct, catalog) {
+function findBestCatalogProduct(
+    productionProduct,
+    catalog
+) {
 
-    const parsedName = prepareArticleSearchText(
+    const searchName = prepareArticleSearchText(
         [
-            productionProduct.product,
+            productionProduct.cleanedArticle,
+            productionProduct.original,
             productionProduct.variety,
             productionProduct.color
         ]
@@ -3092,21 +4705,41 @@ function findBestCatalogProduct(productionProduct, catalog) {
             .join(" ")
     );
 
-    const originalName = prepareArticleSearchText(
-        productionProduct.original
-    );
-
-    const parsedTokens = getUsefulArticleTokens(parsedName);
-
-    const searchName = parsedTokens.length >= 2
-        ? parsedName
-        : originalName;
-
     if (!searchName || !Array.isArray(catalog)) {
         return null;
     }
 
-    const detectedFamily = detectBestCatalogFamily(searchName);
+    let detectedFamily = null;
+
+    const explicitFamily =
+        productionProduct.family ||
+        productionProduct.product ||
+        "";
+
+    if (explicitFamily) {
+        const canonicalFamily =
+            resolveInventoryFamilyName(
+                explicitFamily
+            );
+
+        if (canonicalFamily) {
+            detectedFamily = {
+                family: canonicalFamily,
+                score:
+                    productionProduct.familyConfidence ||
+                    100,
+                directMatch: true,
+                source:
+                    productionProduct.familySource ||
+                    "PARSED_FAMILY"
+            };
+        }
+    }
+
+    if (!detectedFamily) {
+        detectedFamily =
+            detectBestCatalogFamily(searchName);
+    }
 
     const familyCatalog = detectedFamily
         ? (
@@ -3114,7 +4747,7 @@ function findBestCatalogProduct(productionProduct, catalog) {
                 detectedFamily.family
             ) || []
         )
-        : catalog;
+        : [];
 
     const candidates = familyCatalog
         .map(function (catalogItem) {
@@ -3135,9 +4768,15 @@ function findBestCatalogProduct(productionProduct, catalog) {
             return b.score - a.score;
         });
 
+    const bestCandidate =
+        candidates[0] &&
+        candidates[0].score >= 55
+            ? candidates[0]
+            : null;
+
     return {
         detectedFamily: detectedFamily,
-        best: candidates[0] || null,
+        best: bestCandidate,
         alternatives: candidates.slice(1, 4)
     };
 }
@@ -3151,41 +4790,50 @@ function findInventoryMatches(products) {
         return [];
     }
 
-    const catalog = lexiflorSearchCatalog;
+    const availableInventory =
+        inventory.filter(function (item) {
 
-    const availableInventory = inventory.filter(function (item) {
+            const status =
+                normalizeMatchText(item.status);
 
-        const status = normalizeMatchText(item.status);
+            return (
+                Number(item.quantity || 0) > 0 &&
+                status !== "REMOVED FROM INVENTORY" &&
+                status !== "REMOVED"
+            );
+        });
 
-        return (
-            Number(item.quantity || 0) > 0 &&
-            status !== "REMOVED FROM INVENTORY" &&
-            status !== "REMOVED"
-        );
-    });
+    const results = [];
 
-    return products.map(function (productionProduct) {
+    products.forEach(function (productionProduct) {
 
-        const catalogResult = findBestCatalogProduct(
-            productionProduct,
-            catalog
-        );
+        const catalogResult =
+            findBestCatalogProduct(
+                productionProduct,
+                lexiflorSearchCatalog
+            );
 
-        if (
-            !catalogResult ||
-            !catalogResult.best ||
-            catalogResult.best.score < 35
-        ) {
-            return {
+        const detectedFamily =
+            productionProduct.family ||
+            catalogResult?.detectedFamily?.family ||
+            "";
+
+        const recognizedFamily =
+            resolveInventoryFamilyName(
+                detectedFamily
+            );
+
+        if (!recognizedFamily) {
+            results.push({
                 product:
-                    productionProduct.product ||
                     prepareArticleSearchText(
                         productionProduct.original
                     ) ||
                     "UNRECOGNIZED PRODUCT",
                 articleName: "",
-                color: productionProduct.color || "",
-                confidence: catalogResult?.best?.score || 0,
+                color:
+                    productionProduct.color || "",
+                confidence: 0,
                 confidenceLevel: "REVIEW",
                 inventoryFound: false,
                 needsReview: true,
@@ -3193,103 +4841,114 @@ function findInventoryMatches(products) {
                     productionProduct.original || "",
                 alternatives:
                     catalogResult?.alternatives || []
-            };
+            });
+            return;
         }
 
-        const recognizedArticle =
-            catalogResult.best.articleName;
+        const catalogBest =
+            catalogResult?.best || null;
 
-        const recognizedFamily = resolveOperationalFamily(
-            recognizedArticle,
-            catalogResult.best.family
-        );
+        const recognizedArticle =
+            catalogBest &&
+            catalogBest.score >= 70
+                ? catalogBest.articleName
+                : "";
 
         const recognizedColor =
-            catalogResult.best.color ||
             productionProduct.color ||
+            (
+                catalogBest &&
+                catalogBest.score >= 75
+                    ? normalizeMatchText(
+                        catalogBest.color
+                    )
+                    : ""
+            ) ||
             "";
 
-        const requestedColor = normalizeMatchText(
-            recognizedColor
-        );
-
-        const matchingInventory = availableInventory
-            .filter(function (item) {
+        const familyInventory =
+            availableInventory.filter(function (item) {
                 return (
-                    normalizeMatchText(item.product) ===
-                    recognizedFamily
+                    resolveInventoryFamilyName(
+                        item.product
+                    ) === recognizedFamily
                 );
-            })
-            .map(function (item) {
-
-                let colorScore = 100;
-
-                if (requestedColor) {
-                    colorScore = calculateStringSimilarity(
-                        requestedColor,
-                        item.color
-                    );
-                }
-
-                return {
-                    item: item,
-                    colorScore: colorScore
-                };
-            })
-            .sort(function (a, b) {
-                return b.colorScore - a.colorScore;
             });
 
-        const bestInventoryMatch = matchingInventory[0];
+        const matchingInventory =
+            familyInventory.filter(function (item) {
+                return doProductionColorsMatch(
+                    recognizedColor,
+                    item.color
+                );
+            });
 
-        if (!bestInventoryMatch) {
-            return {
-                product:
-                    recognizedFamily || recognizedArticle,
+        if (matchingInventory.length === 0) {
+            results.push({
+                product: recognizedFamily,
                 articleName: recognizedArticle,
                 color: recognizedColor,
-                confidence: catalogResult.best.score,
-                confidenceLevel: getConfidenceLevel(
-                    catalogResult.best.score
-                ),
+                confidence:
+                    catalogResult?.detectedFamily?.score ||
+                    productionProduct.familyConfidence ||
+                    100,
+                confidenceLevel:
+                    recognizedFamily
+                        ? "HIGH"
+                        : "REVIEW",
                 inventoryFound: false,
                 needsReview: false,
+                colorMismatch:
+                    Boolean(
+                        recognizedColor &&
+                        familyInventory.length > 0
+                    ),
                 originalOcrLine:
                     productionProduct.original || "",
                 alternatives:
-                    catalogResult.alternatives
-            };
+                    catalogResult?.alternatives || []
+            });
+            return;
         }
 
-        const bestItem = bestInventoryMatch.item;
+        matchingInventory.forEach(function (bestItem) {
 
-        return {
-            inventoryIndex: inventory.indexOf(bestItem),
-            id: bestItem.id,
-            product: bestItem.product,
-            color: bestItem.color,
-            quantity: bestItem.quantity,
-            caseNumber: bestItem.caseNumber,
-            status: bestItem.status,
-            articleName: recognizedArticle,
-            requestedProduct:
-                productionProduct.product || "",
-            requestedVariety:
-                productionProduct.variety || "",
-            requestedColor: recognizedColor,
-            originalOcrLine:
-                productionProduct.original || "",
-            confidence: catalogResult.best.score,
-            confidenceLevel: getConfidenceLevel(
-                catalogResult.best.score
-            ),
-            inventoryFound: true,
-            needsReview:
-                catalogResult.best.score < 75,
-            alternatives:
-                catalogResult.alternatives
-        };
+            results.push({
+                inventoryIndex:
+                    inventory.indexOf(bestItem),
+                id: bestItem.id,
+                product:
+                    bestItem.product ||
+                    recognizedFamily,
+                normalizedProduct:
+                    recognizedFamily,
+                color: bestItem.color,
+                quantity: bestItem.quantity,
+                caseNumber: bestItem.caseNumber,
+                status: bestItem.status,
+                articleName: recognizedArticle,
+                requestedProduct:
+                    recognizedFamily,
+                requestedVariety:
+                    productionProduct.variety || "",
+                requestedColor:
+                    recognizedColor,
+                originalOcrLine:
+                    productionProduct.original || "",
+                confidence:
+                    catalogResult?.detectedFamily?.score ||
+                    productionProduct.familyConfidence ||
+                    100,
+                confidenceLevel: "HIGH",
+                inventoryFound: true,
+                needsReview: false,
+                alternatives:
+                    catalogResult?.alternatives || []
+            });
+        });
     });
+
+    return results;
 }
 
 function saveLearnedProductAlias(axerrioName, floraFlowName) {
@@ -3318,25 +4977,23 @@ function getLearnedProductAlias(axerrioName) {
 }
 function cleanProductionLine(line) {
 
-    return line
+    return String(line || "")
         .toUpperCase()
 
-        // Remove packaging words
-        .replace(/\bCLEAR\b/g, "")
-        .replace(/\bSLEEVE\b/g, "")
-        .replace(/\bBUNCH(?:ES)?\b/g, "")
-        .replace(/\bSTEMS?\b/g, "")
-        .replace(/\bPCS\b/g, "")
-        .replace(/\bBOX\b/g, "")
-        .replace(/\bCASE\b/g, "")
+        // Remove quantities, measurements and table noise.
+        .replace(/\b\d+(?:-\d+)?\s*(?:CM|MM|AM)\b/g, " ")
+        .replace(/\b\d+\s*GRAMS?\b/g, " ")
+        .replace(/\b\d+\s*X\s*\d+\b/g, " ")
+        .replace(/\bSTEMS?\b/g, " ")
+        .replace(/\bBUNCH(?:ES)?\b/g, " ")
+        .replace(/\bPCS\b/g, " ")
+        .replace(/\bCASE\b/g, " ")
+        .replace(/\bREQUIRED\b/g, " ")
+        .replace(/\bDELIVERED\b/g, " ")
 
-        // Remove measurements
-        .replace(/\b\d+(?:-\d+)?\s*CM\b/g, "")
-        .replace(/\b\d+\s*GR(?:AM|AMS)?\b/g, "")
-
-        // Clean punctuation
-        .replace(/[.,;:()[\]{}]/g, " ")
+        // Clean punctuation but preserve words.
+        .replace(/[.,;:()[\]{}"'|]/g, " ")
+        .replace(/[_/\\-]+/g, " ")
         .replace(/\s+/g, " ")
         .trim();
-
 }
