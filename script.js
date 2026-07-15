@@ -3257,13 +3257,14 @@ function normalizeProductionText(text) {
             if (!raw || isProductionMaterialLine(raw)) {
                 return null;
             }
+let cleaned = cleanProductionLine(rawLine);
 
-            const cleaned = cleanProductionLine(rawLine);
+cleaned = fixProductionOcrWords(cleaned);
 
-            return {
-                raw: raw,
-                cleaned: cleaned
-            };
+return {
+    raw: raw,
+    cleaned: cleaned
+};
         })
         .filter(Boolean)
         .filter(function (lineInfo) {
