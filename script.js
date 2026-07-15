@@ -3237,6 +3237,265 @@ function appendTeachFloraFlowButton(card, match) {
     }
 }
 
+
+function formatProductionShareDate(value) {
+
+    const source = String(value || "").trim();
+
+    if (!source) {
+        return "Not specified";
+    }
+
+    const isoMatch = source.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+    if (isoMatch) {
+        return isoMatch[2] + "/" + isoMatch[3] + "/" + isoMatch[1];
+    }
+
+    return source;
+}
+
+function getSelectedProductionMatches(resultsContainer, matches) {
+
+    if (!resultsContainer || !Array.isArray(matches)) {
+        return [];
+    }
+
+    const selectedIndexes = Array.from(
+        resultsContainer.querySelectorAll(
+            '.production-share-checkbox:checked'
+        )
+    )
+        .map(function (checkbox) {
+            return Number(checkbox.dataset.matchIndex);
+        })
+        .filter(Number.isInteger);
+
+    return selectedIndexes
+        .map(function (index) {
+            return matches[index];
+        })
+        .filter(function (match) {
+            return Boolean(match && match.inventoryFound);
+        });
+}
+
+function buildProductionShareText(
+    productionOrderNumber,
+    selectedMatches
+) {
+
+    const lines = [
+        "FLORAFLOW - PRODUCTION LEFTOVERS",
+        "Production Order: " +
+            (productionOrderNumber || "Not detected"),
+        ""
+    ];
+
+    selectedMatches.forEach(function (match, index) {
+
+        lines.push(
+            (index + 1) + ". " +
+            (match.product || match.requestedProduct || "Product")
+        );
+
+        lines.push(
+            "   Color: " +
+            (match.color || match.requestedColor || "Not specified")
+        );
+
+        lines.push(
+            "   Case: " +
+            (match.caseNumber || "Not specified")
+        );
+
+        lines.push(
+            "   Available: " +
+            (match.quantity ?? 0) + " stems"
+        );
+
+        lines.push(
+            "   Date received: " +
+            formatProductionShareDate(match.date)
+        );
+
+        if (match.articleName) {
+            lines.push("   Article: " + match.articleName);
+        }
+
+        lines.push("");
+    });
+
+    lines.push("Prepared with FloraFlow");
+
+    return lines.join("\n").trim();
+}
+
+async function shareProductionList(
+    productionOrderNumber,
+    selectedMatches,
+    statusElement
+) {
+
+    if (!Array.isArray(selectedMatches) || selectedMatches.length === 0) {
+        alert("Select at least one leftover product first.");
+        return;
+    }
+
+    const shareText = buildProductionShareText(
+        productionOrderNumber,
+        selectedMatches
+    );
+
+    try {
+        if (navigator.share) {
+            await navigator.share({
+                title:
+                    "Production Order " +
+                    (productionOrderNumber || ""),
+                text: shareText
+            });
+
+            if (statusElement) {
+                statusElement.textContent = "List shared successfully.";
+            }
+            return;
+        }
+
+        await navigator.clipboard.writeText(shareText);
+
+        if (statusElement) {
+            statusElement.textContent =
+                "List copied. Paste it into WhatsApp or another app.";
+        }
+    } catch (error) {
+        if (error?.name === "AbortError") {
+            return;
+        }
+
+        console.error("Production share error:", error);
+
+        try {
+            await navigator.clipboard.writeText(shareText);
+
+            if (statusElement) {
+                statusElement.textContent =
+                    "List copied. Paste it into WhatsApp or another app.";
+            }
+        } catch (clipboardError) {
+            alert("The production list could not be shared or copied.");
+        }
+    }
+}
+
+function appendProductionShareControls(
+    resultsContainer,
+    matches,
+    productionOrderNumber
+) {
+
+    const foundCount = matches.filter(function (match) {
+        return match?.inventoryFound;
+    }).length;
+
+    if (foundCount === 0) {
+        return;
+    }
+
+    const controls = document.createElement("div");
+    controls.style.cssText = `
+        background:white;
+        border:1px solid #bbf7d0;
+        border-radius:12px;
+        padding:12px;
+        margin-bottom:15px;
+    `;
+
+    controls.innerHTML = `
+        <div style="font-weight:800;margin-bottom:9px;color:#166534;">
+            📤 Build production list
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="production-select-all">
+                Select All
+            </button>
+            <button type="button" class="production-clear-selection">
+                Clear
+            </button>
+            <button type="button" class="production-share-list" style="font-weight:800;">
+                📤 Share List
+            </button>
+            <span class="production-share-count" style="font-size:13px;color:#475569;"></span>
+        </div>
+        <div class="production-share-status" style="font-size:13px;color:#166534;margin-top:8px;"></div>
+    `;
+
+    resultsContainer.appendChild(controls);
+
+    const countElement = controls.querySelector(
+        ".production-share-count"
+    );
+
+    const statusElement = controls.querySelector(
+        ".production-share-status"
+    );
+
+    const updateCount = function () {
+        const selected = getSelectedProductionMatches(
+            resultsContainer,
+            matches
+        );
+
+        countElement.textContent =
+            selected.length + " of " + foundCount + " selected";
+    };
+
+    controls
+        .querySelector(".production-select-all")
+        .addEventListener("click", function () {
+            resultsContainer
+                .querySelectorAll(".production-share-checkbox")
+                .forEach(function (checkbox) {
+                    checkbox.checked = true;
+                });
+            updateCount();
+        });
+
+    controls
+        .querySelector(".production-clear-selection")
+        .addEventListener("click", function () {
+            resultsContainer
+                .querySelectorAll(".production-share-checkbox")
+                .forEach(function (checkbox) {
+                    checkbox.checked = false;
+                });
+            updateCount();
+        });
+
+    controls
+        .querySelector(".production-share-list")
+        .addEventListener("click", async function () {
+            const selected = getSelectedProductionMatches(
+                resultsContainer,
+                matches
+            );
+
+            await shareProductionList(
+                productionOrderNumber,
+                selected,
+                statusElement
+            );
+        });
+
+    resultsContainer.addEventListener("change", function (event) {
+        if (event.target?.classList.contains("production-share-checkbox")) {
+            updateCount();
+        }
+    });
+
+    setTimeout(updateCount, 0);
+}
+
 function showProductionRecommendations(
     matches,
     productionOrderNumber
@@ -3294,6 +3553,14 @@ function showProductionRecommendations(
 
     resultsContainer.appendChild(orderHeader);
 
+    if (Array.isArray(matches) && matches.length > 0) {
+        appendProductionShareControls(
+            resultsContainer,
+            matches,
+            productionOrderNumber
+        );
+    }
+
     if (!Array.isArray(matches) || matches.length === 0) {
         resultsContainer.innerHTML += `
             <div style="
@@ -3315,7 +3582,7 @@ function showProductionRecommendations(
         return;
     }
 
-    matches.forEach(function (match) {
+    matches.forEach(function (match, matchIndex) {
 
         const card = document.createElement("div");
 
@@ -3328,14 +3595,25 @@ function showProductionRecommendations(
         if (match.inventoryFound) {
 
             card.innerHTML = `
-                <div style="
+                <label style="
+                    display:flex;
+                    align-items:center;
+                    gap:9px;
                     font-size:18px;
                     font-weight:bold;
                     margin-bottom:10px;
                     color:#166534;
+                    cursor:pointer;
                 ">
+                    <input
+                        type="checkbox"
+                        class="production-share-checkbox"
+                        data-match-index="${matchIndex}"
+                        checked
+                        style="width:19px;height:19px;"
+                    >
                     ✅ ${match.product || ""}
-                </div>
+                </label>
 
                 <div style="
                     line-height:1.8;
@@ -3344,6 +3622,7 @@ function showProductionRecommendations(
                     🎨 Color: ${match.color || match.requestedColor || "Not specified"}<br>
                     📦 Case: ${match.caseNumber || "Not specified"}<br>
                     🌿 Available: ${match.quantity ?? 0} stems<br>
+                    📅 Date received: ${formatProductionShareDate(match.date)}<br>
                     ${
                         match.articleName
                             ? `📝 Article: ${match.articleName}<br>`
@@ -5906,6 +6185,7 @@ function findInventoryMatches(products) {
                 color: bestItem.color,
                 quantity: bestItem.quantity,
                 caseNumber: bestItem.caseNumber,
+                date: bestItem.date || "",
                 status: bestItem.status,
                 articleName: recognizedArticle,
                 requestedProduct:
