@@ -3352,15 +3352,16 @@ function normalizeProductionLine(line) {
             ? window.flowerBrain.cleanOCRText(rawLine)
             : normalizeMatchText(rawLine);
 
-    const correctedLine =
-        window.flowerBrain &&
-        typeof window.flowerBrain.fixCommonOcrErrors === "function"
-            ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
-            : cleanOcrText;
+let correctedLine =
+    window.flowerBrain &&
+    typeof window.flowerBrain.fixCommonOcrErrors === "function"
+        ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
+        : cleanOcrText;
 
-    let articleLine = correctedLine;
-    let colorCode = "";
-
+correctedLine = correctedLine
+    .replace(/\bPAEQ\b/g, "PAEO")
+    .replace(/\bPAE0\b/g, "PAEO");
+    
     if (
         window.flowerBrain &&
         typeof window.flowerBrain.extractColorCode === "function"
