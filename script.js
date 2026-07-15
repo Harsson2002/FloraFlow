@@ -343,10 +343,143 @@ async function showFloraFlowDeviceNotification(item) {
     }
 }
 
+const FLORAFLOW_PUSH_SUBSCRIPTION_TABLE = "push_subscriptions";
+let floraFlowPushConfigPromise = null;
+
+function floraFlowBase64UrlToUint8Array(base64Url) {
+    const padding = "=".repeat((4 - base64Url.length % 4) % 4);
+    const base64 = (base64Url + padding).replace(/-/g, "+").replace(/_/g, "/");
+    const rawData = window.atob(base64);
+    return Uint8Array.from(Array.from(rawData).map(function (character) {
+        return character.charCodeAt(0);
+    }));
+}
+
+async function loadFloraFlowPushConfig() {
+    if (floraFlowPushConfigPromise) return floraFlowPushConfigPromise;
+
+    floraFlowPushConfigPromise = (async function () {
+        // Prefer the deployed Edge Function so the public key always matches
+        // the private VAPID key stored securely in Supabase.
+        try {
+            const { data, error } = await supabaseClient.functions.invoke(
+                "send-push-notification",
+                { body: { action: "get_public_key" } }
+            );
+
+            if (!error) {
+                const edgeKey = String(data?.vapidPublicKey || "").trim();
+                if (edgeKey) return { vapidPublicKey: edgeKey };
+            }
+        } catch (error) {
+            console.warn("Could not obtain the VAPID key from Supabase:", error);
+        }
+
+        // Fallback for local/offline deployments that provide push-config.json.
+        const response = await fetch("/push-config.json", { cache: "no-store" });
+        if (!response.ok) throw new Error("push-config.json could not be loaded.");
+        const config = await response.json();
+        const key = String(config?.vapidPublicKey || "").trim();
+        if (!key || key.includes("PASTE_")) {
+            throw new Error("The FloraFlow VAPID public key has not been configured yet.");
+        }
+        return { vapidPublicKey: key };
+    })();
+
+    return floraFlowPushConfigPromise;
+}
+
+async function sendFloraFlowExteriorTestNotification() {
+    const userId = getCurrentAuthUserId();
+    if (!userId) throw new Error("You must be signed in to test notifications.");
+
+    const permission = await requestFloraFlowNotificationPermission();
+    if (permission !== "granted") {
+        throw new Error("Notification permission was not granted on this device.");
+    }
+
+    const { data, error } = await supabaseClient.functions.invoke(
+        "send-push-notification",
+        {
+            body: {
+                action: "send",
+                user_id: userId,
+                title: "FloraFlow test notification",
+                message: "Exterior notifications are working on this device.",
+                type: "SYSTEM_TEST",
+                action_url: window.location.origin + window.location.pathname,
+                tag: "floraflow-exterior-test-" + Date.now()
+            }
+        }
+    );
+
+    if (error) throw error;
+    if (!data?.ok) throw new Error(data?.error || "The test notification could not be sent.");
+
+    const sentCount = Number(data.sentCount || 0);
+    if (sentCount < 1) {
+        throw new Error("No active device subscription was found. Enable notifications on this device and try again.");
+    }
+
+    return data;
+}
+
+async function saveFloraFlowPushSubscription(subscription) {
+    const userId = getCurrentAuthUserId();
+    if (!userId || !subscription) throw new Error("A signed-in FloraFlow user is required.");
+
+    const json = subscription.toJSON();
+    const payload = {
+        user_id: userId,
+        endpoint: json.endpoint,
+        p256dh: json.keys?.p256dh || "",
+        auth: json.keys?.auth || "",
+        user_agent: navigator.userAgent || "",
+        enabled: true,
+        updated_at: new Date().toISOString()
+    };
+
+    const { error } = await supabaseClient
+        .from(FLORAFLOW_PUSH_SUBSCRIPTION_TABLE)
+        .upsert(payload, { onConflict: "user_id,endpoint" });
+
+    if (error) throw error;
+    return payload;
+}
+
+async function subscribeFloraFlowDeviceForExteriorNotifications() {
+    if (!("serviceWorker" in navigator) || !("PushManager" in window)) {
+        throw new Error("Exterior notifications are not supported on this device or browser.");
+    }
+
+    const config = await loadFloraFlowPushConfig();
+    const registration = await navigator.serviceWorker.ready;
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) {
+        subscription = await registration.pushManager.subscribe({
+            userVisibleOnly: true,
+            applicationServerKey: floraFlowBase64UrlToUint8Array(config.vapidPublicKey)
+        });
+    }
+
+    await saveFloraFlowPushSubscription(subscription);
+    return subscription;
+}
+
 async function requestFloraFlowNotificationPermission() {
     if (!("Notification" in window)) return "unsupported";
-    if (Notification.permission === "granted") return "granted";
-    return await Notification.requestPermission();
+
+    let permission = Notification.permission;
+    if (permission !== "granted") {
+        permission = await Notification.requestPermission();
+    }
+
+    if (permission === "granted") {
+        await subscribeFloraFlowDeviceForExteriorNotifications();
+    }
+
+    return permission;
 }
 
 
@@ -1790,6 +1923,7 @@ function openFloraFlowPreferencePanel(section) {
             <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:11px;"><span><strong>QC Review</strong><br><small>Off unless QC responsibility is assigned.</small></span><input id="prefNotifyQc" type="checkbox" ${currentUserProfile?.notify_qc === true ? "checked" : ""}></label>
         </div>
         <button id="enableDeviceNotificationsBtn" type="button" style="width:100%;margin-top:12px;min-height:44px;background:#166534;">Enable notifications on this device</button>
+        <button id="testExteriorNotificationBtn" type="button" style="width:100%;margin-top:9px;min-height:44px;background:#334155;">Send test exterior notification</button>
         <div id="deviceNotificationStatus" style="margin-top:8px;font-size:12px;color:#64748b;"></div>`;
     if (section === "sounds") body = `
         <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
@@ -1839,17 +1973,53 @@ function openFloraFlowPreferencePanel(section) {
     const enableDeviceButton = card.querySelector("#enableDeviceNotificationsBtn");
     const deviceStatus = card.querySelector("#deviceNotificationStatus");
     if (deviceStatus && "Notification" in window) {
-        deviceStatus.textContent = "Device permission: " + Notification.permission;
+        deviceStatus.textContent = Notification.permission === "granted" ? "Exterior notifications: enabled on this device" : "Exterior notifications: not enabled";
     } else if (deviceStatus) {
         deviceStatus.textContent = "Device notifications are not supported here.";
     }
     if (enableDeviceButton) enableDeviceButton.addEventListener("click", async function () {
-        const permission = await requestFloraFlowNotificationPermission();
-        if (deviceStatus) deviceStatus.textContent = "Device permission: " + permission;
-        if (permission === "granted") {
-            await showFloraFlowDeviceNotification({ title: "FloraFlow notifications enabled", message: "This device is ready to receive important updates.", type: "SYSTEM_TEST" });
+        enableDeviceButton.disabled = true;
+        const originalText = enableDeviceButton.textContent;
+        enableDeviceButton.textContent = "Enabling...";
+        try {
+            const permission = await requestFloraFlowNotificationPermission();
+            if (deviceStatus) deviceStatus.textContent = permission === "granted" ? "Exterior notifications: enabled on this device" : "Exterior notifications: " + permission;
+            if (permission === "granted") {
+                await showFloraFlowDeviceNotification({ title: "FloraFlow exterior notifications enabled", message: "This device is registered for alerts even when FloraFlow is closed.", type: "SYSTEM_TEST" });
+            }
+        } catch (error) {
+            if (deviceStatus) deviceStatus.textContent = "Could not enable exterior notifications: " + (error?.message || String(error));
+        } finally {
+            enableDeviceButton.disabled = false;
+            enableDeviceButton.textContent = originalText;
         }
     });
+
+    const testExteriorButton = card.querySelector("#testExteriorNotificationBtn");
+    if (testExteriorButton) testExteriorButton.addEventListener("click", async function () {
+        const originalText = testExteriorButton.textContent;
+        testExteriorButton.disabled = true;
+        testExteriorButton.textContent = "Sending test...";
+        if (deviceStatus) deviceStatus.textContent = "Sending an exterior test notification...";
+
+        try {
+            const result = await sendFloraFlowExteriorTestNotification();
+            testExteriorButton.textContent = "Test sent ✓";
+            if (deviceStatus) {
+                deviceStatus.textContent = "Test sent to " + Number(result.sentCount || 1) + " registered device(s). It may take a few seconds to appear.";
+            }
+        } catch (error) {
+            console.error("Exterior notification test failed:", error);
+            testExteriorButton.textContent = "Test failed — try again";
+            if (deviceStatus) deviceStatus.textContent = error?.message || String(error);
+        }
+
+        setTimeout(function () {
+            testExteriorButton.disabled = false;
+            testExteriorButton.textContent = originalText;
+        }, 2200);
+    });
+
     const testSoundButton = card.querySelector("#testFloraFlowSoundBtn");
     if (testSoundButton) testSoundButton.addEventListener("click", async function () {
         const originalText = testSoundButton.textContent;
