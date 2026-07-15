@@ -2715,9 +2715,9 @@ function ensureInventoryPaginationControls() {
     controls.innerHTML = `
         <div id="inventoryVisibleSummary" class="inventory-visible-summary"></div>
         <div class="inventory-pagination-row">
-            <button id="inventoryPreviousPageBtn" class="inventory-page-navigation" type="button">← Previous</button>
-            <div id="inventoryPageNumbers" class="inventory-page-numbers"></div>
-            <button id="inventoryNextPageBtn" class="inventory-page-navigation" type="button">Next →</button>
+            <button id="inventoryPreviousPageBtn" class="inventory-page-navigation" type="button" aria-label="Previous inventory page">←</button>
+            <span id="inventoryPageIndicator" class="inventory-page-indicator" aria-live="polite"></span>
+            <button id="inventoryNextPageBtn" class="inventory-page-navigation" type="button" aria-label="Next inventory page">→</button>
         </div>
     `;
 
@@ -2737,16 +2737,6 @@ function ensureInventoryPaginationControls() {
         const totalPages = Math.max(1, Math.ceil(getVisibleInventoryItems().length / INVENTORY_RENDER_PAGE_SIZE));
         if (inventoryCurrentPage >= totalPages) return;
         inventoryCurrentPage += 1;
-        renderInventory();
-        scrollInventoryToTop();
-    });
-
-    controls.querySelector("#inventoryPageNumbers").addEventListener("click", function (event) {
-        const button = event.target.closest("button[data-page]");
-        if (!button) return;
-        const page = Number(button.dataset.page);
-        if (!Number.isInteger(page) || page < 1 || page === inventoryCurrentPage) return;
-        inventoryCurrentPage = page;
         renderInventory();
         scrollInventoryToTop();
     });
@@ -2796,15 +2786,15 @@ function getInventoryPaginationItems(currentPage, totalPages) {
 function renderInventoryPagination(totalItems, totalPages) {
     const controls = ensureInventoryPaginationControls();
     const summary = controls?.querySelector("#inventoryVisibleSummary");
-    const pageNumbers = controls?.querySelector("#inventoryPageNumbers");
+    const pageIndicator = controls?.querySelector("#inventoryPageIndicator");
     const previousButton = controls?.querySelector("#inventoryPreviousPageBtn");
     const nextButton = controls?.querySelector("#inventoryNextPageBtn");
 
-    if (!controls || !summary || !pageNumbers || !previousButton || !nextButton) return;
+    if (!controls || !summary || !pageIndicator || !previousButton || !nextButton) return;
 
     if (totalItems === 0) {
         summary.textContent = "No inventory items found";
-        pageNumbers.innerHTML = "";
+        pageIndicator.textContent = "";
         previousButton.disabled = true;
         nextButton.disabled = true;
         controls.classList.add("is-empty");
@@ -2816,15 +2806,7 @@ function renderInventoryPagination(totalItems, totalPages) {
     const lastItem = Math.min(inventoryCurrentPage * INVENTORY_RENDER_PAGE_SIZE, totalItems);
     summary.textContent = `Showing ${firstItem}–${lastItem} of ${totalItems} products`;
 
-    pageNumbers.innerHTML = getInventoryPaginationItems(inventoryCurrentPage, totalPages)
-        .map(function (item) {
-            if (typeof item === "string") {
-                return '<span class="inventory-page-ellipsis" aria-hidden="true">…</span>';
-            }
-            const active = item === inventoryCurrentPage;
-            return `<button type="button" class="inventory-page-button${active ? " active" : ""}" data-page="${item}" ${active ? 'aria-current="page"' : ""}>${item}</button>`;
-        })
-        .join("");
+    pageIndicator.textContent = `${inventoryCurrentPage} / ${totalPages}`;
 
     previousButton.disabled = inventoryCurrentPage <= 1;
     nextButton.disabled = inventoryCurrentPage >= totalPages;
