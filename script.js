@@ -2706,7 +2706,112 @@ setTimeout(function () {
 
 function ensureInventoryPaginationControls() {
     let controls = document.getElementById("inventoryPaginationControls");
-    if (controls) return controls;
+
+    if (!document.getElementById("floraFlowInventoryPaginationFixStyles")) {
+        const style = document.createElement("style");
+        style.id = "floraFlowInventoryPaginationFixStyles";
+        style.textContent = `
+            #mobileInventoryList {
+                position: relative !important;
+                z-index: 1 !important;
+                overflow: visible !important;
+                padding-bottom: 0 !important;
+            }
+
+            #inventoryPaginationControls.inventory-pagination-controls {
+                position: static !important;
+                inset: auto !important;
+                top: auto !important;
+                right: auto !important;
+                bottom: auto !important;
+                left: auto !important;
+                z-index: 1 !important;
+                transform: none !important;
+                clear: both !important;
+                width: 100% !important;
+                max-width: none !important;
+                min-height: 0 !important;
+                margin: 12px 0 0 !important;
+                padding: 8px 8px 10px !important;
+                box-sizing: border-box !important;
+                background: transparent !important;
+                border: 0 !important;
+                border-top: 1px solid rgba(148, 163, 184, .24) !important;
+                border-radius: 0 !important;
+                box-shadow: none !important;
+                backdrop-filter: none !important;
+                overflow: visible !important;
+            }
+
+            #inventoryPaginationControls .inventory-visible-summary {
+                margin: 0 0 5px !important;
+                padding: 0 !important;
+                color: #64748b !important;
+                font-size: 10px !important;
+                line-height: 1.2 !important;
+                font-weight: 500 !important;
+                text-align: center !important;
+            }
+
+            #inventoryPaginationControls .inventory-pagination-row {
+                display: grid !important;
+                grid-template-columns: 32px 1fr 32px !important;
+                align-items: center !important;
+                gap: 8px !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+            }
+
+            #inventoryPaginationControls .inventory-page-navigation {
+                width: 32px !important;
+                min-width: 32px !important;
+                height: 30px !important;
+                min-height: 30px !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                border: 1px solid #e2e8f0 !important;
+                border-radius: 8px !important;
+                background: #ffffff !important;
+                color: #8a3f76 !important;
+                box-shadow: none !important;
+                font-size: 15px !important;
+                line-height: 1 !important;
+            }
+
+            #inventoryPaginationControls .inventory-page-navigation:disabled {
+                opacity: .32 !important;
+                cursor: default !important;
+            }
+
+            #inventoryPaginationControls .inventory-page-indicator {
+                color: #64748b !important;
+                font-size: 10px !important;
+                line-height: 1 !important;
+                font-weight: 700 !important;
+                text-align: center !important;
+            }
+
+            @media (max-width: 720px) {
+                #mobileInventoryList .mobile-inventory-card:last-child {
+                    margin-bottom: 0 !important;
+                }
+
+                #inventoryPaginationControls.inventory-pagination-controls {
+                    margin-top: 10px !important;
+                    margin-bottom: calc(96px + env(safe-area-inset-bottom)) !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    if (controls) {
+        if (mobileInventoryList?.parentNode && controls.previousElementSibling !== mobileInventoryList) {
+            mobileInventoryList.parentNode.insertBefore(controls, mobileInventoryList.nextSibling);
+        }
+        return controls;
+    }
 
     controls = document.createElement("nav");
     controls.id = "inventoryPaginationControls";
@@ -2721,6 +2826,8 @@ function ensureInventoryPaginationControls() {
         </div>
     `;
 
+    // Keep pagination in normal document flow, immediately after the mobile list.
+    // This guarantees it can never cover Rotate/Edit on the last product card.
     const anchor = mobileInventoryList || table?.closest("table") || table;
     if (anchor?.parentNode) {
         anchor.parentNode.insertBefore(controls, anchor.nextSibling);
