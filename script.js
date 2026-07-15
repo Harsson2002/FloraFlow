@@ -1326,6 +1326,33 @@ document.addEventListener("paste", async function (event) {
 
         productionPreview.src = imageUrl;
         window.originalProductionImage = imageUrl;
+        productionPreview.onload = function () {
+
+    ensureProductionSelectionUI();
+
+    productionSelectionCanvas.style.cursor = "crosshair";
+
+    setProductionSelectionStatus(
+        "Drag over the product names to select the area.",
+        "info"
+    );
+
+    setTimeout(function () {
+
+        beginProductionAreaSelection();
+
+        const selectionTool =
+            document.getElementById("productionSelectionTool");
+
+        if (selectionTool) {
+            selectionTool.scrollIntoView({
+                behavior: "smooth",
+                block: "start"
+            });
+        }
+
+    }, 150);
+};
 
         productionPlaceholder.style.display = "none";
         productionLoaded.style.display = "block";
