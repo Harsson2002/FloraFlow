@@ -3342,6 +3342,7 @@ function normalizeProductionText(text) {
     return uniqueProducts;
 }
 function fixProductionOcrWords(text) {
+    console.log("ANTES:", text);
 
     const corrections = {
 
@@ -3372,7 +3373,7 @@ function fixProductionOcrWords(text) {
             correct
         );
     }
-
+console.log("DESPUÉS:", text);
     return text;
 }
 function normalizeProductionLine(line) {
