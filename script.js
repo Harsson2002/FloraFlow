@@ -874,11 +874,12 @@ function ensureProductionSelectionUI() {
                         box-sizing:border-box;
                         margin-top:6px;
                         padding:11px 12px;
-                        border:1px solid #cbd5e1;
+                        border:2px solid #166534;
                         border-radius:10px;
-                        font-size:16px;
-                        font-weight:700;
-                        background:white;
+                        font-size:18px;
+                        font-weight:800;
+                        color:#14532d;
+                        background:#f0fdf4;
                     " placeholder="Confirm the order number">
                 </label>
                 <button type="button" id="productionDetectOrderBtn" style="min-height:44px;">
@@ -2934,17 +2935,19 @@ function appendFloraFlowBrainCard(card, match) {
 
     const brainCard = document.createElement("div");
     brainCard.style.marginTop = "14px";
-    brainCard.style.padding = "13px";
-    brainCard.style.border = "1px solid #7c3aed";
-    brainCard.style.borderRadius = "10px";
-    brainCard.style.background = "#f5f3ff";
+    brainCard.style.padding = "16px";
+    brainCard.style.border = "1px solid #d1d5db";
+    brainCard.style.borderRadius = "12px";
+    brainCard.style.background = "#ffffff";
+    brainCard.style.boxShadow = "0 2px 8px rgba(15,23,42,.08)";
 
     const canTeach =
         normalizeMatchText(currentUser) === "HARSSON";
 
     brainCard.innerHTML = `
-        <div style="font-weight:800;color:#5b21b6;margin-bottom:8px;">
-            🧠 FloraFlow Brain
+        <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#166534;margin-bottom:10px;">
+            <span style="display:inline-flex;width:28px;height:28px;border-radius:8px;background:#dcfce7;align-items:center;justify-content:center;font-size:15px;">FF</span>
+            FloraFlow Learning
         </div>
         <div style="font-size:14px;line-height:1.6;color:#3f3f46;">
             OCR read: <strong>${match.learningAlias}</strong><br>
@@ -3277,10 +3280,35 @@ function appendTeachFloraFlowButton(card, match) {
     const canTeach = normalizeMatchText(currentUser) === "HARSSON";
     const button = document.createElement("button");
     button.type = "button";
-    button.textContent = "➕ Teach FloraFlow";
+    button.textContent = "Teach FloraFlow";
     button.disabled = !canTeach;
-    button.style.marginTop = "12px";
-    button.style.fontWeight = "800";
+    button.style.cssText = `
+        margin-top:12px;
+        min-height:42px;
+        padding:10px 16px;
+        border:none;
+        border-radius:10px;
+        background:#166534;
+        color:white;
+        font-size:14px;
+        font-weight:700;
+        letter-spacing:.01em;
+        cursor:pointer;
+        box-shadow:0 2px 6px rgba(22,101,52,.20);
+        transition:transform .15s ease, box-shadow .15s ease, background .15s ease;
+    `;
+
+    button.addEventListener("mouseenter", function () {
+        if (!button.disabled) {
+            button.style.background = "#14532d";
+            button.style.boxShadow = "0 4px 10px rgba(22,101,52,.25)";
+        }
+    });
+
+    button.addEventListener("mouseleave", function () {
+        button.style.background = "#166534";
+        button.style.boxShadow = "0 2px 6px rgba(22,101,52,.20)";
+    });
 
     button.addEventListener("click", function () {
         openTeachFloraFlowModal(match);
@@ -3407,7 +3435,7 @@ async function detectProductionOrderFromImage(options = {}) {
         const image = productionSelectionImage;
         const cropHeight = Math.max(
             160,
-            Math.round(image.naturalHeight * 0.35)
+            Math.round(image.naturalHeight * 0.55)
         );
 
         const headerCanvas = createEnhancedOcrCanvas(
@@ -3775,13 +3803,15 @@ function showProductionRecommendations(
 
     orderHeader.innerHTML = `
         <div style="
-            background:#e8f5e9;
-            border:1px solid #2e7d32;
-            border-radius:10px;
-            padding:14px;
+            background:#f0fdf4;
+            border:1px solid #86efac;
+            border-left:5px solid #166534;
+            border-radius:12px;
+            padding:15px 16px;
             margin-bottom:15px;
-            font-size:18px;
-            font-weight:bold;
+            font-size:19px;
+            font-weight:800;
+            color:#14532d;
         ">
             📋 Production Order:
             ${productionOrderNumber || "Not detected"}
@@ -3961,14 +3991,20 @@ function extractProductionLot(text, options = {}) {
         return normalizeProductionOrderNumber(value);
     };
 
+    const cleanedSource = source
+        .replace(/[^A-Z0-9#:\-\s]/g, " ")
+        .replace(/\s+/g, " ")
+        .trim();
+
     const orderPatterns = [
-        /PRODUCTION\s*ORDER\s*(?:NUMBER|NO|#)?\s*[-:]?\s*([0-9OIL]{4,8})/,
-        /ORDER\s*(?:NUMBER|NO|#)?\s*[-:]?\s*([0-9OIL]{4,8})/,
-        /([0-9OIL]{4,8})\s*[-:]?\s*PRODUCTION\s*ORDER/
+        /PRODUCTION\s*(?:ORDER|0RDER|ORD ER)\s*(?:NUMBER|NUM|NO|#)?\s*[-:#]?\s*([0-9OIL]{4,8})/,
+        /(?:ORDER|0RDER)\s*(?:NUMBER|NUM|NO|#)?\s*[-:#]?\s*([0-9OIL]{4,8})/,
+        /(?:PROD|PRODUCTION)\s*[-:#]?\s*([0-9OIL]{4,8})/,
+        /([0-9OIL]{4,8})\s*[-:#]?\s*(?:PRODUCTION\s*)?(?:ORDER|0RDER)/
     ];
 
     for (const pattern of orderPatterns) {
-        const match = source.match(pattern);
+        const match = cleanedSource.match(pattern);
 
         if (!match) {
             continue;
