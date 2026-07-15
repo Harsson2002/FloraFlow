@@ -5942,3 +5942,384 @@ function cleanProductionLine(line) {
         .replace(/\s+/g, " ")
         .trim();
 }
+
+// ============================================================
+// PRODUCTS / FLOWER FAMILIES MANAGEMENT
+// ============================================================
+
+function ensureProductsManagementModal() {
+    let overlay = document.getElementById("productsManagementOverlay");
+
+    if (overlay) {
+        return overlay;
+    }
+
+    overlay = document.createElement("div");
+    overlay.id = "productsManagementOverlay";
+    overlay.style.cssText = [
+        "display:none",
+        "position:fixed",
+        "inset:0",
+        "z-index:100000",
+        "background:rgba(15,23,42,.62)",
+        "padding:18px",
+        "box-sizing:border-box",
+        "overflow:auto"
+    ].join(";");
+
+    overlay.innerHTML = `
+        <div style="
+            width:min(850px,100%);
+            margin:4vh auto;
+            background:white;
+            border-radius:16px;
+            padding:20px;
+            box-shadow:0 24px 70px rgba(0,0,0,.28);
+        ">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+                <div>
+                    <div style="font-size:22px;font-weight:800;color:#166534;">
+                        🌼 Products & Families
+                    </div>
+                    <div style="font-size:13px;color:#64748b;margin-top:3px;">
+                        Add products, review every flower family, and manage Production aliases.
+                    </div>
+                </div>
+                <button type="button" id="closeProductsManagementBtn" style="
+                    border:none;
+                    background:#15803d;
+                    color:white;
+                    width:38px;
+                    height:38px;
+                    border-radius:9px;
+                    font-size:18px;
+                    cursor:pointer;
+                ">✕</button>
+            </div>
+
+            <div style="
+                margin-top:18px;
+                padding:16px;
+                border:1px solid #bbf7d0;
+                background:#f0fdf4;
+                border-radius:12px;
+            ">
+                <div style="font-weight:800;margin-bottom:12px;color:#166534;">
+                    ➕ Add New Product / Family
+                </div>
+
+                <div style="display:grid;grid-template-columns:1fr 1.3fr;gap:12px;">
+                    <label style="font-size:13px;font-weight:700;">
+                        Product family
+                        <input id="newProductFamilyInput" type="text" placeholder="Example: PUSSY WILLOW" style="
+                            width:100%;box-sizing:border-box;margin-top:5px;padding:10px;
+                            border:1px solid #cbd5e1;border-radius:8px;text-transform:uppercase;
+                        ">
+                    </label>
+
+                    <label style="font-size:13px;font-weight:700;">
+                        Production aliases (optional)
+                        <input id="newProductAliasesInput" type="text" placeholder="Example: PUS, PUSSYWILLOW" style="
+                            width:100%;box-sizing:border-box;margin-top:5px;padding:10px;
+                            border:1px solid #cbd5e1;border-radius:8px;text-transform:uppercase;
+                        ">
+                    </label>
+                </div>
+
+                <div style="font-size:12px;color:#64748b;margin-top:8px;">
+                    Separate several aliases with commas. The family will also be added to the Add Product dropdown.
+                </div>
+
+                <div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">
+                    <button type="button" id="saveNewProductFamilyBtn" style="
+                        border:none;background:#15803d;color:white;padding:10px 16px;
+                        border-radius:9px;font-weight:800;cursor:pointer;
+                    ">💾 Save Product</button>
+                    <span id="productsManagementMessage" style="font-size:13px;color:#475569;"></span>
+                </div>
+            </div>
+
+            <div style="margin-top:18px;display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                <div style="font-size:18px;font-weight:800;color:#0f172a;">
+                    All Families
+                    <span id="productsFamilyCount" style="font-size:13px;color:#64748b;font-weight:600;"></span>
+                </div>
+                <input id="productsFamilySearch" type="search" placeholder="Search family or alias..." style="
+                    width:min(330px,100%);padding:10px;border:1px solid #cbd5e1;border-radius:9px;
+                ">
+            </div>
+
+            <div id="productsFamiliesList" style="
+                margin-top:12px;
+                max-height:48vh;
+                overflow:auto;
+                border:1px solid #e2e8f0;
+                border-radius:12px;
+                background:#f8fafc;
+                padding:10px;
+            "></div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#closeProductsManagementBtn")
+        .addEventListener("click", function () {
+            overlay.style.display = "none";
+        });
+
+    overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) {
+            overlay.style.display = "none";
+        }
+    });
+
+    overlay.querySelector("#productsFamilySearch")
+        .addEventListener("input", renderProductsFamiliesList);
+
+    overlay.querySelector("#saveNewProductFamilyBtn")
+        .addEventListener("click", saveNewProductFamilyFromSettings);
+
+    return overlay;
+}
+
+function addFamilyToProductDropdown(family) {
+    const normalizedFamily = normalizeMatchText(family);
+
+    if (!normalizedFamily) {
+        return;
+    }
+
+    if (!productsCatalog.includes(normalizedFamily)) {
+        productsCatalog.push(normalizedFamily);
+        productsCatalog.sort(function (a, b) {
+            return a.localeCompare(b);
+        });
+    }
+
+    if (productSelect && !productSelect.options[normalizedFamily]) {
+        productSelect.addOption({
+            value: normalizedFamily,
+            text: normalizedFamily
+        });
+        productSelect.refreshOptions(false);
+    }
+}
+
+async function refreshProductsManagementData() {
+    const message = document.getElementById("productsManagementMessage");
+
+    if (message) {
+        message.textContent = "Loading families...";
+        message.style.color = "#475569";
+    }
+
+    await loadFlowerFamilies();
+
+    flowerFamilies.forEach(function (item) {
+        addFamilyToProductDropdown(item.family);
+    });
+
+    renderProductsFamiliesList();
+
+    if (message) {
+        message.textContent = "";
+    }
+}
+
+function renderProductsFamiliesList() {
+    const list = document.getElementById("productsFamiliesList");
+    const count = document.getElementById("productsFamilyCount");
+    const searchInput = document.getElementById("productsFamilySearch");
+
+    if (!list) {
+        return;
+    }
+
+    const search = normalizeMatchText(searchInput?.value || "");
+
+    const families = (flowerFamilies || [])
+        .slice()
+        .sort(function (a, b) {
+            return String(a.family || "").localeCompare(String(b.family || ""));
+        })
+        .filter(function (item) {
+            const family = normalizeMatchText(item.family);
+            const aliases = normalizeMatchText((item.aliases || []).join(" "));
+
+            return !search || family.includes(search) || aliases.includes(search);
+        });
+
+    if (count) {
+        count.textContent = "(" + families.length + ")";
+    }
+
+    list.innerHTML = "";
+
+    if (families.length === 0) {
+        list.innerHTML = `
+            <div style="padding:24px;text-align:center;color:#64748b;">
+                No families found.
+            </div>
+        `;
+        return;
+    }
+
+    families.forEach(function (item) {
+        const family = normalizeMatchText(item.family);
+        const aliases = (item.aliases || [])
+            .map(normalizeMatchText)
+            .filter(Boolean);
+
+        const card = document.createElement("div");
+        card.style.cssText = [
+            "background:white",
+            "border:1px solid #e2e8f0",
+            "border-radius:10px",
+            "padding:12px",
+            "margin-bottom:8px",
+            "display:flex",
+            "justify-content:space-between",
+            "gap:12px",
+            "align-items:flex-start"
+        ].join(";");
+
+        card.innerHTML = `
+            <div>
+                <div style="font-weight:800;color:#166534;">🌸 ${family}</div>
+                <div style="font-size:13px;color:#64748b;margin-top:5px;line-height:1.5;">
+                    ${aliases.length > 0
+                        ? "Aliases: " + aliases.join(", ")
+                        : "No production aliases saved"}
+                </div>
+            </div>
+            <button type="button" class="copy-family-name-btn" style="
+                border:1px solid #cbd5e1;background:white;border-radius:8px;
+                padding:7px 10px;cursor:pointer;white-space:nowrap;
+            ">📋 Copy</button>
+        `;
+
+        card.querySelector(".copy-family-name-btn")
+            .addEventListener("click", async function () {
+                try {
+                    await navigator.clipboard.writeText(family);
+                    this.textContent = "✓ Copied";
+                    setTimeout(() => {
+                        this.textContent = "📋 Copy";
+                    }, 1000);
+                } catch (error) {
+                    alert("Could not copy the family name.");
+                }
+            });
+
+        list.appendChild(card);
+    });
+}
+
+async function saveNewProductFamilyFromSettings() {
+    const familyInput = document.getElementById("newProductFamilyInput");
+    const aliasesInput = document.getElementById("newProductAliasesInput");
+    const saveButton = document.getElementById("saveNewProductFamilyBtn");
+    const message = document.getElementById("productsManagementMessage");
+
+    const family = normalizeMatchText(familyInput?.value || "");
+    const aliases = String(aliasesInput?.value || "")
+        .split(",")
+        .map(normalizeMatchText)
+        .filter(Boolean)
+        .filter(function (alias, index, array) {
+            return array.indexOf(alias) === index;
+        });
+
+    if (!family) {
+        alert("Enter the product family name.");
+        familyInput?.focus();
+        return;
+    }
+
+    saveButton.disabled = true;
+    saveButton.textContent = "Saving...";
+    message.textContent = "";
+
+    try {
+        const { data: existingRows, error: selectError } = await supabaseClient
+            .from("flower_families")
+            .select("family, aliases")
+            .ilike("family", family)
+            .limit(1);
+
+        if (selectError) {
+            throw selectError;
+        }
+
+        if (existingRows && existingRows.length > 0) {
+            const existingAliases = String(existingRows[0].aliases || "")
+                .split(",")
+                .map(normalizeMatchText)
+                .filter(Boolean);
+
+            const mergedAliases = Array.from(
+                new Set(existingAliases.concat(aliases))
+            );
+
+            const { error: updateError } = await supabaseClient
+                .from("flower_families")
+                .update({
+                    aliases: mergedAliases.join(", "),
+                    active: true
+                })
+                .ilike("family", family);
+
+            if (updateError) {
+                throw updateError;
+            }
+
+            message.textContent = family + " already existed. Its aliases were updated.";
+        } else {
+            const { error: insertError } = await supabaseClient
+                .from("flower_families")
+                .insert([{
+                    family: family,
+                    aliases: aliases.join(", "),
+                    active: true
+                }]);
+
+            if (insertError) {
+                throw insertError;
+            }
+
+            message.textContent = family + " was added successfully.";
+        }
+
+        message.style.color = "#166534";
+        addFamilyToProductDropdown(family);
+
+        familyInput.value = "";
+        aliasesInput.value = "";
+
+        await loadFlowerFamilies();
+        renderProductsFamiliesList();
+
+    } catch (error) {
+        console.error("Products management save error:", error);
+        message.style.color = "#b91c1c";
+        message.textContent = "Could not save the product.";
+        alert(
+            "The product could not be saved. " +
+            (error?.message || String(error))
+        );
+    } finally {
+        saveButton.disabled = false;
+        saveButton.textContent = "💾 Save Product";
+    }
+}
+
+if (productsBtn) {
+    productsBtn.addEventListener("click", async function () {
+        const overlay = ensureProductsManagementModal();
+        overlay.style.display = "block";
+        settingsModal.style.display = "none";
+        await refreshProductsManagementData();
+        document.getElementById("newProductFamilyInput")?.focus();
+    });
+}
