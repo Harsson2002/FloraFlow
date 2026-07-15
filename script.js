@@ -8485,3 +8485,575 @@ async function openProductionPickListFromUrl() {
         );
     }
 }
+
+/* =============================================================
+   FloraFlow Production Assistant - PDF Pick List Import
+   PDF is the recommended input; screenshot remains available.
+   ============================================================= */
+
+let floraFlowPdfJsPromise = null;
+let floraFlowLastPdfAnalysis = null;
+
+function loadFloraFlowPdfJs() {
+    if (window.pdfjsLib) {
+        return Promise.resolve(window.pdfjsLib);
+    }
+
+    if (floraFlowPdfJsPromise) {
+        return floraFlowPdfJsPromise;
+    }
+
+    floraFlowPdfJsPromise = new Promise(function (resolve, reject) {
+        const script = document.createElement("script");
+        script.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/4.10.38/pdf.min.mjs";
+        script.type = "module";
+
+        script.onload = function () {
+            if (window.pdfjsLib) {
+                resolve(window.pdfjsLib);
+                return;
+            }
+            reject(new Error("PDF reader did not initialize."));
+        };
+
+        script.onerror = function () {
+            reject(new Error("PDF reader could not be loaded."));
+        };
+
+        document.head.appendChild(script);
+    }).catch(async function () {
+        // Fallback to the classic build for browsers that do not expose the module globally.
+        return new Promise(function (resolve, reject) {
+            const fallback = document.createElement("script");
+            fallback.src = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
+            fallback.onload = function () {
+                if (!window.pdfjsLib) {
+                    reject(new Error("PDF reader did not initialize."));
+                    return;
+                }
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc =
+                    "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
+                resolve(window.pdfjsLib);
+            };
+            fallback.onerror = function () {
+                reject(new Error("PDF reader could not be loaded."));
+            };
+            document.head.appendChild(fallback);
+        });
+    });
+
+    return floraFlowPdfJsPromise;
+}
+
+function ensureProductionAssistantStyles() {
+    if (document.getElementById("floraFlowProductionAssistantStyles")) {
+        return;
+    }
+
+    const style = document.createElement("style");
+    style.id = "floraFlowProductionAssistantStyles";
+    style.textContent = `
+        #productionInputChoice {
+            margin-top: 12px;
+            padding: 18px;
+            border: 1px solid #dbe4ea;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
+        }
+        .ff-input-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 14px;
+        }
+        .ff-input-card {
+            position: relative;
+            min-height: 180px;
+            padding: 18px;
+            border: 1px solid #cbd5e1;
+            border-radius: 16px;
+            background: white;
+            box-shadow: 0 5px 18px rgba(15, 23, 42, .07);
+            box-sizing: border-box;
+        }
+        .ff-input-card.recommended {
+            border: 2px solid #166534;
+            background: #f0fdf4;
+        }
+        .ff-recommended-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 5px 9px;
+            border-radius: 999px;
+            background: #166534;
+            color: white;
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+        }
+        .ff-input-action {
+            width: 100%;
+            min-height: 46px;
+            margin-top: 14px;
+            border: 0;
+            border-radius: 11px;
+            background: #166534;
+            color: white;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+        }
+        .ff-input-action.secondary {
+            background: #334155;
+        }
+        #productionPdfDropZone.dragging {
+            outline: 3px solid #22c55e;
+            outline-offset: 3px;
+        }
+        .ff-analysis-progress {
+            margin-top: 14px;
+            padding: 14px;
+            border-radius: 13px;
+            border: 1px solid #bfdbfe;
+            background: #eff6ff;
+        }
+        .ff-progress-track {
+            height: 8px;
+            overflow: hidden;
+            margin-top: 9px;
+            border-radius: 999px;
+            background: #dbeafe;
+        }
+        .ff-progress-bar {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            background: #166534;
+            transition: width .25s ease;
+        }
+        .ff-pdf-summary {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        .ff-summary-stat {
+            padding: 13px;
+            border: 1px solid #dbe4ea;
+            border-radius: 12px;
+            background: white;
+        }
+        .ff-summary-value {
+            font-size: 23px;
+            font-weight: 850;
+            color: #14532d;
+        }
+        @media (max-width: 720px) {
+            .ff-input-grid { grid-template-columns: 1fr; }
+            .ff-pdf-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+            #productionInputChoice { padding: 12px; }
+            .ff-input-card { min-height: 0; padding: 15px; }
+        }
+    `;
+    document.head.appendChild(style);
+}
+
+function setProductionPdfProgress(percent, message, type) {
+    const wrapper = document.getElementById("productionPdfProgress");
+    const bar = document.getElementById("productionPdfProgressBar");
+    const text = document.getElementById("productionPdfProgressText");
+
+    if (!wrapper || !bar || !text) return;
+
+    wrapper.style.display = "block";
+    bar.style.width = Math.max(0, Math.min(100, Number(percent || 0))) + "%";
+    text.textContent = message || "";
+    text.style.color = type === "error" ? "#b91c1c" : "#1e3a8a";
+}
+
+function ensureProductionPdfImportUI() {
+    ensureProductionSelectionUI();
+    ensureProductionAssistantStyles();
+
+    let choice = document.getElementById("productionInputChoice");
+    if (choice) return choice;
+
+    choice = document.createElement("section");
+    choice.id = "productionInputChoice";
+    choice.innerHTML = `
+        <div style="margin-bottom:14px;">
+            <div style="font-size:22px;font-weight:850;color:#0f172a;">Production Assistant</div>
+            <div style="font-size:14px;color:#64748b;margin-top:4px;line-height:1.5;">
+                Choose the official PDF for the clearest results, or use a screenshot when the PDF is unavailable.
+            </div>
+        </div>
+
+        <div class="ff-input-grid">
+            <div class="ff-input-card recommended" id="productionPdfDropZone">
+                <span class="ff-recommended-badge">Recommended · Highest accuracy</span>
+                <div style="font-size:20px;font-weight:850;color:#14532d;margin-top:13px;">Import Pick List PDF</div>
+                <div style="font-size:13px;color:#475569;line-height:1.55;margin-top:6px;">
+                    Reads the official Axerrio document, detects the order number and extracts flower articles automatically.
+                </div>
+                <input id="productionPdfInput" type="file" accept="application/pdf,.pdf" hidden>
+                <button type="button" class="ff-input-action" id="productionPdfChooseBtn">Select PDF</button>
+                <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px;">You can also drag the PDF onto this card.</div>
+            </div>
+
+            <div class="ff-input-card">
+                <div style="font-size:20px;font-weight:850;color:#0f172a;">Analyze Screenshot</div>
+                <div style="font-size:13px;color:#475569;line-height:1.55;margin-top:8px;">
+                    Keeps the current OCR workflow as a backup. Paste a screenshot and select the area to read.
+                </div>
+                <button type="button" class="ff-input-action secondary" id="productionUseScreenshotBtn">Use Screenshot</button>
+                <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px;">Best when the PDF is not available.</div>
+            </div>
+        </div>
+
+        <div id="productionPdfProgress" class="ff-analysis-progress" style="display:none;">
+            <div id="productionPdfProgressText" style="font-size:13px;font-weight:750;color:#1e3a8a;">Preparing PDF reader...</div>
+            <div class="ff-progress-track"><div id="productionPdfProgressBar" class="ff-progress-bar"></div></div>
+        </div>
+    `;
+
+    const screenshotTool = document.getElementById("productionSelectionTool");
+    if (screenshotTool?.parentNode) {
+        screenshotTool.parentNode.insertBefore(choice, screenshotTool);
+        if (!productionSelectionImage) screenshotTool.style.display = "none";
+    }
+
+    const input = choice.querySelector("#productionPdfInput");
+    const chooseButton = choice.querySelector("#productionPdfChooseBtn");
+    const screenshotButton = choice.querySelector("#productionUseScreenshotBtn");
+    const dropZone = choice.querySelector("#productionPdfDropZone");
+
+    chooseButton.addEventListener("click", function () {
+        input.click();
+    });
+
+    input.addEventListener("change", async function () {
+        const file = input.files?.[0];
+        if (file) await processProductionPickListPdf(file);
+        input.value = "";
+    });
+
+    screenshotButton.addEventListener("click", function () {
+        screenshotTool.style.display = "block";
+        screenshotTool.scrollIntoView({ behavior: "smooth", block: "start" });
+        setProductionSelectionStatus("Paste a screenshot, then select the area containing the order and products.", "info");
+    });
+
+    ["dragenter", "dragover"].forEach(function (eventName) {
+        dropZone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            dropZone.classList.add("dragging");
+        });
+    });
+
+    ["dragleave", "drop"].forEach(function (eventName) {
+        dropZone.addEventListener(eventName, function (event) {
+            event.preventDefault();
+            dropZone.classList.remove("dragging");
+        });
+    });
+
+    dropZone.addEventListener("drop", async function (event) {
+        const file = Array.from(event.dataTransfer?.files || [])
+            .find(function (candidate) {
+                return candidate.type === "application/pdf" || /\.pdf$/i.test(candidate.name || "");
+            });
+        if (!file) {
+            alert("Please drop a PDF file.");
+            return;
+        }
+        await processProductionPickListPdf(file);
+    });
+
+    return choice;
+}
+
+function groupPdfTextItemsIntoLines(items) {
+    const groups = [];
+
+    (items || []).forEach(function (item) {
+        const text = String(item.str || "").trim();
+        if (!text) return;
+
+        const x = Number(item.transform?.[4] || 0);
+        const y = Number(item.transform?.[5] || 0);
+        let group = groups.find(function (candidate) {
+            return Math.abs(candidate.y - y) <= 2.5;
+        });
+
+        if (!group) {
+            group = { y: y, pieces: [] };
+            groups.push(group);
+        }
+
+        group.pieces.push({ x: x, text: text });
+    });
+
+    return groups
+        .sort(function (a, b) { return b.y - a.y; })
+        .map(function (group) {
+            return group.pieces
+                .sort(function (a, b) { return a.x - b.x; })
+                .map(function (piece) { return piece.text; })
+                .join(" ")
+                .replace(/\s+/g, " ")
+                .trim();
+        })
+        .filter(Boolean);
+}
+
+async function extractTextLinesFromProductionPdf(file) {
+    const pdfjs = await loadFloraFlowPdfJs();
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    const loadingTask = pdfjs.getDocument({ data: bytes });
+    const pdf = await loadingTask.promise;
+    const pages = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
+        setProductionPdfProgress(
+            15 + Math.round((pageNumber / pdf.numPages) * 40),
+            "Reading PDF page " + pageNumber + " of " + pdf.numPages + "..."
+        );
+        const page = await pdf.getPage(pageNumber);
+        const content = await page.getTextContent();
+        pages.push(groupPdfTextItemsIntoLines(content.items));
+    }
+
+    return {
+        pageCount: pdf.numPages,
+        pages: pages,
+        lines: pages.flat(),
+        fullText: pages.map(function (lines) { return lines.join("\n"); }).join("\n")
+    };
+}
+
+function extractProductionOrderFromPdfLines(lines) {
+    const cleanLines = (lines || []).map(function (line) {
+        return String(line || "").replace(/\s+/g, " ").trim();
+    });
+
+    const titleIndex = cleanLines.findIndex(function (line) {
+        return /PRODUCTION\s+ORDER\s+PICKLIST/i.test(line);
+    });
+
+    if (titleIndex >= 0) {
+        for (let index = Math.max(0, titleIndex - 6); index < titleIndex; index++) {
+            const match = cleanLines[index].match(/^\s*(\d{4,8})\s*$/);
+            if (match) return match[1];
+        }
+    }
+
+    for (const line of cleanLines) {
+        const direct = line.match(/PRODUCTION\s*(?:ORDER|0RDER)\D{0,12}(\d{4,8})/i);
+        if (direct) return direct[1];
+    }
+
+    const firstStandalone = cleanLines
+        .map(function (line) { return line.match(/^\s*(\d{4,8})\s*$/); })
+        .find(Boolean);
+
+    return firstStandalone ? firstStandalone[1] : "";
+}
+
+function isPdfPackingOrAdministrativeLine(line) {
+    const text = normalizeMatchText(line);
+    if (!text) return true;
+
+    if (isProductionMaterialLine(text)) return true;
+
+    return [
+        "PRODUCTION ORDER PICKLIST", "INTERNAL NUMBER", "SUPPLIER",
+        "AVAILABLE FOR", "PRINTED", "UNITS ORDERED", "DELIVERED NAME",
+        "AMOUNT PROD ORDER LOT", "PARTLIST", "OPERATIONS", "ALLOCATIONS",
+        "CUSTOMER ORDER", "PACKING REMARK", "PAGE", "ALL STEMS MUST",
+        "TODOS LOS TALLOS", "CLEAR SLEEVE", "NONWOVEN KRAFT", "FOOD"
+    ].some(function (phrase) {
+        return text.includes(phrase);
+    });
+}
+
+function extractFlowerArticlesFromPdfLines(lines) {
+    const cleanLines = (lines || []).map(function (line) {
+        return String(line || "").replace(/\s+/g, " ").trim();
+    }).filter(Boolean);
+
+    const articleCandidates = [];
+
+    cleanLines.forEach(function (line) {
+        if (isPdfPackingOrAdministrativeLine(line)) return;
+
+        // Axerrio summary rows normally contain a description followed by " - " and a delivered ratio.
+        if (!/\s-\s/.test(line) || !/\b\d+\s*\/\s*\d+\b/.test(line)) return;
+
+        let article = line
+            .replace(/\s+\d{2,3}\s*CM\b.*$/i, "")
+            .replace(/\s+-\s+.*$/, "")
+            .replace(/\s+/g, " ")
+            .trim();
+
+        if (!article || isPdfPackingOrAdministrativeLine(article)) return;
+        articleCandidates.push(article);
+    });
+
+    // Fallback for a future layout that does not preserve the summary row ratio.
+    if (articleCandidates.length === 0) {
+        cleanLines.forEach(function (line) {
+            if (isPdfPackingOrAdministrativeLine(line)) return;
+            if (/\sX\s[\d,]+/i.test(line)) return;
+            if (/\+\s*\d+\s*STEMS?/i.test(line)) return;
+
+            const family = detectOperationalFamilyFromLine(line);
+            if (!family?.family) return;
+
+            const article = line
+                .replace(/\s+\d{2,3}\s*CM\b.*$/i, "")
+                .replace(/\s+-\s+.*$/, "")
+                .trim();
+            if (article) articleCandidates.push(article);
+        });
+    }
+
+    const seen = new Set();
+    return articleCandidates.filter(function (article) {
+        const key = normalizeMatchText(article);
+        if (!key || seen.has(key)) return false;
+        seen.add(key);
+        return true;
+    });
+}
+
+function prependPdfAnalysisSummary(resultsContainer, analysis, matches) {
+    if (!resultsContainer || !analysis) return;
+
+    const existing = resultsContainer.querySelector(".ff-pdf-analysis-summary");
+    if (existing) existing.remove();
+
+    const foundProducts = new Set();
+    let estimatedStems = 0;
+
+    (matches || []).forEach(function (match) {
+        if (!match?.inventoryFound) return;
+        foundProducts.add(normalizeMatchText(match.requestedProduct || match.product));
+        estimatedStems += Number(match.quantity || 0);
+    });
+
+    const articleCount = analysis.articles.length;
+    const coverage = articleCount > 0
+        ? Math.round((foundProducts.size / articleCount) * 100)
+        : 0;
+
+    const summary = document.createElement("section");
+    summary.className = "ff-pdf-analysis-summary";
+    summary.innerHTML = `
+        <div style="padding:15px;border:1px solid #86efac;border-radius:14px;background:#f0fdf4;margin-bottom:14px;">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#166534;">PDF analysis complete</div>
+                    <div style="font-size:21px;font-weight:850;color:#14532d;margin-top:3px;">Production Order #${escapeProductionPickHtml(analysis.orderNumber || "Not detected")}</div>
+                    <div style="font-size:13px;color:#475569;margin-top:4px;">${escapeProductionPickHtml(analysis.fileName || "Pick List PDF")} · ${analysis.pageCount} page(s) · Text read directly</div>
+                </div>
+                <span class="ff-recommended-badge">Detection quality: 100%</span>
+            </div>
+        </div>
+        <div class="ff-pdf-summary">
+            <div class="ff-summary-stat"><div class="ff-summary-value">${articleCount}</div><div style="font-size:12px;color:#64748b;">Articles detected</div></div>
+            <div class="ff-summary-stat"><div class="ff-summary-value">${foundProducts.size}</div><div style="font-size:12px;color:#64748b;">Products with leftovers</div></div>
+            <div class="ff-summary-stat"><div class="ff-summary-value">${coverage}%</div><div style="font-size:12px;color:#64748b;">Coverage</div></div>
+            <div class="ff-summary-stat"><div class="ff-summary-value">${estimatedStems}</div><div style="font-size:12px;color:#64748b;">Available stems found</div></div>
+        </div>
+    `;
+
+    resultsContainer.insertBefore(summary, resultsContainer.firstChild);
+}
+
+async function processProductionPickListPdf(file) {
+    ensureProductionPdfImportUI();
+
+    if (!file || !(file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""))) {
+        alert("Please select a Production Pick List PDF.");
+        return;
+    }
+
+    try {
+        setProductionPdfProgress(5, "Preparing the official Pick List PDF...");
+        const extracted = await extractTextLinesFromProductionPdf(file);
+
+        setProductionPdfProgress(62, "Detecting the production order and flower articles...");
+        const orderNumber = extractProductionOrderFromPdfLines(extracted.lines);
+        const articles = extractFlowerArticlesFromPdfLines(extracted.lines);
+
+        if (!orderNumber) {
+            throw new Error("The Production Order number was not found in this PDF.");
+        }
+
+        if (articles.length === 0) {
+            throw new Error("No flower articles were detected in the Partlist section.");
+        }
+
+        ensureProductionSelectionUI();
+        productionOrderInput.value = orderNumber;
+        productionDetectedText.value = articles.join("\n");
+        productionFindLeftoversBtn.disabled = false;
+        window.lastProductionFullOcrText = extracted.fullText;
+
+        setProductionPdfProgress(76, "Comparing exact PDF article names with FloraFlow inventory...");
+
+        if (!Array.isArray(lexiflorSearchCatalog) || lexiflorSearchCatalog.length === 0) {
+            await loadLexiflorCatalog();
+        }
+
+        const products = normalizeProductionText(articles.join("\n"));
+        const matches = findInventoryMatches(products);
+
+        floraFlowLastPdfAnalysis = {
+            fileName: file.name,
+            pageCount: extracted.pageCount,
+            orderNumber: orderNumber,
+            articles: articles,
+            products: products,
+            fullText: extracted.fullText
+        };
+
+        showProductionRecommendations(matches, orderNumber);
+        const resultsContainer = document.getElementById("productionRecommendations");
+        prependPdfAnalysisSummary(resultsContainer, floraFlowLastPdfAnalysis, matches);
+
+        setProductionPdfProgress(
+            100,
+            "Ready: Production Order #" + orderNumber + " · " + articles.length + " article(s) detected.",
+            "success"
+        );
+
+        setProductionSelectionStatus(
+            "PDF processed automatically. Review the leftover cards and create the Pick List when ready.",
+            "success"
+        );
+
+        if (resultsContainer) {
+            setTimeout(function () {
+                resultsContainer.scrollIntoView({ behavior: "smooth", block: "start" });
+            }, 120);
+        }
+    } catch (error) {
+        console.error("Production PDF analysis error:", error);
+        setProductionPdfProgress(100, error?.message || String(error), "error");
+        alert("The PDF could not be analyzed. " + (error?.message || String(error)));
+    }
+}
+
+// Add the new input chooser whenever Today's Production opens.
+if (todayProductionBtn) {
+    todayProductionBtn.addEventListener("click", function () {
+        setTimeout(ensureProductionPdfImportUI, 0);
+    });
+}
+
+window.addEventListener("floraflow-auth-ready", function () {
+    if (todayProductionModal?.style.display === "block") {
+        ensureProductionPdfImportUI();
+    }
+});
