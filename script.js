@@ -1026,6 +1026,8 @@ async function initializeFloraFlow() {
     await loadLexiflorCatalog();
     await loadActiveProductionReservations();
     startNotificationRefresh();
+    ensureProductionProgressCenter();
+    startProductionProgressRefresh();
     await openProductionPickListFromUrl();
 
     console.log(
@@ -8330,7 +8332,7 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                 completed_by: confirmedBy
             })
             .eq("id", list.id)
-            .eq("status", "PENDING")
+            .in("status", ["PENDING", "IN_PROGRESS"])
             .select("id")
             .maybeSingle();
 
@@ -8466,6 +8468,373 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
     }
 }
 
+
+
+// ============================================================
+// PRODUCTION PROGRESS CENTER
+// ============================================================
+
+let productionProgressRefreshTimer = null;
+let productionProgressLists = [];
+
+function getProductionProgressLabel(status) {
+    const value = String(status || "PENDING").toUpperCase();
+    const labels = {
+        PENDING: "Waiting",
+        IN_PROGRESS: "In progress",
+        PROCESSING: "Updating inventory",
+        COMPLETED: "Completed",
+        CANCELLED: "Cancelled"
+    };
+    return labels[value] || value.replace(/_/g, " ");
+}
+
+function getProductionProgressColors(status) {
+    const value = String(status || "PENDING").toUpperCase();
+    const colors = {
+        PENDING: { background: "#fff7ed", text: "#9a3412", border: "#fdba74" },
+        IN_PROGRESS: { background: "#eff6ff", text: "#1d4ed8", border: "#93c5fd" },
+        PROCESSING: { background: "#faf5ff", text: "#7e22ce", border: "#d8b4fe" },
+        COMPLETED: { background: "#ecfdf5", text: "#166534", border: "#86efac" },
+        CANCELLED: { background: "#f8fafc", text: "#475569", border: "#cbd5e1" }
+    };
+    return colors[value] || colors.PENDING;
+}
+
+function calculateProductionPickProgress(items) {
+    const list = Array.isArray(items) ? items : [];
+    const total = list.length;
+    const resolvedStatuses = new Set(["COMPLETED", "RETURNED", "CANCELLED"]);
+    const resolved = list.filter(function (item) {
+        return resolvedStatuses.has(String(item.status || "").toUpperCase());
+    }).length;
+    const percentage = total > 0 ? Math.round((resolved / total) * 100) : 0;
+    return { total: total, resolved: resolved, percentage: percentage };
+}
+
+function formatProgressCenterTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function ensureProductionProgressCenter() {
+    let launcher = document.getElementById("floraFlowProductionProgressLauncher");
+    if (launcher) return launcher;
+
+    if (!document.getElementById("floraFlowProductionProgressStyles")) {
+        const style = document.createElement("style");
+        style.id = "floraFlowProductionProgressStyles";
+        style.textContent = `
+            #floraFlowProductionProgressLauncher {
+                position: fixed;
+                top: 82px;
+                right: 18px;
+                z-index: 89990;
+                border: 1px solid rgba(148,163,184,.35);
+                border-radius: 14px;
+                background: rgba(255,255,255,.97);
+                box-shadow: 0 10px 30px rgba(15,23,42,.14);
+                padding: 7px;
+            }
+            #floraFlowProductionProgressButton {
+                min-height: 42px;
+                border: 0;
+                border-radius: 10px;
+                background: #0f172a;
+                color: white;
+                font-weight: 800;
+                padding: 0 14px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+            }
+            #floraFlowProductionProgressPanel {
+                width: min(900px, calc(100vw - 32px));
+                max-height: min(88vh, 860px);
+                overflow: auto;
+                margin: 6vh auto 0;
+                background: #f8fafc;
+                border-radius: 20px;
+                box-shadow: 0 24px 70px rgba(15,23,42,.3);
+            }
+            @media (max-width: 720px) {
+                #floraFlowProductionProgressLauncher {
+                    top: auto;
+                    left: 14px;
+                    right: auto;
+                    bottom: calc(14px + env(safe-area-inset-bottom));
+                    border-radius: 999px;
+                    padding: 6px;
+                }
+                #floraFlowProductionProgressButton {
+                    width: 52px;
+                    height: 52px;
+                    min-height: 52px;
+                    border-radius: 999px;
+                    padding: 0;
+                    justify-content: center;
+                    font-size: 0;
+                }
+                #floraFlowProductionProgressButton .progress-icon {
+                    font-size: 22px;
+                }
+                #floraFlowProductionProgressPanel {
+                    width: 100%;
+                    max-height: 92vh;
+                    margin: 8vh 0 0;
+                    border-radius: 22px 22px 0 0;
+                }
+                #floraFlowProductionProgressOverlay {
+                    padding: 0 !important;
+                    align-items: flex-end;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    launcher = document.createElement("div");
+    launcher.id = "floraFlowProductionProgressLauncher";
+    launcher.innerHTML = `
+        <button id="floraFlowProductionProgressButton" type="button" title="Production Progress">
+            <span class="progress-icon">📋</span>
+            <span>Production Progress</span>
+            <span id="floraFlowProductionProgressBadge" style="display:none;min-width:20px;height:20px;padding:0 5px;border-radius:999px;background:#dc2626;color:white;font-size:11px;align-items:center;justify-content:center;"></span>
+        </button>
+    `;
+    document.body.appendChild(launcher);
+
+    const overlay = document.createElement("div");
+    overlay.id = "floraFlowProductionProgressOverlay";
+    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:100010;background:rgba(15,23,42,.5);padding:18px;box-sizing:border-box;";
+    overlay.innerHTML = `
+        <section id="floraFlowProductionProgressPanel">
+            <header style="position:sticky;top:0;z-index:3;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:17px 18px;background:white;border-bottom:1px solid #e2e8f0;">
+                <div>
+                    <div style="font-size:21px;font-weight:850;color:#0f172a;">Production Progress</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:2px;">Follow every Pick List from creation to confirmation.</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button type="button" id="floraFlowProductionProgressRefreshBtn">Refresh</button>
+                    <button type="button" id="floraFlowProductionProgressCloseBtn" style="width:42px;height:42px;border:0;border-radius:11px;background:#e2e8f0;font-size:25px;cursor:pointer;">×</button>
+                </div>
+            </header>
+            <div style="padding:14px;">
+                <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+                    <button type="button" class="progress-filter-btn" data-filter="ACTIVE">Active</button>
+                    <button type="button" class="progress-filter-btn" data-filter="COMPLETED">Completed</button>
+                    <button type="button" class="progress-filter-btn" data-filter="ALL">All</button>
+                </div>
+                <div id="floraFlowProductionProgressStatus" style="min-height:20px;font-size:13px;color:#475569;margin-bottom:10px;"></div>
+                <div id="floraFlowProductionProgressList"></div>
+            </div>
+        </section>
+    `;
+    document.body.appendChild(overlay);
+
+    overlay.dataset.filter = "ACTIVE";
+
+    const close = function () { overlay.style.display = "none"; };
+    launcher.querySelector("#floraFlowProductionProgressButton").addEventListener("click", async function () {
+        overlay.style.display = "block";
+        await loadProductionProgressLists();
+    });
+    overlay.querySelector("#floraFlowProductionProgressCloseBtn").addEventListener("click", close);
+    overlay.querySelector("#floraFlowProductionProgressRefreshBtn").addEventListener("click", loadProductionProgressLists);
+    overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) close();
+    });
+    overlay.querySelectorAll(".progress-filter-btn").forEach(function (button) {
+        button.addEventListener("click", function () {
+            overlay.dataset.filter = button.dataset.filter || "ACTIVE";
+            renderProductionProgressLists();
+        });
+    });
+
+    return launcher;
+}
+
+async function loadProductionProgressLists() {
+    ensureProductionProgressCenter();
+    const statusElement = document.getElementById("floraFlowProductionProgressStatus");
+    if (statusElement) statusElement.textContent = "Loading production progress...";
+
+    const { data: lists, error: listError } = await supabaseClient
+        .from(PRODUCTION_PICK_LIST_TABLE)
+        .select("id, token, production_order, status, created_by, created_at, completed_by, completed_at")
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+    if (listError) {
+        console.error("Could not load production progress:", listError);
+        if (statusElement) statusElement.textContent = "Production progress could not be loaded.";
+        return [];
+    }
+
+    const listIds = (lists || []).map(function (item) { return item.id; });
+    let items = [];
+    let assignments = [];
+
+    if (listIds.length > 0) {
+        const itemResult = await supabaseClient
+            .from(PRODUCTION_PICK_ITEM_TABLE)
+            .select("id, pick_list_id, inventory_id, product, color, case_number, reserved_quantity, quantity_taken, destination, status, confirmed_by, confirmed_at")
+            .in("pick_list_id", listIds)
+            .order("id", { ascending: true });
+        if (!itemResult.error) items = itemResult.data || [];
+
+        const assignmentResult = await supabaseClient
+            .from(PRODUCTION_PICK_ASSIGNMENT_TABLE)
+            .select("pick_list_id, assigned_to, assigned_by, status, started_at, completed_at")
+            .in("pick_list_id", listIds);
+        if (!assignmentResult.error) assignments = assignmentResult.data || [];
+    }
+
+    const userMap = new Map((appUsers || []).map(function (user) {
+        return [String(user.id), user.full_name || user.email || "User"];
+    }));
+
+    productionProgressLists = (lists || []).map(function (list) {
+        const listItems = items.filter(function (item) {
+            return String(item.pick_list_id) === String(list.id);
+        });
+        const listAssignments = assignments.filter(function (assignment) {
+            return String(assignment.pick_list_id) === String(list.id);
+        }).map(function (assignment) {
+            return {
+                ...assignment,
+                assignedName: userMap.get(String(assignment.assigned_to)) || "Assigned user"
+            };
+        });
+        return { ...list, items: listItems, assignments: listAssignments };
+    });
+
+    if (statusElement) statusElement.textContent = "Updated " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    renderProductionProgressLists();
+    updateProductionProgressBadge();
+    return productionProgressLists;
+}
+
+function updateProductionProgressBadge() {
+    const badge = document.getElementById("floraFlowProductionProgressBadge");
+    if (!badge) return;
+    const activeCount = productionProgressLists.filter(function (list) {
+        return !["COMPLETED", "CANCELLED"].includes(String(list.status || "").toUpperCase());
+    }).length;
+    badge.textContent = activeCount > 99 ? "99+" : String(activeCount);
+    badge.style.display = activeCount > 0 ? "flex" : "none";
+}
+
+function renderProductionProgressLists() {
+    const container = document.getElementById("floraFlowProductionProgressList");
+    const overlay = document.getElementById("floraFlowProductionProgressOverlay");
+    if (!container || !overlay) return;
+
+    const filter = overlay.dataset.filter || "ACTIVE";
+    const visible = productionProgressLists.filter(function (list) {
+        const status = String(list.status || "PENDING").toUpperCase();
+        if (filter === "ACTIVE") return !["COMPLETED", "CANCELLED"].includes(status);
+        if (filter === "COMPLETED") return status === "COMPLETED";
+        return true;
+    });
+
+    if (visible.length === 0) {
+        container.innerHTML = `<div style="padding:34px 18px;text-align:center;color:#64748b;background:white;border-radius:14px;">No Pick Lists in this section.</div>`;
+        return;
+    }
+
+    container.innerHTML = "";
+    visible.forEach(function (list) {
+        const progress = calculateProductionPickProgress(list.items);
+        const colors = getProductionProgressColors(list.status);
+        const assignedNames = list.assignments.map(function (assignment) { return assignment.assignedName; });
+        const lastConfirmed = list.items
+            .filter(function (item) { return item.confirmed_at; })
+            .sort(function (a, b) { return new Date(b.confirmed_at) - new Date(a.confirmed_at); })[0];
+
+        const card = document.createElement("article");
+        card.style.cssText = "background:white;border:1px solid #e2e8f0;border-radius:16px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(15,23,42,.06);";
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
+                <div>
+                    <div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Production Order</div>
+                    <div style="font-size:23px;font-weight:900;color:#0f172a;margin-top:2px;">#${escapeProductionPickHtml(list.production_order || "")}</div>
+                </div>
+                <span style="padding:7px 10px;border-radius:999px;background:${colors.background};color:${colors.text};border:1px solid ${colors.border};font-size:12px;font-weight:800;">${escapeProductionPickHtml(getProductionProgressLabel(list.status))}</span>
+            </div>
+            <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-top:14px;font-size:13px;color:#475569;">
+                <div><strong style="color:#0f172a;">Created by</strong><br>${escapeProductionPickHtml(list.created_by || "Unknown")}</div>
+                <div><strong style="color:#0f172a;">Assigned to</strong><br>${escapeProductionPickHtml(assignedNames.join(", ") || "Not assigned")}</div>
+                <div><strong style="color:#0f172a;">Created</strong><br>${escapeProductionPickHtml(formatProgressCenterTime(list.created_at))}</div>
+                <div><strong style="color:#0f172a;">Boxes resolved</strong><br>${progress.resolved} of ${progress.total}</div>
+            </div>
+            <div style="margin-top:14px;">
+                <div style="display:flex;justify-content:space-between;font-size:12px;font-weight:800;color:#475569;margin-bottom:6px;"><span>Progress</span><span>${progress.percentage}%</span></div>
+                <div style="height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden;"><div style="width:${progress.percentage}%;height:100%;background:#166534;border-radius:999px;transition:width .25s ease;"></div></div>
+            </div>
+            ${lastConfirmed ? `<div style="margin-top:12px;padding:10px;border-radius:10px;background:#f8fafc;font-size:12px;color:#475569;">Last update: ${escapeProductionPickHtml(lastConfirmed.product || "Product")} · Case ${escapeProductionPickHtml(lastConfirmed.case_number || "")} · ${escapeProductionPickHtml(formatProgressCenterTime(lastConfirmed.confirmed_at))}</div>` : ""}
+            <details style="margin-top:12px;">
+                <summary style="cursor:pointer;font-weight:800;color:#334155;">View box details</summary>
+                <div style="margin-top:10px;display:grid;gap:8px;">
+                    ${(list.items || []).map(function (item) {
+                        return `<div style="padding:10px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><strong>${escapeProductionPickHtml(item.product || "Product")}</strong><br><span style="color:#64748b;">${escapeProductionPickHtml(item.color || "")} · Case ${escapeProductionPickHtml(item.case_number || "")}</span></div><div style="text-align:right;"><strong>${escapeProductionPickHtml(getProductionProgressLabel(item.status))}</strong><br><span style="color:#64748b;">${Number(item.quantity_taken || 0)} / ${Number(item.reserved_quantity || 0)} stems</span></div></div>`;
+                    }).join("") || `<div style="color:#64748b;">No box details available.</div>`}
+                </div>
+            </details>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
+                <button type="button" class="open-progress-pick" style="background:#166534;color:white;border:0;border-radius:9px;padding:10px 13px;font-weight:800;">Open Pick List</button>
+                <button type="button" class="copy-progress-link">Copy Link</button>
+            </div>
+        `;
+
+        card.querySelector(".open-progress-pick").addEventListener("click", function () {
+            window.location.href = getProductionPickLink(list.token);
+        });
+        card.querySelector(".copy-progress-link").addEventListener("click", async function () {
+            try {
+                await navigator.clipboard.writeText(getProductionPickLink(list.token));
+                this.textContent = "Copied";
+                setTimeout(() => { this.textContent = "Copy Link"; }, 1200);
+            } catch (error) {
+                alert("The Pick List link could not be copied.");
+            }
+        });
+        container.appendChild(card);
+    });
+}
+
+function startProductionProgressRefresh() {
+    ensureProductionProgressCenter();
+    if (productionProgressRefreshTimer) clearInterval(productionProgressRefreshTimer);
+    loadProductionProgressLists();
+    productionProgressRefreshTimer = setInterval(loadProductionProgressLists, 60000);
+}
+
+async function markProductionPickListInProgress(list) {
+    if (!list || String(list.status || "").toUpperCase() !== "PENDING") return;
+    const { error } = await supabaseClient
+        .from(PRODUCTION_PICK_LIST_TABLE)
+        .update({ status: "IN_PROGRESS" })
+        .eq("id", list.id)
+        .eq("status", "PENDING");
+    if (!error) {
+        list.status = "IN_PROGRESS";
+        await supabaseClient
+            .from(PRODUCTION_PICK_ASSIGNMENT_TABLE)
+            .update({ status: "IN_PROGRESS", started_at: new Date().toISOString() })
+            .eq("pick_list_id", list.id)
+            .eq("status", "PENDING");
+    }
+}
+
 async function openProductionPickListFromUrl() {
     const params = new URLSearchParams(window.location.search);
     const token = normalizeMatchText(params.get("pick") || "").replace(/\s/g, "");
@@ -8476,6 +8845,7 @@ async function openProductionPickListFromUrl() {
 
     try {
         const data = await fetchProductionPickList(token);
+        await markProductionPickListInProgress(data.list);
         buildProductionPickPage(data);
     } catch (error) {
         console.error("Could not open production pick list:", error);
@@ -8485,572 +8855,3 @@ async function openProductionPickListFromUrl() {
         );
     }
 }
-
-/* =============================================================
-   FloraFlow Production Assistant - PDF Pick List Import
-   PDF is the recommended input; screenshot remains available.
-   ============================================================= */
-
-let floraFlowPdfJsPromise = null;
-let floraFlowLastPdfAnalysis = null;
-
-function configureFloraFlowPdfWorker(pdfjs) {
-    if (!pdfjs || !pdfjs.GlobalWorkerOptions) {
-        return pdfjs;
-    }
-
-    pdfjs.GlobalWorkerOptions.workerSrc =
-        "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js";
-
-    return pdfjs;
-}
-
-function loadFloraFlowPdfJs() {
-    if (window.pdfjsLib) {
-        return Promise.resolve(
-            configureFloraFlowPdfWorker(window.pdfjsLib)
-        );
-    }
-
-    if (floraFlowPdfJsPromise) {
-        return floraFlowPdfJsPromise;
-    }
-
-    floraFlowPdfJsPromise = new Promise(function (resolve, reject) {
-        const script = document.createElement("script");
-        script.src =
-            "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js";
-
-        script.onload = function () {
-            if (!window.pdfjsLib) {
-                reject(new Error("PDF reader did not initialize."));
-                return;
-            }
-
-            resolve(
-                configureFloraFlowPdfWorker(window.pdfjsLib)
-            );
-        };
-
-        script.onerror = function () {
-            reject(new Error("PDF reader could not be loaded."));
-        };
-
-        document.head.appendChild(script);
-    });
-
-    return floraFlowPdfJsPromise;
-}
-
-function ensureProductionAssistantStyles() {
-    if (document.getElementById("floraFlowProductionAssistantStyles")) {
-        return;
-    }
-
-    const style = document.createElement("style");
-    style.id = "floraFlowProductionAssistantStyles";
-    style.textContent = `
-        #productionInputChoice {
-            margin-top: 12px;
-            padding: 18px;
-            border: 1px solid #dbe4ea;
-            border-radius: 18px;
-            background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-        }
-        .ff-input-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 14px;
-        }
-        .ff-input-card {
-            position: relative;
-            min-height: 180px;
-            padding: 18px;
-            border: 1px solid #cbd5e1;
-            border-radius: 16px;
-            background: white;
-            box-shadow: 0 5px 18px rgba(15, 23, 42, .07);
-            box-sizing: border-box;
-        }
-        .ff-input-card.recommended {
-            border: 2px solid #166534;
-            background: #f0fdf4;
-        }
-        .ff-recommended-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 5px 9px;
-            border-radius: 999px;
-            background: #166534;
-            color: white;
-            font-size: 11px;
-            font-weight: 800;
-            letter-spacing: .05em;
-            text-transform: uppercase;
-        }
-        .ff-input-action {
-            width: 100%;
-            min-height: 46px;
-            margin-top: 14px;
-            border: 0;
-            border-radius: 11px;
-            background: #166534;
-            color: white;
-            font-size: 14px;
-            font-weight: 800;
-            cursor: pointer;
-        }
-        .ff-input-action.secondary {
-            background: #334155;
-        }
-        #productionPdfDropZone.dragging {
-            outline: 3px solid #22c55e;
-            outline-offset: 3px;
-        }
-        .ff-analysis-progress {
-            margin-top: 14px;
-            padding: 14px;
-            border-radius: 13px;
-            border: 1px solid #bfdbfe;
-            background: #eff6ff;
-        }
-        .ff-progress-track {
-            height: 8px;
-            overflow: hidden;
-            margin-top: 9px;
-            border-radius: 999px;
-            background: #dbeafe;
-        }
-        .ff-progress-bar {
-            width: 0%;
-            height: 100%;
-            border-radius: inherit;
-            background: #166534;
-            transition: width .25s ease;
-        }
-        .ff-pdf-summary {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-            gap: 10px;
-            margin-bottom: 15px;
-        }
-        .ff-summary-stat {
-            padding: 13px;
-            border: 1px solid #dbe4ea;
-            border-radius: 12px;
-            background: white;
-        }
-        .ff-summary-value {
-            font-size: 23px;
-            font-weight: 850;
-            color: #14532d;
-        }
-        @media (max-width: 720px) {
-            .ff-input-grid { grid-template-columns: 1fr; }
-            .ff-pdf-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-            #productionInputChoice { padding: 12px; }
-            .ff-input-card { min-height: 0; padding: 15px; }
-        }
-    `;
-    document.head.appendChild(style);
-}
-
-function setProductionPdfProgress(percent, message, type) {
-    const wrapper = document.getElementById("productionPdfProgress");
-    const bar = document.getElementById("productionPdfProgressBar");
-    const text = document.getElementById("productionPdfProgressText");
-
-    if (!wrapper || !bar || !text) return;
-
-    wrapper.style.display = "block";
-    bar.style.width = Math.max(0, Math.min(100, Number(percent || 0))) + "%";
-    text.textContent = message || "";
-    text.style.color = type === "error" ? "#b91c1c" : "#1e3a8a";
-}
-
-function ensureProductionPdfImportUI() {
-    ensureProductionSelectionUI();
-    ensureProductionAssistantStyles();
-
-    let choice = document.getElementById("productionInputChoice");
-    if (choice) return choice;
-
-    choice = document.createElement("section");
-    choice.id = "productionInputChoice";
-    choice.innerHTML = `
-        <div style="margin-bottom:14px;">
-            <div style="font-size:22px;font-weight:850;color:#0f172a;">Production Assistant</div>
-            <div style="font-size:14px;color:#64748b;margin-top:4px;line-height:1.5;">
-                Choose the official PDF for the clearest results, or use a screenshot when the PDF is unavailable.
-            </div>
-        </div>
-
-        <div class="ff-input-grid">
-            <div class="ff-input-card recommended" id="productionPdfDropZone">
-                <span class="ff-recommended-badge">Recommended · Highest accuracy</span>
-                <div style="font-size:20px;font-weight:850;color:#14532d;margin-top:13px;">Import Pick List PDF</div>
-                <div style="font-size:13px;color:#475569;line-height:1.55;margin-top:6px;">
-                    Reads the official Axerrio document, detects the order number and extracts flower articles automatically.
-                </div>
-                <input id="productionPdfInput" type="file" accept="application/pdf,.pdf" hidden>
-                <button type="button" class="ff-input-action" id="productionPdfChooseBtn">Select PDF</button>
-                <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px;">You can also drag the PDF onto this card.</div>
-            </div>
-
-            <div class="ff-input-card">
-                <div style="font-size:20px;font-weight:850;color:#0f172a;">Analyze Screenshot</div>
-                <div style="font-size:13px;color:#475569;line-height:1.55;margin-top:8px;">
-                    Keeps the current OCR workflow as a backup. Paste a screenshot and select the area to read.
-                </div>
-                <button type="button" class="ff-input-action secondary" id="productionUseScreenshotBtn">Use Screenshot</button>
-                <div style="font-size:12px;color:#64748b;text-align:center;margin-top:8px;">Best when the PDF is not available.</div>
-            </div>
-        </div>
-
-        <div id="productionPdfProgress" class="ff-analysis-progress" style="display:none;">
-            <div id="productionPdfProgressText" style="font-size:13px;font-weight:750;color:#1e3a8a;">Preparing PDF reader...</div>
-            <div class="ff-progress-track"><div id="productionPdfProgressBar" class="ff-progress-bar"></div></div>
-        </div>
-    `;
-
-    const screenshotTool = document.getElementById("productionSelectionTool");
-    if (screenshotTool?.parentNode) {
-        screenshotTool.parentNode.insertBefore(choice, screenshotTool);
-        if (!productionSelectionImage) screenshotTool.style.display = "none";
-    }
-
-    const input = choice.querySelector("#productionPdfInput");
-    const chooseButton = choice.querySelector("#productionPdfChooseBtn");
-    const screenshotButton = choice.querySelector("#productionUseScreenshotBtn");
-    const dropZone = choice.querySelector("#productionPdfDropZone");
-
-    chooseButton.addEventListener("click", function () {
-        input.click();
-    });
-
-    input.addEventListener("change", async function () {
-        const file = input.files?.[0];
-        if (file) await processProductionPickListPdf(file);
-        input.value = "";
-    });
-
-    screenshotButton.addEventListener("click", function () {
-        screenshotTool.style.display = "block";
-        screenshotTool.scrollIntoView({ behavior: "smooth", block: "start" });
-        setProductionSelectionStatus("Paste a screenshot, then select the area containing the order and products.", "info");
-    });
-
-    ["dragenter", "dragover"].forEach(function (eventName) {
-        dropZone.addEventListener(eventName, function (event) {
-            event.preventDefault();
-            dropZone.classList.add("dragging");
-        });
-    });
-
-    ["dragleave", "drop"].forEach(function (eventName) {
-        dropZone.addEventListener(eventName, function (event) {
-            event.preventDefault();
-            dropZone.classList.remove("dragging");
-        });
-    });
-
-    dropZone.addEventListener("drop", async function (event) {
-        const file = Array.from(event.dataTransfer?.files || [])
-            .find(function (candidate) {
-                return candidate.type === "application/pdf" || /\.pdf$/i.test(candidate.name || "");
-            });
-        if (!file) {
-            alert("Please drop a PDF file.");
-            return;
-        }
-        await processProductionPickListPdf(file);
-    });
-
-    return choice;
-}
-
-function groupPdfTextItemsIntoLines(items) {
-    const groups = [];
-
-    (items || []).forEach(function (item) {
-        const text = String(item.str || "").trim();
-        if (!text) return;
-
-        const x = Number(item.transform?.[4] || 0);
-        const y = Number(item.transform?.[5] || 0);
-        let group = groups.find(function (candidate) {
-            return Math.abs(candidate.y - y) <= 2.5;
-        });
-
-        if (!group) {
-            group = { y: y, pieces: [] };
-            groups.push(group);
-        }
-
-        group.pieces.push({ x: x, text: text });
-    });
-
-    return groups
-        .sort(function (a, b) { return b.y - a.y; })
-        .map(function (group) {
-            return group.pieces
-                .sort(function (a, b) { return a.x - b.x; })
-                .map(function (piece) { return piece.text; })
-                .join(" ")
-                .replace(/\s+/g, " ")
-                .trim();
-        })
-        .filter(Boolean);
-}
-
-async function extractTextLinesFromProductionPdf(file) {
-    const pdfjs = await loadFloraFlowPdfJs();
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const loadingTask = pdfjs.getDocument({ data: bytes });
-    const pdf = await loadingTask.promise;
-    const pages = [];
-
-    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-        setProductionPdfProgress(
-            15 + Math.round((pageNumber / pdf.numPages) * 40),
-            "Reading PDF page " + pageNumber + " of " + pdf.numPages + "..."
-        );
-        const page = await pdf.getPage(pageNumber);
-        const content = await page.getTextContent();
-        pages.push(groupPdfTextItemsIntoLines(content.items));
-    }
-
-    return {
-        pageCount: pdf.numPages,
-        pages: pages,
-        lines: pages.flat(),
-        fullText: pages.map(function (lines) { return lines.join("\n"); }).join("\n")
-    };
-}
-
-function extractProductionOrderFromPdfLines(lines) {
-    const cleanLines = (lines || []).map(function (line) {
-        return String(line || "").replace(/\s+/g, " ").trim();
-    });
-
-    const titleIndex = cleanLines.findIndex(function (line) {
-        return /PRODUCTION\s+ORDER\s+PICKLIST/i.test(line);
-    });
-
-    if (titleIndex >= 0) {
-        for (let index = Math.max(0, titleIndex - 6); index < titleIndex; index++) {
-            const match = cleanLines[index].match(/^\s*(\d{4,8})\s*$/);
-            if (match) return match[1];
-        }
-    }
-
-    for (const line of cleanLines) {
-        const direct = line.match(/PRODUCTION\s*(?:ORDER|0RDER)\D{0,12}(\d{4,8})/i);
-        if (direct) return direct[1];
-    }
-
-    const firstStandalone = cleanLines
-        .map(function (line) { return line.match(/^\s*(\d{4,8})\s*$/); })
-        .find(Boolean);
-
-    return firstStandalone ? firstStandalone[1] : "";
-}
-
-function isPdfPackingOrAdministrativeLine(line) {
-    const text = normalizeMatchText(line);
-    if (!text) return true;
-
-    if (isProductionMaterialLine(text)) return true;
-
-    return [
-        "PRODUCTION ORDER PICKLIST", "INTERNAL NUMBER", "SUPPLIER",
-        "AVAILABLE FOR", "PRINTED", "UNITS ORDERED", "DELIVERED NAME",
-        "AMOUNT PROD ORDER LOT", "PARTLIST", "OPERATIONS", "ALLOCATIONS",
-        "CUSTOMER ORDER", "PACKING REMARK", "PAGE", "ALL STEMS MUST",
-        "TODOS LOS TALLOS", "CLEAR SLEEVE", "NONWOVEN KRAFT", "FOOD"
-    ].some(function (phrase) {
-        return text.includes(phrase);
-    });
-}
-
-function extractFlowerArticlesFromPdfLines(lines) {
-    const cleanLines = (lines || []).map(function (line) {
-        return String(line || "").replace(/\s+/g, " ").trim();
-    }).filter(Boolean);
-
-    const articleCandidates = [];
-
-    cleanLines.forEach(function (line) {
-        if (isPdfPackingOrAdministrativeLine(line)) return;
-
-        // Axerrio summary rows normally contain a description followed by " - " and a delivered ratio.
-        if (!/\s-\s/.test(line) || !/\b\d+\s*\/\s*\d+\b/.test(line)) return;
-
-        let article = line
-            .replace(/\s+\d{2,3}\s*CM\b.*$/i, "")
-            .replace(/\s+-\s+.*$/, "")
-            .replace(/\s+/g, " ")
-            .trim();
-
-        if (!article || isPdfPackingOrAdministrativeLine(article)) return;
-        articleCandidates.push(article);
-    });
-
-    // Fallback for a future layout that does not preserve the summary row ratio.
-    if (articleCandidates.length === 0) {
-        cleanLines.forEach(function (line) {
-            if (isPdfPackingOrAdministrativeLine(line)) return;
-            if (/\sX\s[\d,]+/i.test(line)) return;
-            if (/\+\s*\d+\s*STEMS?/i.test(line)) return;
-
-            const family = detectOperationalFamilyFromLine(line);
-            if (!family?.family) return;
-
-            const article = line
-                .replace(/\s+\d{2,3}\s*CM\b.*$/i, "")
-                .replace(/\s+-\s+.*$/, "")
-                .trim();
-            if (article) articleCandidates.push(article);
-        });
-    }
-
-    const seen = new Set();
-    return articleCandidates.filter(function (article) {
-        const key = normalizeMatchText(article);
-        if (!key || seen.has(key)) return false;
-        seen.add(key);
-        return true;
-    });
-}
-
-function prependPdfAnalysisSummary(resultsContainer, analysis, matches) {
-    if (!resultsContainer || !analysis) return;
-
-    const existing = resultsContainer.querySelector(".ff-pdf-analysis-summary");
-    if (existing) existing.remove();
-
-    const foundProducts = new Set();
-    let estimatedStems = 0;
-
-    (matches || []).forEach(function (match) {
-        if (!match?.inventoryFound) return;
-        foundProducts.add(normalizeMatchText(match.requestedProduct || match.product));
-        estimatedStems += Number(match.quantity || 0);
-    });
-
-    const articleCount = analysis.articles.length;
-    const coverage = articleCount > 0
-        ? Math.round((foundProducts.size / articleCount) * 100)
-        : 0;
-
-    const summary = document.createElement("section");
-    summary.className = "ff-pdf-analysis-summary";
-    summary.innerHTML = `
-        <div style="padding:15px;border:1px solid #86efac;border-radius:14px;background:#f0fdf4;margin-bottom:14px;">
-            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;flex-wrap:wrap;">
-                <div>
-                    <div style="font-size:12px;font-weight:850;letter-spacing:.08em;text-transform:uppercase;color:#166534;">PDF analysis complete</div>
-                    <div style="font-size:21px;font-weight:850;color:#14532d;margin-top:3px;">Production Order #${escapeProductionPickHtml(analysis.orderNumber || "Not detected")}</div>
-                    <div style="font-size:13px;color:#475569;margin-top:4px;">${escapeProductionPickHtml(analysis.fileName || "Pick List PDF")} · ${analysis.pageCount} page(s) · Text read directly</div>
-                </div>
-                <span class="ff-recommended-badge">Detection quality: 100%</span>
-            </div>
-        </div>
-        <div class="ff-pdf-summary">
-            <div class="ff-summary-stat"><div class="ff-summary-value">${articleCount}</div><div style="font-size:12px;color:#64748b;">Articles detected</div></div>
-            <div class="ff-summary-stat"><div class="ff-summary-value">${foundProducts.size}</div><div style="font-size:12px;color:#64748b;">Products with leftovers</div></div>
-            <div class="ff-summary-stat"><div class="ff-summary-value">${coverage}%</div><div style="font-size:12px;color:#64748b;">Coverage</div></div>
-            <div class="ff-summary-stat"><div class="ff-summary-value">${estimatedStems}</div><div style="font-size:12px;color:#64748b;">Available stems found</div></div>
-        </div>
-    `;
-
-    resultsContainer.insertBefore(summary, resultsContainer.firstChild);
-}
-
-async function processProductionPickListPdf(file) {
-    ensureProductionPdfImportUI();
-
-    if (!file || !(file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""))) {
-        alert("Please select a Production Pick List PDF.");
-        return;
-    }
-
-    try {
-        setProductionPdfProgress(5, "Preparing the official Pick List PDF...");
-        const extracted = await extractTextLinesFromProductionPdf(file);
-
-        setProductionPdfProgress(62, "Detecting the production order and flower articles...");
-        const orderNumber = extractProductionOrderFromPdfLines(extracted.lines);
-        const articles = extractFlowerArticlesFromPdfLines(extracted.lines);
-
-        if (!orderNumber) {
-            throw new Error("The Production Order number was not found in this PDF.");
-        }
-
-        if (articles.length === 0) {
-            throw new Error("No flower articles were detected in the Partlist section.");
-        }
-
-        ensureProductionSelectionUI();
-        productionOrderInput.value = orderNumber;
-        productionDetectedText.value = articles.join("\n");
-        productionFindLeftoversBtn.disabled = false;
-        window.lastProductionFullOcrText = extracted.fullText;
-
-        setProductionPdfProgress(76, "Comparing exact PDF article names with FloraFlow inventory...");
-
-        if (!Array.isArray(lexiflorSearchCatalog) || lexiflorSearchCatalog.length === 0) {
-            await loadLexiflorCatalog();
-        }
-
-        const products = normalizeProductionText(articles.join("\n"));
-        const matches = findInventoryMatches(products);
-
-        floraFlowLastPdfAnalysis = {
-            fileName: file.name,
-            pageCount: extracted.pageCount,
-            orderNumber: orderNumber,
-            articles: articles,
-            products: products,
-            fullText: extracted.fullText
-        };
-
-        showProductionRecommendations(matches, orderNumber);
-        const resultsContainer = document.getElementById("productionRecommendations");
-        prependPdfAnalysisSummary(resultsContainer, floraFlowLastPdfAnalysis, matches);
-
-        setProductionPdfProgress(
-            100,
-            "Ready: Production Order #" + orderNumber + " · " + articles.length + " article(s) detected.",
-            "success"
-        );
-
-        setProductionSelectionStatus(
-            "PDF processed automatically. Review the leftover cards and create the Pick List when ready.",
-            "success"
-        );
-
-        if (resultsContainer) {
-            setTimeout(function () {
-                resultsContainer.scrollIntoView({ behavior: "smooth", block: "start" });
-            }, 120);
-        }
-    } catch (error) {
-        console.error("Production PDF analysis error:", error);
-        setProductionPdfProgress(100, error?.message || String(error), "error");
-        alert("The PDF could not be analyzed. " + (error?.message || String(error)));
-    }
-}
-
-// Add the new input chooser whenever Today's Production opens.
-if (todayProductionBtn) {
-    todayProductionBtn.addEventListener("click", function () {
-        setTimeout(ensureProductionPdfImportUI, 0);
-    });
-}
-
-window.addEventListener("floraflow-auth-ready", function () {
-    if (todayProductionModal?.style.display === "block") {
-        ensureProductionPdfImportUI();
-    }
-});
