@@ -621,6 +621,15 @@ function updateSettingsCurrentUserPanel() {
         <div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Current user</div>
         <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:4px;">${getCurrentUserName()}</div>
         <div style="font-size:13px;color:#64748b;margin-top:3px;">${currentUserProfile?.email || ""} · ${normalizeAppRole(currentUserProfile?.role)}</div>`;
+
+    updateNotificationCurrentUser();
+}
+
+function updateNotificationCurrentUser() {
+    const nameElement = document.getElementById("floraFlowNotificationUserName");
+    if (nameElement) {
+        nameElement.textContent = getCurrentUserName();
+    }
 }
 
 function applyUserPermissions() {
@@ -646,54 +655,136 @@ function formatNotificationTime(value) {
 }
 
 function ensureNotificationCenter() {
-    let bell = document.getElementById("floraFlowNotificationBell");
-    if (bell) return bell;
+    let launcher = document.getElementById("floraFlowNotificationLauncher");
+    if (launcher) return launcher;
 
-    bell = document.createElement("button");
-    bell.id = "floraFlowNotificationBell";
-    bell.type = "button";
-    bell.setAttribute("aria-label", "Notifications");
-    bell.title = "Notifications";
-    bell.style.cssText = `
-        position:fixed;
-        top:18px;
-        right:78px;
-        z-index:90000;
-        width:46px;
-        height:46px;
-        border:none;
-        border-radius:14px;
-        background:#ffffff;
-        color:#14532d;
-        box-shadow:0 6px 20px rgba(15,23,42,.16);
-        cursor:pointer;
-        font-size:21px;
-        display:flex;
-        align-items:center;
-        justify-content:center;
+    if (!document.getElementById("floraFlowNotificationResponsiveStyles")) {
+        const style = document.createElement("style");
+        style.id = "floraFlowNotificationResponsiveStyles";
+        style.textContent = `
+            #floraFlowNotificationLauncher {
+                position: fixed;
+                top: 16px;
+                right: 18px;
+                z-index: 90000;
+                display: flex;
+                align-items: center;
+                gap: 10px;
+                padding: 7px;
+                border: 1px solid rgba(148, 163, 184, .35);
+                border-radius: 16px;
+                background: rgba(255, 255, 255, .96);
+                box-shadow: 0 10px 30px rgba(15, 23, 42, .16);
+                backdrop-filter: blur(12px);
+            }
+
+            #floraFlowNotificationBell {
+                position: relative;
+                width: 44px;
+                height: 44px;
+                border: 0;
+                border-radius: 12px;
+                background: #166534;
+                color: #fff;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 20px;
+                box-shadow: 0 4px 12px rgba(22, 101, 52, .25);
+            }
+
+            #floraFlowNotificationUser {
+                max-width: 180px;
+                padding-right: 8px;
+                line-height: 1.15;
+            }
+
+            #floraFlowNotificationPanel {
+                width: min(480px, calc(100vw - 32px));
+                max-height: min(86vh, 760px);
+                overflow: auto;
+                margin: 72px 18px 0 auto;
+                background: #f8fafc;
+                border-radius: 18px;
+                box-shadow: 0 24px 70px rgba(15, 23, 42, .28);
+            }
+
+            @media (max-width: 720px) {
+                #floraFlowNotificationLauncher {
+                    top: auto;
+                    right: 14px;
+                    bottom: calc(14px + env(safe-area-inset-bottom));
+                    padding: 6px;
+                    border-radius: 999px;
+                }
+
+                #floraFlowNotificationUser {
+                    display: none;
+                }
+
+                #floraFlowNotificationBell {
+                    width: 52px;
+                    height: 52px;
+                    border-radius: 999px;
+                    font-size: 22px;
+                }
+
+                #floraFlowNotificationPanel {
+                    width: 100%;
+                    max-height: 88vh;
+                    margin: 12vh 0 0;
+                    border-radius: 22px 22px 0 0;
+                }
+
+                #floraFlowNotificationOverlay {
+                    padding: 0 !important;
+                    align-items: flex-end;
+                }
+
+                #floraFlowNotificationHeader {
+                    padding: 15px !important;
+                }
+
+                #floraFlowMarkAllReadBtn {
+                    font-size: 12px;
+                    padding: 8px 10px;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
+    launcher = document.createElement("div");
+    launcher.id = "floraFlowNotificationLauncher";
+    launcher.innerHTML = `
+        <button id="floraFlowNotificationBell" type="button" aria-label="Open notifications" title="Notifications">
+            <span aria-hidden="true">🔔</span>
+            <span id="floraFlowNotificationBadge" style="
+                display:none;
+                position:absolute;
+                top:-5px;
+                right:-5px;
+                min-width:21px;
+                height:21px;
+                padding:0 5px;
+                box-sizing:border-box;
+                border-radius:999px;
+                background:#b91c1c;
+                color:white;
+                font-size:11px;
+                font-weight:800;
+                align-items:center;
+                justify-content:center;
+                border:2px solid white;
+            "></span>
+        </button>
+        <div id="floraFlowNotificationUser">
+            <div style="font-size:11px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">FloraFlow</div>
+            <div id="floraFlowNotificationUserName" style="font-size:14px;font-weight:800;color:#0f172a;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeProductionPickHtml(getCurrentUserName())}</div>
+        </div>
     `;
-    bell.innerHTML = `
-        <span aria-hidden="true">🔔</span>
-        <span id="floraFlowNotificationBadge" style="
-            display:none;
-            position:absolute;
-            top:-5px;
-            right:-5px;
-            min-width:21px;
-            height:21px;
-            padding:0 5px;
-            box-sizing:border-box;
-            border-radius:999px;
-            background:#b91c1c;
-            color:white;
-            font-size:11px;
-            font-weight:800;
-            align-items:center;
-            justify-content:center;
-            border:2px solid white;
-        "></span>
-    `;
-    document.body.appendChild(bell);
+    document.body.appendChild(launcher);
 
     const overlay = document.createElement("div");
     overlay.id = "floraFlowNotificationOverlay";
@@ -702,21 +793,13 @@ function ensureNotificationCenter() {
         position:fixed;
         inset:0;
         z-index:100000;
-        background:rgba(15,23,42,.42);
+        background:rgba(15,23,42,.46);
         padding:18px;
         box-sizing:border-box;
     `;
     overlay.innerHTML = `
-        <section style="
-            width:min(520px,100%);
-            max-height:88vh;
-            overflow:auto;
-            margin:4vh 0 0 auto;
-            background:#f8fafc;
-            border-radius:18px;
-            box-shadow:0 24px 70px rgba(15,23,42,.28);
-        ">
-            <header style="
+        <section id="floraFlowNotificationPanel">
+            <header id="floraFlowNotificationHeader" style="
                 position:sticky;
                 top:0;
                 z-index:2;
@@ -734,7 +817,7 @@ function ensureNotificationCenter() {
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                     <button type="button" id="floraFlowMarkAllReadBtn">Mark all read</button>
-                    <button type="button" id="floraFlowNotificationCloseBtn" style="width:42px;height:42px;font-size:24px;">×</button>
+                    <button type="button" id="floraFlowNotificationCloseBtn" aria-label="Close notifications" style="width:42px;height:42px;border:0;border-radius:11px;background:#e2e8f0;color:#0f172a;font-size:25px;cursor:pointer;">×</button>
                 </div>
             </header>
             <div id="floraFlowNotificationList" style="padding:14px;"></div>
@@ -742,20 +825,27 @@ function ensureNotificationCenter() {
     `;
     document.body.appendChild(overlay);
 
+    const bell = launcher.querySelector("#floraFlowNotificationBell");
     const close = function () { overlay.style.display = "none"; };
+
     bell.addEventListener("click", async function () {
         overlay.style.display = "block";
         await loadAppNotifications();
     });
-    overlay.querySelector("#floraFlowNotificationCloseBtn").addEventListener("click", close);
+
+    overlay.querySelector("#floraFlowNotificationCloseBtn")
+        .addEventListener("click", close);
+
     overlay.addEventListener("click", function (event) {
         if (event.target === overlay) close();
     });
-    overlay.querySelector("#floraFlowMarkAllReadBtn").addEventListener("click", async function () {
-        await markAllNotificationsRead();
-    });
 
-    return bell;
+    overlay.querySelector("#floraFlowMarkAllReadBtn")
+        .addEventListener("click", async function () {
+            await markAllNotificationsRead();
+        });
+
+    return launcher;
 }
 
 function renderAppNotifications() {
