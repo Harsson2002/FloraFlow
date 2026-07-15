@@ -2709,8 +2709,7 @@ if (resultsContainer) {
     }, 150);
 }
 
-const resultsContainer =
-    document.getElementById("productionRecommendations");
+
 
 const selectorTool =
     document.getElementById("productionSelectionTool");
