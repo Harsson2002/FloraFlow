@@ -4394,6 +4394,289 @@ function appendProductionShareControls(
     setTimeout(updateCount, 0);
 }
 
+
+// ============================================================
+// INLINE PRODUCTION MATCH CORRECTION
+// Edit, remove or ignore a family directly from Today's Production.
+// ============================================================
+
+function getProductionCorrectionAlias(match) {
+    return normalizeMatchText(
+        match?.learningAlias ||
+        match?.familyObservedAlias ||
+        match?.familyAlias ||
+        getSuggestedProductionAlias(match) ||
+        match?.originalOcrLine ||
+        match?.product ||
+        ""
+    );
+}
+
+async function removeAliasFromFlowerFamilies(alias) {
+    const normalizedAlias = normalizeMatchText(alias);
+    if (!normalizedAlias) return 0;
+
+    let changedRows = 0;
+
+    for (const familyRow of (flowerFamilies || [])) {
+        const aliases = Array.isArray(familyRow.aliases)
+            ? familyRow.aliases.map(normalizeMatchText).filter(Boolean)
+            : [];
+
+        if (!aliases.includes(normalizedAlias)) continue;
+
+        const updatedAliases = aliases.filter(function (value) {
+            return value !== normalizedAlias;
+        });
+
+        const query = supabaseClient
+            .from("flower_families")
+            .update({ aliases: updatedAliases.join(", ") });
+
+        const result = familyRow.id
+            ? await query.eq("id", familyRow.id)
+            : await query.ilike("family", familyRow.family);
+
+        if (result.error) throw result.error;
+        changedRows++;
+    }
+
+    return changedRows;
+}
+
+async function deactivateProductionAlias(alias) {
+    const normalizedAlias = normalizeMatchText(alias);
+    if (!normalizedAlias) {
+        throw new Error("No production alias was found for this result.");
+    }
+
+    const { data: rows, error: selectError } = await supabaseClient
+        .from("production_aliases")
+        .select("id, alias")
+        .eq("active", true)
+        .ilike("alias", normalizedAlias);
+
+    if (selectError) throw selectError;
+
+    let disabledCount = 0;
+    for (const row of (rows || [])) {
+        const { error } = await supabaseClient
+            .from("production_aliases")
+            .update({ active: false })
+            .eq("id", row.id);
+
+        if (error) throw error;
+        disabledCount++;
+    }
+
+    const familyAliasCount = await removeAliasFromFlowerFamilies(normalizedAlias);
+
+    await loadProductionAliases();
+    await loadFlowerFamilies();
+
+    return disabledCount + familyAliasCount;
+}
+
+function ensureProductionCorrectionModal() {
+    let overlay = document.getElementById("productionCorrectionOverlay");
+    if (overlay) return overlay;
+
+    overlay = document.createElement("div");
+    overlay.id = "productionCorrectionOverlay";
+    overlay.style.cssText = [
+        "display:none",
+        "position:fixed",
+        "inset:0",
+        "z-index:180000",
+        "background:rgba(15,23,42,.60)",
+        "padding:18px",
+        "box-sizing:border-box",
+        "overflow:auto"
+    ].join(";");
+
+    overlay.innerHTML = `
+        <div style="width:min(560px,100%);margin:5vh auto;background:white;border-radius:18px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                <div>
+                    <div style="font-size:11px;font-weight:900;letter-spacing:.12em;color:#a11375;text-transform:uppercase;">Today's Production</div>
+                    <div style="font-size:22px;font-weight:850;color:#111827;margin-top:4px;">Correct product family</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:4px;line-height:1.45;">Fix the result here without leaving the production order.</div>
+                </div>
+                <button id="productionCorrectionClose" type="button" style="width:42px;height:42px;padding:0;font-size:24px;">×</button>
+            </div>
+
+            <div style="margin-top:16px;padding:13px;border-radius:12px;background:#fdf2f8;border:1px solid #fbcfe8;">
+                <div style="font-size:12px;font-weight:800;color:#9d174d;">Production text / alias</div>
+                <div id="productionCorrectionAliasText" style="font-size:17px;font-weight:850;color:#4a044e;margin-top:4px;word-break:break-word;"></div>
+                <div id="productionCorrectionCurrentFamily" style="font-size:13px;color:#64748b;margin-top:5px;"></div>
+            </div>
+
+            <label style="display:block;font-weight:800;margin-top:16px;margin-bottom:7px;">Correct family</label>
+            <select id="productionCorrectionFamily" style="width:100%;box-sizing:border-box;padding:12px;border:1px solid #cbd5e1;border-radius:10px;background:white;"></select>
+
+            <div id="productionCorrectionMessage" style="min-height:20px;margin-top:11px;font-size:13px;color:#475569;"></div>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:14px;">
+                <button id="productionCorrectionSave" type="button" style="min-height:46px;background:#a11375;">✓ Save correction</button>
+                <button id="productionCorrectionRemove" type="button" style="min-height:46px;background:#fff;color:#b91c1c;border:1px solid #fecaca;">Remove wrong rule</button>
+            </div>
+            <button id="productionCorrectionIgnore" type="button" style="width:100%;margin-top:9px;min-height:44px;background:#f1f5f9;color:#334155;">Ignore only this result</button>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = function () {
+        overlay.style.display = "none";
+        overlay._match = null;
+        overlay._card = null;
+    };
+
+    overlay.querySelector("#productionCorrectionClose").addEventListener("click", close);
+    installSafeBackdropClose(overlay, close);
+
+    overlay.querySelector("#productionCorrectionIgnore").addEventListener("click", function () {
+        if (overlay._card) overlay._card.remove();
+        close();
+        setProductionSelectionStatus("The result was ignored for this analysis only.", "info");
+    });
+
+    overlay.querySelector("#productionCorrectionSave").addEventListener("click", async function () {
+        const button = this;
+        const message = overlay.querySelector("#productionCorrectionMessage");
+        const family = normalizeMatchText(overlay.querySelector("#productionCorrectionFamily").value);
+        const alias = getProductionCorrectionAlias(overlay._match);
+
+        if (!alias || !family) {
+            message.style.color = "#b91c1c";
+            message.textContent = "Choose a correct family before saving.";
+            return;
+        }
+
+        button.disabled = true;
+        message.style.color = "#1d4ed8";
+        message.textContent = "Saving the correction...";
+
+        try {
+            await saveProductionAliasLearning(alias, family);
+            message.style.color = "#166534";
+            message.textContent = alias + " is now recognized as " + family + ".";
+            setProductionSelectionStatus(message.textContent, "success");
+            setTimeout(async function () {
+                close();
+                await findLeftoversFromDetectedText();
+            }, 350);
+        } catch (error) {
+            console.error("Inline production correction error:", error);
+            message.style.color = "#b91c1c";
+            message.textContent = error?.message || String(error);
+            button.disabled = false;
+        }
+    });
+
+    overlay.querySelector("#productionCorrectionRemove").addEventListener("click", async function () {
+        const button = this;
+        const message = overlay.querySelector("#productionCorrectionMessage");
+        const alias = getProductionCorrectionAlias(overlay._match);
+
+        if (!alias) {
+            message.style.color = "#b91c1c";
+            message.textContent = "No removable alias was found for this result.";
+            return;
+        }
+
+        if (!window.confirm('Remove the learned rule for "' + alias + '"?')) return;
+
+        button.disabled = true;
+        message.style.color = "#1d4ed8";
+        message.textContent = "Removing the incorrect rule...";
+
+        try {
+            const removed = await deactivateProductionAlias(alias);
+            message.style.color = "#166534";
+            message.textContent = removed > 0
+                ? "The incorrect rule was removed."
+                : "No saved rule used that exact alias. You can still save the correct family.";
+            setProductionSelectionStatus(message.textContent, removed > 0 ? "success" : "info");
+            setTimeout(async function () {
+                close();
+                await findLeftoversFromDetectedText();
+            }, 450);
+        } catch (error) {
+            console.error("Remove production rule error:", error);
+            message.style.color = "#b91c1c";
+            message.textContent = error?.message || String(error);
+            button.disabled = false;
+        }
+    });
+
+    return overlay;
+}
+
+function openProductionCorrectionModal(match, card) {
+    if (!canManageProducts()) {
+        alert("Only authorized managers can edit production families.");
+        return;
+    }
+
+    const overlay = ensureProductionCorrectionModal();
+    const alias = getProductionCorrectionAlias(match);
+    const families = getTeachFloraFlowFamilies();
+    const familySelect = overlay.querySelector("#productionCorrectionFamily");
+
+    familySelect.innerHTML = '<option value="">Select the correct family</option>' +
+        families.map(function (family) {
+            return '<option value="' + family + '">' + family + '</option>';
+        }).join("");
+
+    const currentFamily = normalizeMatchText(match?.product || match?.family || match?.learningFamily || "");
+    if (currentFamily && families.includes(currentFamily)) {
+        familySelect.value = currentFamily;
+    }
+
+    overlay.querySelector("#productionCorrectionAliasText").textContent = alias || "Unknown alias";
+    overlay.querySelector("#productionCorrectionCurrentFamily").textContent = currentFamily
+        ? "Currently shown as: " + currentFamily
+        : "No family is currently assigned.";
+    overlay.querySelector("#productionCorrectionMessage").textContent = "Choose the right family, remove the wrong rule, or ignore this result once.";
+    overlay.querySelector("#productionCorrectionMessage").style.color = "#475569";
+    overlay.querySelector("#productionCorrectionSave").disabled = false;
+    overlay.querySelector("#productionCorrectionRemove").disabled = false;
+
+    overlay._match = match;
+    overlay._card = card;
+    overlay.style.display = "block";
+}
+
+function appendProductionCorrectionControls(card, match) {
+    if (!card || !match) return;
+
+    const wrap = document.createElement("div");
+    wrap.style.cssText = "display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid #e2e8f0;";
+
+    const editButton = document.createElement("button");
+    editButton.type = "button";
+    editButton.textContent = "Edit family";
+    editButton.disabled = !canManageProducts();
+    editButton.style.cssText = "min-height:40px;padding:9px 14px;background:#a11375;color:white;border-radius:10px;";
+    editButton.addEventListener("click", function () {
+        openProductionCorrectionModal(match, card);
+    });
+
+    const ignoreButton = document.createElement("button");
+    ignoreButton.type = "button";
+    ignoreButton.textContent = "Ignore once";
+    ignoreButton.style.cssText = "min-height:40px;padding:9px 14px;background:#f1f5f9;color:#334155;border:1px solid #cbd5e1;border-radius:10px;";
+    ignoreButton.addEventListener("click", function () {
+        card.remove();
+        setProductionSelectionStatus("The result was ignored for this analysis only.", "info");
+    });
+
+    wrap.appendChild(editButton);
+    wrap.appendChild(ignoreButton);
+    card.appendChild(wrap);
+}
+
 function showProductionRecommendations(
     matches,
     productionOrderNumber
@@ -4602,6 +4885,7 @@ function showProductionRecommendations(
 
         appendFloraFlowBrainCard(card, match);
         appendTeachFloraFlowButton(card, match);
+        appendProductionCorrectionControls(card, match);
         resultsContainer.appendChild(card);
     });
 
