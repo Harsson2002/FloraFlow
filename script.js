@@ -3365,6 +3365,8 @@ function fixProductionOcrWords(text) {
 
         // ===== GENERAL =====
         "AS50RTED": "ASSORTED"
+        
+        "EM LEEM VD MARK": "MARK",
     };
 
     for (const [wrong, correct] of Object.entries(corrections)) {
