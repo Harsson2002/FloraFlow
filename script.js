@@ -441,41 +441,193 @@ async function loadLexiflorCatalog() {
     );
 }
 
-const users = [
-    "Harsson",
-    "Ender",
-    "Henry",
-    "Maidelyn",
-    "Mark",
-    "Paulina",
-    "Sandra",
-    "Dayan",
-    "Sarymed",
-    "Thalia",
-    "Laura",
-    "Liudmila",
-    "Orlando"
+const fallbackUsers = [
+    "Harsson", "Ender", "Henry", "Maidelyn", "Mark", "Paulina",
+    "Sandra", "Dayan", "Sarymed", "Thalia", "Laura", "Liudmila", "Orlando"
 ];
 
-let currentUser = localStorage.getItem("currentUser") || "Harsson";
+let appUsers = [];
+let currentUser = "";
+let currentUserProfile = null;
+let currentAuthUser = null;
 const userSelect = document.getElementById("userSelect");
 
-users.forEach(user => {
+function normalizeAppRole(value) {
+    const role = String(value || "user").toLowerCase();
+    return ["admin", "manager", "user"].includes(role) ? role : "user";
+}
+
+function canManageProducts() {
+    const name = normalizeMatchText(currentUser);
+    return normalizeAppRole(currentUserProfile?.role) === "admin" ||
+        name === "HARSSON" || name === "MARK";
+}
+
+function canManageUsers() {
+    return normalizeAppRole(currentUserProfile?.role) === "admin";
+}
+
+function getCurrentUserName() {
+    return currentUser || currentUserProfile?.full_name || currentAuthUser?.email || "Unknown";
+}
+
+function setLegacyUserSelectVisibility() {
+    if (!userSelect) return;
+    const wrapper = userSelect.closest(".form-group, label, div") || userSelect;
+    wrapper.style.display = "none";
+    userSelect.disabled = true;
+}
+
+function syncLegacyUserSelect() {
+    if (!userSelect) return;
+    userSelect.innerHTML = "";
     const option = document.createElement("option");
-    option.value = user;
-    option.textContent = user;
+    option.value = getCurrentUserName();
+    option.textContent = getCurrentUserName();
     userSelect.appendChild(option);
-});
+    userSelect.value = getCurrentUserName();
+}
 
-userSelect.value = currentUser;
+async function loadAppUsers() {
+    const { data, error } = await supabaseClient
+        .from("app_profiles")
+        .select("id, full_name, email, role, active, department, created_at")
+        .order("full_name", { ascending: true });
 
-userSelect.addEventListener("change", function () {
-    currentUser = this.value;
+    if (error) {
+        console.error("Could not load app users:", error);
+        appUsers = fallbackUsers.map(function (name) {
+            return { full_name: name, email: "", role: "user", active: true };
+        });
+        return appUsers;
+    }
+
+    appUsers = data || [];
+    return appUsers;
+}
+
+async function loadCurrentUserProfile(authUser) {
+    const { data, error } = await supabaseClient
+        .from("app_profiles")
+        .select("id, full_name, email, role, active, department")
+        .eq("id", authUser.id)
+        .maybeSingle();
+
+    if (error) throw error;
+    if (!data) throw new Error("Your FloraFlow profile has not been created yet.");
+    if (data.active === false) throw new Error("This FloraFlow account is inactive.");
+
+    currentAuthUser = authUser;
+    currentUserProfile = data;
+    currentUser = data.full_name || authUser.email || "Unknown";
     localStorage.setItem("currentUser", currentUser);
-});
+    syncLegacyUserSelect();
+    setLegacyUserSelectVisibility();
+    updateSettingsCurrentUserPanel();
+    applyUserPermissions();
+    return data;
+}
+
+function ensureLoginOverlay() {
+    let overlay = document.getElementById("floraFlowLoginOverlay");
+    if (overlay) return overlay;
+
+    overlay = document.createElement("div");
+    overlay.id = "floraFlowLoginOverlay";
+    overlay.style.cssText = "position:fixed;inset:0;z-index:200000;background:#f1f5f9;display:none;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;";
+    overlay.innerHTML = `
+        <form id="floraFlowLoginForm" style="width:min(420px,100%);background:white;border-radius:18px;padding:24px;box-shadow:0 24px 70px rgba(15,23,42,.16);">
+            <div style="font-size:12px;font-weight:800;letter-spacing:.12em;color:#166534;text-transform:uppercase;">FloraFlow</div>
+            <h1 style="margin:6px 0 4px;font-size:27px;color:#0f172a;">Sign in</h1>
+            <p style="margin:0 0 18px;color:#64748b;font-size:14px;line-height:1.5;">Use your company account to continue.</p>
+            <label style="display:block;font-weight:700;font-size:14px;margin-bottom:12px;">Email
+                <input id="floraFlowLoginEmail" type="email" required autocomplete="username" style="width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;">
+            </label>
+            <label style="display:block;font-weight:700;font-size:14px;margin-bottom:14px;">Password
+                <input id="floraFlowLoginPassword" type="password" required autocomplete="current-password" style="width:100%;box-sizing:border-box;margin-top:6px;padding:12px;border:1px solid #cbd5e1;border-radius:10px;">
+            </label>
+            <button id="floraFlowLoginButton" type="submit" style="width:100%;padding:13px;border:none;border-radius:10px;background:#166534;color:white;font-weight:800;font-size:15px;">Sign in</button>
+            <div id="floraFlowLoginMessage" style="min-height:20px;margin-top:12px;font-size:13px;color:#b91c1c;"></div>
+        </form>`;
+    document.body.appendChild(overlay);
+
+    overlay.querySelector("#floraFlowLoginForm").addEventListener("submit", async function (event) {
+        event.preventDefault();
+        const button = overlay.querySelector("#floraFlowLoginButton");
+        const message = overlay.querySelector("#floraFlowLoginMessage");
+        button.disabled = true;
+        button.textContent = "Signing in...";
+        message.textContent = "";
+        try {
+            const email = overlay.querySelector("#floraFlowLoginEmail").value.trim();
+            const password = overlay.querySelector("#floraFlowLoginPassword").value;
+            const { data, error } = await supabaseClient.auth.signInWithPassword({ email, password });
+            if (error) throw error;
+            await loadCurrentUserProfile(data.user);
+            await loadAppUsers();
+            overlay.style.display = "none";
+            window.dispatchEvent(new CustomEvent("floraflow-auth-ready"));
+        } catch (error) {
+            message.textContent = error?.message || String(error);
+        } finally {
+            button.disabled = false;
+            button.textContent = "Sign in";
+        }
+    });
+    return overlay;
+}
+
+async function initializeFloraFlowAuth() {
+    const overlay = ensureLoginOverlay();
+    const { data } = await supabaseClient.auth.getSession();
+    const authUser = data?.session?.user || null;
+
+    if (authUser) {
+        try {
+            await loadCurrentUserProfile(authUser);
+            await loadAppUsers();
+            overlay.style.display = "none";
+            return;
+        } catch (error) {
+            console.error("FloraFlow profile error:", error);
+            await supabaseClient.auth.signOut();
+        }
+    }
+
+    overlay.style.display = "flex";
+    await new Promise(function (resolve) {
+        window.addEventListener("floraflow-auth-ready", resolve, { once: true });
+    });
+}
+
+function ensureSettingsCurrentUserPanel() {
+    if (!settingsModal || document.getElementById("settingsCurrentUserPanel")) return;
+    const panel = document.createElement("div");
+    panel.id = "settingsCurrentUserPanel";
+    panel.style.cssText = "margin:14px 0;padding:14px;border:1px solid #dbe4ea;border-radius:12px;background:#f8fafc;";
+    const content = settingsModal.querySelector(".modal-content") || settingsModal;
+    content.insertBefore(panel, content.children[1] || null);
+    updateSettingsCurrentUserPanel();
+}
+
+function updateSettingsCurrentUserPanel() {
+    const panel = document.getElementById("settingsCurrentUserPanel");
+    if (!panel) return;
+    panel.innerHTML = `
+        <div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Current user</div>
+        <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:4px;">${getCurrentUserName()}</div>
+        <div style="font-size:13px;color:#64748b;margin-top:3px;">${currentUserProfile?.email || ""} · ${normalizeAppRole(currentUserProfile?.role)}</div>`;
+}
+
+function applyUserPermissions() {
+    if (productsBtn) productsBtn.style.display = canManageProducts() ? "" : "none";
+    if (usersBtn) usersBtn.style.display = canManageUsers() ? "" : "none";
+}
 
 async function initializeFloraFlow() {
 
+    await initializeFloraFlowAuth();
+    ensureSettingsCurrentUserPanel();
     await loadInventoryFromSupabase();
     await loadHistoryFromSupabase();
     await loadFlowerFamilies();
@@ -744,9 +896,10 @@ activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
 settingsBtn.addEventListener("click", function () {
-
+    ensureSettingsCurrentUserPanel();
+    updateSettingsCurrentUserPanel();
+    applyUserPermissions();
     settingsModal.style.display = "block";
-
 });
 closeSettingsModal.addEventListener("click", function () {
 
@@ -1626,7 +1779,7 @@ if (Number(quantity) <= 0) {
                 date_received: date,
                 notes: notes,
                 status: "Available",
-                created_by: document.getElementById("userSelect").value || "Harsson"            }
+                created_by: getCurrentUserName()            }
         ])
         .select()
         .single();
@@ -2247,7 +2400,7 @@ async function addHistory(
                 before_qty: beforeQty === "-" ? null : beforeQty,
                 quantity_used: quantity === "-" ? null : quantity,
                 after_qty: afterQty === "-" ? null : afterQty,
-                user_name: document.getElementById("userSelect").value || "Harsson",
+                user_name: getCurrentUserName(),
                 details: details
             }
         ])
@@ -2976,7 +3129,7 @@ function appendFloraFlowBrainCard(card, match) {
     brainCard.style.boxShadow = "0 2px 8px rgba(15,23,42,.08)";
 
     const canTeach =
-        normalizeMatchText(currentUser) === "HARSSON";
+        canManageProducts();
 
     brainCard.innerHTML = `
         <div style="display:flex;align-items:center;gap:8px;font-weight:800;color:#166534;margin-bottom:10px;">
@@ -3001,7 +3154,7 @@ function appendFloraFlowBrainCard(card, match) {
             canTeach
                 ? ""
                 : `<div style="font-size:12px;color:#7c2d12;margin-top:8px;">
-                    Only Harsson can confirm new learning rules.
+                    Only authorized managers can confirm new learning rules.
                    </div>`
         }
     `;
@@ -3218,9 +3371,9 @@ function ensureTeachFloraFlowModal() {
                 return;
             }
 
-            if (normalizeMatchText(currentUser) !== "HARSSON") {
+            if (!canManageProducts()) {
                 message.style.color = "#b91c1c";
-                message.textContent = "Only Harsson can save new production rules.";
+                message.textContent = "Only authorized managers can save new production rules.";
                 return;
             }
 
@@ -3293,7 +3446,7 @@ function openTeachFloraFlowModal(match) {
     varietyInput.value = "";
     message.textContent = "Review the alias before saving. Keep only the production name or code.";
     message.style.color = "#475569";
-    saveButton.disabled = normalizeMatchText(currentUser) !== "HARSSON";
+    saveButton.disabled = !canManageProducts();
     saveButton.textContent = "💾 Save and Analyze Again";
 
     overlay.dataset.originalLine = match?.originalOcrLine || "";
@@ -3311,7 +3464,7 @@ function appendTeachFloraFlowButton(card, match) {
         return;
     }
 
-    const canTeach = normalizeMatchText(currentUser) === "HARSSON";
+    const canTeach = canManageProducts();
     const button = document.createElement("button");
     button.type = "button";
     button.textContent = "Teach FloraFlow";
@@ -3352,7 +3505,7 @@ function appendTeachFloraFlowButton(card, match) {
 
     if (!canTeach) {
         const note = document.createElement("div");
-        note.textContent = "Only Harsson can add new production rules.";
+        note.textContent = "Only authorized managers can add new production rules.";
         note.style.cssText = "font-size:12px;color:#7c2d12;margin-top:6px;";
         card.appendChild(note);
     }
@@ -6632,6 +6785,100 @@ function cleanProductionLine(line) {
         .trim();
 }
 
+
+// ============================================================
+// USER ACCOUNTS MANAGEMENT
+// ============================================================
+function ensureUsersManagementModal() {
+    let overlay = document.getElementById("usersManagementOverlay");
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "usersManagementOverlay";
+    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);padding:18px;box-sizing:border-box;overflow:auto;";
+    overlay.innerHTML = `
+      <div style="width:min(900px,100%);margin:4vh auto;background:white;border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);">
+        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+          <div><div style="font-size:22px;font-weight:800;color:#0f172a;">User Management</div><div style="font-size:13px;color:#64748b;margin-top:3px;">Create accounts and control access to FloraFlow.</div></div>
+          <button id="closeUsersManagementBtn" type="button" style="width:40px;height:40px;border:none;border-radius:10px;background:#0f172a;color:white;font-size:20px;">×</button>
+        </div>
+        <div style="margin-top:18px;padding:16px;border:1px solid #dbe4ea;border-radius:12px;background:#f8fafc;">
+          <div style="font-weight:800;margin-bottom:12px;">Create account</div>
+          <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:10px;">
+            <input id="newUserName" placeholder="Full name" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
+            <input id="newUserEmail" type="email" placeholder="Email" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
+            <input id="newUserPassword" type="password" placeholder="Temporary password" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
+            <select id="newUserRole" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+          </div>
+          <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:10px 16px;border:none;border-radius:9px;background:#166534;color:white;font-weight:800;">Create Account</button>
+          <div id="usersManagementMessage" style="min-height:20px;margin-top:9px;font-size:13px;color:#475569;"></div>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;"><div style="font-size:18px;font-weight:800;">All users</div><button id="refreshUsersBtn" type="button">Refresh</button></div>
+        <div id="usersManagementList" style="margin-top:10px;max-height:48vh;overflow:auto;"></div>
+      </div>`;
+    document.body.appendChild(overlay);
+    overlay.querySelector("#closeUsersManagementBtn").addEventListener("click", () => overlay.style.display = "none");
+    overlay.querySelector("#refreshUsersBtn").addEventListener("click", refreshUsersManagement);
+    overlay.querySelector("#createUserAccountBtn").addEventListener("click", createUserAccountFromSettings);
+    return overlay;
+}
+
+async function createUserAccountFromSettings() {
+    const overlay = ensureUsersManagementModal();
+    const message = overlay.querySelector("#usersManagementMessage");
+    const button = overlay.querySelector("#createUserAccountBtn");
+    if (!canManageUsers()) { message.textContent = "Only administrators can create accounts."; return; }
+    const full_name = overlay.querySelector("#newUserName").value.trim();
+    const email = overlay.querySelector("#newUserEmail").value.trim().toLowerCase();
+    const password = overlay.querySelector("#newUserPassword").value;
+    const role = normalizeAppRole(overlay.querySelector("#newUserRole").value);
+    if (!full_name || !email || password.length < 8) { message.style.color="#b91c1c"; message.textContent="Enter a name, valid email and a temporary password of at least 8 characters."; return; }
+    button.disabled = true; button.textContent = "Creating..."; message.textContent = "";
+    try {
+        const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", { body: { full_name, email, password, role } });
+        if (error) throw error;
+        if (data?.error) throw new Error(data.error);
+        message.style.color="#166534"; message.textContent = full_name + " was created successfully.";
+        overlay.querySelector("#newUserName").value=""; overlay.querySelector("#newUserEmail").value=""; overlay.querySelector("#newUserPassword").value=""; overlay.querySelector("#newUserRole").value="user";
+        await refreshUsersManagement();
+    } catch (error) {
+        console.error("Create user error:", error); message.style.color="#b91c1c"; message.textContent = error?.message || String(error);
+    } finally { button.disabled=false; button.textContent="Create Account"; }
+}
+
+async function refreshUsersManagement() {
+    await loadAppUsers();
+    const list = document.getElementById("usersManagementList");
+    if (!list) return;
+    list.innerHTML="";
+    appUsers.forEach(function (user) {
+        const card=document.createElement("div");
+        card.style.cssText="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white;";
+        card.innerHTML=`<div><div style="font-weight:800;color:#0f172a;">${user.full_name || user.email}</div><div style="font-size:13px;color:#64748b;margin-top:3px;">${user.email || ""}</div></div><div style="display:flex;gap:8px;align-items:center;"><select class="user-role-select" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select><label style="font-size:13px;display:flex;gap:5px;align-items:center;"><input class="user-active-check" type="checkbox"> Active</label></div>`;
+        const roleSelect=card.querySelector(".user-role-select"); const activeCheck=card.querySelector(".user-active-check");
+        roleSelect.value=normalizeAppRole(user.role); activeCheck.checked=user.active!==false;
+        const save=async function(){
+            const { error }=await supabaseClient.from("app_profiles").update({role:normalizeAppRole(roleSelect.value),active:activeCheck.checked}).eq("id",user.id);
+            if(error){alert("Could not update the user: "+error.message); return;} await loadAppUsers();
+        };
+        roleSelect.addEventListener("change",save); activeCheck.addEventListener("change",save); list.appendChild(card);
+    });
+}
+
+if (usersBtn) {
+    usersBtn.addEventListener("click", async function () {
+        if (!canManageUsers()) return;
+        const overlay=ensureUsersManagementModal(); overlay.style.display="block"; settingsModal.style.display="none"; await refreshUsersManagement();
+    });
+}
+
+if (logoutBtn) {
+    logoutBtn.addEventListener("click", async function () {
+        await supabaseClient.auth.signOut();
+        localStorage.removeItem("currentUser");
+        window.location.reload();
+    });
+}
+
 // ============================================================
 // PRODUCTS / FLOWER FAMILIES MANAGEMENT
 // ============================================================
@@ -7463,8 +7710,10 @@ function buildProductionPickPage(data) {
                 <div id="pickItems"></div>
                 ${isClosed ? "" : `
                     <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
-                        <label style="display:block;font-weight:700;margin-bottom:6px;">Confirmed by</label>
-                        <select id="pickConfirmedBy" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;"></select>
+                        <div style="padding:11px 12px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;background:#f8fafc;">
+                            <div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;">Confirmed by</div>
+                            <div id="pickConfirmedByName" style="font-weight:800;color:#0f172a;margin-top:3px;"></div>
+                        </div>
                         <label style="display:flex;gap:9px;align-items:flex-start;font-size:14px;line-height:1.45;margin-bottom:14px;">
                             <input type="checkbox" id="pickPhysicalCheck" style="width:19px;height:19px;margin-top:1px;">
                             I physically verified which products were taken and the quantities shown below.
@@ -7531,7 +7780,7 @@ function buildProductionPickPage(data) {
                         <select class="pick-destination" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:9px;margin-top:5px;">
                             <option value="PRODUCTION">Production</option>
                             <option value="OLD">OLD</option>
-                            <option value="DAMAGED">Damaged</option>
+                            <option value="QC_REVIEW">QC Review</option>
                             <option value="SAMPLES">Samples</option>
                         </select>
                     </label>
@@ -7546,14 +7795,10 @@ function buildProductionPickPage(data) {
         return overlay;
     }
 
-    const userSelectElement = overlay.querySelector("#pickConfirmedBy");
-    users.forEach(function (user) {
-        const option = document.createElement("option");
-        option.value = user;
-        option.textContent = user;
-        userSelectElement.appendChild(option);
-    });
-    userSelectElement.value = users.includes(currentUser) ? currentUser : users[0];
+    const confirmedByName = overlay.querySelector("#pickConfirmedByName");
+    if (confirmedByName) {
+        confirmedByName.textContent = getCurrentUserName();
+    }
 
     const toggleCardControls = function (card) {
         const selected = card.querySelector(".pick-item-selected")?.checked;
@@ -7599,7 +7844,7 @@ function buildProductionPickPage(data) {
             list,
             items,
             overlay,
-            userSelectElement.value
+            getCurrentUserName()
         );
     });
 
@@ -7650,12 +7895,6 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
     confirmButton.disabled = true;
     confirmButton.textContent = "Updating inventory...";
     statusElement.textContent = "Saving the confirmation. Do not close this page.";
-
-    currentUser = confirmedBy || currentUser;
-    localStorage.setItem("currentUser", currentUser);
-    if (userSelect) {
-        userSelect.value = currentUser;
-    }
 
     try {
         const { data: claimedList, error: claimError } = await supabaseClient
