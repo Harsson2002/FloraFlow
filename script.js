@@ -202,7 +202,7 @@ async function loadProductionAliases() {
 
     const { data, error } = await supabaseClient
         .from("production_aliases")
-        .select("alias, family, confirmed_by, active")
+        .select("id, alias, family, confirmed_by, active")
         .eq("active", true)
         .order("alias", { ascending: true });
 
@@ -215,9 +215,11 @@ async function loadProductionAliases() {
     learnedProductionAliases = (data || [])
         .map(function (item) {
             return {
+                id: item.id,
                 alias: normalizeMatchText(item.alias),
                 family: normalizeMatchText(item.family),
-                confirmedBy: item.confirmed_by || ""
+                confirmedBy: item.confirmed_by || "",
+                active: item.active !== false
             };
         })
         .filter(function (item) {
@@ -322,7 +324,7 @@ async function loadFlowerFamilies() {
 
     const { data, error } = await supabaseClient
         .from("flower_families")
-        .select("family, aliases")
+        .select("id, family, aliases, active")
         .eq("active", true)
         .order("family", { ascending: true });
 
@@ -345,11 +347,13 @@ async function loadFlowerFamilies() {
             .filter(Boolean);
 
         return {
+            id: item.id,
             family: String(item.family || "")
                 .trim()
                 .toUpperCase(),
 
-            aliases: aliases
+            aliases: aliases,
+            active: item.active !== false
         };
     });
 
@@ -7429,13 +7433,29 @@ function ensureProductsManagementModal() {
 
             <div id="productsFamiliesList" style="
                 margin-top:12px;
-                max-height:48vh;
+                max-height:38vh;
                 overflow:auto;
                 border:1px solid #e2e8f0;
                 border-radius:12px;
                 background:#f8fafc;
                 padding:10px;
             "></div>
+
+            <div style="margin-top:20px;padding-top:18px;border-top:1px solid #e2e8f0;">
+                <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;flex-wrap:wrap;">
+                    <div>
+                        <div style="font-size:18px;font-weight:800;color:#0f172a;">Learned Production Rules</div>
+                        <div style="font-size:12px;color:#64748b;margin-top:3px;">Correct or remove an alias that FloraFlow learned with the wrong family.</div>
+                    </div>
+                    <input id="productionRulesSearch" type="search" placeholder="Search alias or family..." style="
+                        width:min(330px,100%);padding:10px;border:1px solid #cbd5e1;border-radius:9px;
+                    ">
+                </div>
+                <div id="productionRulesList" style="
+                    margin-top:12px;max-height:34vh;overflow:auto;border:1px solid #e2e8f0;
+                    border-radius:12px;background:#f8fafc;padding:10px;
+                "></div>
+            </div>
         </div>
     `;
 
@@ -7454,6 +7474,9 @@ function ensureProductsManagementModal() {
 
     overlay.querySelector("#productsFamilySearch")
         .addEventListener("input", renderProductsFamiliesList);
+
+    overlay.querySelector("#productionRulesSearch")
+        .addEventListener("input", renderProductionRulesList);
 
     overlay.querySelector("#saveNewProductFamilyBtn")
         .addEventListener("click", saveNewProductFamilyFromSettings);
@@ -7498,7 +7521,9 @@ async function refreshProductsManagementData() {
         addFamilyToProductDropdown(item.family);
     });
 
+    await loadProductionAliases();
     renderProductsFamiliesList();
+    renderProductionRulesList();
 
     if (message) {
         message.textContent = "";
@@ -7571,11 +7596,84 @@ function renderProductsFamiliesList() {
                         : "No production aliases saved"}
                 </div>
             </div>
-            <button type="button" class="copy-family-name-btn" style="
-                border:1px solid #cbd5e1;background:white;border-radius:8px;
-                padding:7px 10px;cursor:pointer;white-space:nowrap;
-            ">📋 Copy</button>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
+                <button type="button" class="edit-family-aliases-btn" style="
+                    border:1px solid #d8b4d8;background:#fff7fc;color:#86156d;border-radius:8px;
+                    padding:7px 10px;cursor:pointer;white-space:nowrap;
+                ">Edit aliases</button>
+                <button type="button" class="disable-family-btn" style="
+                    border:1px solid #fecaca;background:#fff7f7;color:#b91c1c;border-radius:8px;
+                    padding:7px 10px;cursor:pointer;white-space:nowrap;
+                ">Disable</button>
+                <button type="button" class="copy-family-name-btn" style="
+                    border:1px solid #cbd5e1;background:white;color:#334155;border-radius:8px;
+                    padding:7px 10px;cursor:pointer;white-space:nowrap;
+                ">📋 Copy</button>
+            </div>
         `;
+
+        card.querySelector(".edit-family-aliases-btn")
+            .addEventListener("click", async function () {
+                const currentAliases = aliases.join(", ");
+                const edited = window.prompt(
+                    "Edit aliases for " + family + ". Separate aliases with commas. Remove a wrong alias from this list.",
+                    currentAliases
+                );
+
+                if (edited === null) return;
+
+                const cleanedAliases = String(edited)
+                    .split(",")
+                    .map(normalizeMatchText)
+                    .filter(Boolean)
+                    .filter(function (value, index, array) {
+                        return array.indexOf(value) === index;
+                    });
+
+                const { error } = await supabaseClient
+                    .from("flower_families")
+                    .update({ aliases: cleanedAliases.join(", ") })
+                    .eq("id", item.id);
+
+                if (error) {
+                    alert("The aliases could not be updated. " + error.message);
+                    return;
+                }
+
+                await loadFlowerFamilies();
+                renderProductsFamiliesList();
+                alert("Aliases updated for " + family + ".");
+            });
+
+        card.querySelector(".disable-family-btn")
+            .addEventListener("click", async function () {
+                const confirmed = window.confirm(
+                    "Disable " + family + "? It will disappear from Add Product and future family matching. Existing inventory records will not be deleted."
+                );
+
+                if (!confirmed) return;
+
+                const { error } = await supabaseClient
+                    .from("flower_families")
+                    .update({ active: false })
+                    .eq("id", item.id);
+
+                if (error) {
+                    alert("The family could not be disabled. " + error.message);
+                    return;
+                }
+
+                if (productSelect?.options?.[family]) {
+                    productSelect.removeOption(family);
+                    productSelect.refreshOptions(false);
+                }
+
+                const catalogIndex = productsCatalog.indexOf(family);
+                if (catalogIndex >= 0) productsCatalog.splice(catalogIndex, 1);
+
+                await loadFlowerFamilies();
+                renderProductsFamiliesList();
+            });
 
         card.querySelector(".copy-family-name-btn")
             .addEventListener("click", async function () {
@@ -7589,6 +7687,115 @@ function renderProductsFamiliesList() {
                     alert("Could not copy the family name.");
                 }
             });
+
+        list.appendChild(card);
+    });
+}
+
+
+function renderProductionRulesList() {
+    const list = document.getElementById("productionRulesList");
+    const searchInput = document.getElementById("productionRulesSearch");
+    if (!list) return;
+
+    const search = normalizeMatchText(searchInput?.value || "");
+    const rules = (learnedProductionAliases || [])
+        .filter(function (rule) {
+            return !search ||
+                normalizeMatchText(rule.alias).includes(search) ||
+                normalizeMatchText(rule.family).includes(search);
+        })
+        .sort(function (a, b) {
+            return String(a.alias || "").localeCompare(String(b.alias || ""));
+        });
+
+    list.innerHTML = "";
+
+    if (rules.length === 0) {
+        list.innerHTML = `<div style="padding:24px;text-align:center;color:#64748b;">No learned rules found.</div>`;
+        return;
+    }
+
+    rules.forEach(function (rule) {
+        const card = document.createElement("div");
+        card.style.cssText = [
+            "background:white",
+            "border:1px solid #e2e8f0",
+            "border-radius:10px",
+            "padding:12px",
+            "margin-bottom:8px",
+            "display:flex",
+            "justify-content:space-between",
+            "gap:12px",
+            "align-items:center"
+        ].join(";");
+
+        card.innerHTML = `
+            <div style="min-width:0;">
+                <div style="font-weight:800;color:#86156d;word-break:break-word;">${escapeProductionPickHtml(rule.alias || "")}</div>
+                <div style="font-size:13px;color:#64748b;margin-top:4px;">
+                    Assigned family: <strong>${escapeProductionPickHtml(rule.family || "")}</strong>
+                </div>
+            </div>
+            <div style="display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end;">
+                <button type="button" class="edit-production-rule-btn" style="border:1px solid #d8b4d8;background:#fff7fc;color:#86156d;border-radius:8px;padding:7px 10px;cursor:pointer;">Correct</button>
+                <button type="button" class="remove-production-rule-btn" style="border:1px solid #fecaca;background:#fff7f7;color:#b91c1c;border-radius:8px;padding:7px 10px;cursor:pointer;">Remove</button>
+            </div>`;
+
+        card.querySelector(".edit-production-rule-btn").addEventListener("click", async function () {
+            const families = getTeachFloraFlowFamilies();
+            const correctedFamily = normalizeMatchText(window.prompt(
+                "Correct family for " + rule.alias + ":\n\nExamples: CHRYSANTHEMUM, CURLY WILLOW, HYDRANGEA",
+                rule.family || ""
+            ));
+
+            if (!correctedFamily) return;
+
+            if (!families.includes(correctedFamily)) {
+                const proceed = window.confirm(
+                    correctedFamily + " is not currently in the family list. Save it anyway?"
+                );
+                if (!proceed) return;
+            }
+
+            const { error } = await supabaseClient
+                .from("production_aliases")
+                .update({
+                    family: correctedFamily,
+                    confirmed_by: getCurrentUserName(),
+                    active: true
+                })
+                .eq("id", rule.id);
+
+            if (error) {
+                alert("The rule could not be corrected. " + error.message);
+                return;
+            }
+
+            await loadProductionAliases();
+            renderProductionRulesList();
+            alert(rule.alias + " now maps to " + correctedFamily + ".");
+        });
+
+        card.querySelector(".remove-production-rule-btn").addEventListener("click", async function () {
+            const confirmed = window.confirm(
+                "Remove the learned rule " + rule.alias + " → " + rule.family + "? FloraFlow will stop forcing this assignment."
+            );
+            if (!confirmed) return;
+
+            const { error } = await supabaseClient
+                .from("production_aliases")
+                .update({ active: false })
+                .eq("id", rule.id);
+
+            if (error) {
+                alert("The rule could not be removed. " + error.message);
+                return;
+            }
+
+            await loadProductionAliases();
+            renderProductionRulesList();
+        });
 
         list.appendChild(card);
     });
