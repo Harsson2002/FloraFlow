@@ -208,6 +208,85 @@ const PRODUCTION_PICK_ASSIGNMENT_TABLE = "production_pick_assignments";
 const APP_NOTIFICATION_TABLE = "app_notifications";
 let appNotifications = [];
 let notificationRefreshTimer = null;
+let floraFlowKnownNotificationIds = new Set();
+let floraFlowNotificationsInitialized = false;
+let floraFlowLastSoundAt = 0;
+const FLORAFLOW_NOTIFICATION_SOUND_COOLDOWN = 4000;
+
+function getNotificationCategory(type) {
+    const value = String(type || "").toUpperCase();
+    if (value.includes("QC")) return "qc";
+    if (value.includes("PICKUP")) return "pickup";
+    if (value.includes("PRODUCTION") || value.includes("PICK_LIST")) return "production";
+    return "general";
+}
+
+function isNotificationCategoryEnabled(type) {
+    const category = getNotificationCategory(type);
+    if (category === "qc") return currentUserProfile?.notify_qc === true;
+    if (category === "pickup") return currentUserProfile?.notify_pickup !== false;
+    if (category === "production") return currentUserProfile?.notify_production !== false;
+    return true;
+}
+
+function isNotificationSoundEnabled() {
+    const prefs = getFloraFlowPreferences();
+    return prefs.notifications !== false && prefs.sounds !== false && currentUserProfile?.notification_sound !== false;
+}
+
+function playFloraFlowNotificationSound(force = false) {
+    if (!force && !isNotificationSoundEnabled()) return;
+    const now = Date.now();
+    if (!force && now - floraFlowLastSoundAt < FLORAFLOW_NOTIFICATION_SOUND_COOLDOWN) return;
+    floraFlowLastSoundAt = now;
+    try {
+        const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextClass) return;
+        const context = new AudioContextClass();
+        const oscillator = context.createOscillator();
+        const gain = context.createGain();
+        const volume = getFloraFlowPreferences().soundVolume || "medium";
+        const level = volume === "low" ? 0.025 : volume === "high" ? 0.065 : 0.04;
+        oscillator.type = "sine";
+        oscillator.frequency.setValueAtTime(740, context.currentTime);
+        oscillator.frequency.exponentialRampToValueAtTime(560, context.currentTime + 0.16);
+        gain.gain.setValueAtTime(level, context.currentTime);
+        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.22);
+        oscillator.connect(gain);
+        gain.connect(context.destination);
+        oscillator.start();
+        oscillator.stop(context.currentTime + 0.23);
+        oscillator.addEventListener("ended", function () { context.close().catch(function () {}); });
+    } catch (error) {
+        console.warn("FloraFlow sound could not play:", error);
+    }
+}
+
+async function showFloraFlowDeviceNotification(item) {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    if (!isNotificationCategoryEnabled(item?.type)) return;
+    const options = {
+        body: item?.message || "You have a new FloraFlow notification.",
+        icon: "/icon.png",
+        badge: "/icon.png",
+        tag: "floraflow-" + String(item?.id || Date.now()),
+        renotify: false,
+        data: { url: item?.action_url || window.location.href }
+    };
+    try {
+        const registration = await navigator.serviceWorker?.ready;
+        if (registration) await registration.showNotification(item?.title || "FloraFlow", options);
+        else new Notification(item?.title || "FloraFlow", options);
+    } catch (error) {
+        console.warn("Device notification could not be shown:", error);
+    }
+}
+
+async function requestFloraFlowNotificationPermission() {
+    if (!("Notification" in window)) return "unsupported";
+    if (Notification.permission === "granted") return "granted";
+    return await Notification.requestPermission();
+}
 
 
 async function loadProductionAliases() {
@@ -520,7 +599,7 @@ function syncLegacyUserSelect() {
 async function loadAppUsers() {
     const { data, error } = await supabaseClient
         .from("app_profiles")
-        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at, created_at")
+        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at, created_at, notify_production, notify_pickup, notify_qc, notification_sound")
         .order("full_name", { ascending: true });
 
     if (error) {
@@ -538,7 +617,7 @@ async function loadAppUsers() {
 async function loadCurrentUserProfile(authUser) {
     const { data, error } = await supabaseClient
         .from("app_profiles")
-        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at")
+        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at, notify_production, notify_pickup, notify_qc, notification_sound")
         .eq("id", authUser.id)
         .maybeSingle();
 
@@ -1131,8 +1210,23 @@ async function loadAppNotifications() {
         return [];
     }
 
-    appNotifications = data || [];
+    const incoming = data || [];
+    const newlyArrived = incoming.filter(function (item) {
+        return !floraFlowKnownNotificationIds.has(String(item.id)) && isNotificationCategoryEnabled(item.type);
+    });
+
+    appNotifications = incoming.filter(function (item) {
+        return isNotificationCategoryEnabled(item.type);
+    });
     renderAppNotifications();
+
+    if (floraFlowNotificationsInitialized && newlyArrived.length > 0 && getFloraFlowPreferences().notifications !== false) {
+        playFloraFlowNotificationSound();
+        await showFloraFlowDeviceNotification(newlyArrived[0]);
+    }
+
+    incoming.forEach(function (item) { floraFlowKnownNotificationIds.add(String(item.id)); });
+    floraFlowNotificationsInitialized = true;
     return appNotifications;
 }
 
@@ -1626,9 +1720,16 @@ function openFloraFlowPreferencePanel(section) {
     let body = "";
     if (section === "notifications") body = `
         <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
-            <span><strong>App notifications</strong><br><small>Pick lists, pickup requests and internal updates.</small></span>
+            <span><strong>App notifications</strong><br><small>Show important FloraFlow updates.</small></span>
             <input id="prefNotifications" type="checkbox" ${prefs.notifications ? "checked" : ""}>
-        </label>`;
+        </label>
+        <div style="display:grid;gap:9px;margin-top:12px;">
+            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:11px;"><span><strong>Production Orders</strong><br><small>Only when an order is assigned to this user.</small></span><input id="prefNotifyProduction" type="checkbox" ${currentUserProfile?.notify_production !== false ? "checked" : ""}></label>
+            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:11px;"><span><strong>Pickup Requests</strong><br><small>Only new pickup requests assigned to this user.</small></span><input id="prefNotifyPickup" type="checkbox" ${currentUserProfile?.notify_pickup !== false ? "checked" : ""}></label>
+            <label style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px;border:1px solid #e2e8f0;border-radius:11px;"><span><strong>QC Review</strong><br><small>Off unless QC responsibility is assigned.</small></span><input id="prefNotifyQc" type="checkbox" ${currentUserProfile?.notify_qc === true ? "checked" : ""}></label>
+        </div>
+        <button id="enableDeviceNotificationsBtn" type="button" style="width:100%;margin-top:12px;min-height:44px;background:#166534;">Enable notifications on this device</button>
+        <div id="deviceNotificationStatus" style="margin-top:8px;font-size:12px;color:#64748b;"></div>`;
     if (section === "sounds") body = `
         <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
             <span><strong>Enable sounds</strong><br><small>Play a short sound for important events.</small></span>
@@ -1640,7 +1741,8 @@ function openFloraFlowPreferencePanel(section) {
                 <option value="medium" ${prefs.soundVolume === "medium" ? "selected" : ""}>Medium</option>
                 <option value="high" ${prefs.soundVolume === "high" ? "selected" : ""}>High</option>
             </select>
-        </label>`;
+        </label>
+        <button id="testFloraFlowSoundBtn" type="button" style="width:100%;margin-top:12px;min-height:42px;background:#166534;">Test sound</button>`;
     if (section === "mobile") body = `
         <label style="display:flex;align-items:center;justify-content:space-between;gap:14px;padding:14px;border:1px solid #e2e8f0;border-radius:12px;">
             <span><strong>Compact mobile view</strong><br><small>Use tighter cards and controls on phones.</small></span>
@@ -1673,10 +1775,38 @@ function openFloraFlowPreferencePanel(section) {
         <div style="margin-top:18px;">${body}</div>
         ${["notifications","sounds","mobile","qc"].includes(section) ? '<button id="saveFloraFlowPreference" type="button" style="width:100%;margin-top:18px;min-height:46px;background:#a11375;color:white;border:0;border-radius:11px;font-weight:900;">Save settings</button>' : ''}`;
 
+    const enableDeviceButton = card.querySelector("#enableDeviceNotificationsBtn");
+    const deviceStatus = card.querySelector("#deviceNotificationStatus");
+    if (deviceStatus && "Notification" in window) {
+        deviceStatus.textContent = "Device permission: " + Notification.permission;
+    } else if (deviceStatus) {
+        deviceStatus.textContent = "Device notifications are not supported here.";
+    }
+    if (enableDeviceButton) enableDeviceButton.addEventListener("click", async function () {
+        const permission = await requestFloraFlowNotificationPermission();
+        if (deviceStatus) deviceStatus.textContent = "Device permission: " + permission;
+        if (permission === "granted") {
+            await showFloraFlowDeviceNotification({ title: "FloraFlow notifications enabled", message: "This device is ready to receive important updates.", type: "SYSTEM_TEST" });
+        }
+    });
+    const testSoundButton = card.querySelector("#testFloraFlowSoundBtn");
+    if (testSoundButton) testSoundButton.addEventListener("click", function () { playFloraFlowNotificationSound(true); });
+
     card.querySelector("#closeFloraFlowPreference").addEventListener("click", function () { overlay.style.display = "none"; });
     const save = card.querySelector("#saveFloraFlowPreference");
     if (save) save.addEventListener("click", function () {
-        if (section === "notifications") prefs.notifications = Boolean(card.querySelector("#prefNotifications")?.checked);
+        if (section === "notifications") {
+            prefs.notifications = Boolean(card.querySelector("#prefNotifications")?.checked);
+            const changes = {
+                notify_production: Boolean(card.querySelector("#prefNotifyProduction")?.checked),
+                notify_pickup: Boolean(card.querySelector("#prefNotifyPickup")?.checked),
+                notify_qc: Boolean(card.querySelector("#prefNotifyQc")?.checked)
+            };
+            Object.assign(currentUserProfile, changes);
+            supabaseClient.from("app_profiles").update(changes).eq("id", getCurrentAuthUserId()).then(function (result) {
+                if (result.error) console.error("Notification preferences could not be saved:", result.error);
+            });
+        }
         if (section === "sounds") {
             prefs.sounds = Boolean(card.querySelector("#prefSounds")?.checked);
             prefs.soundVolume = card.querySelector("#prefSoundVolume")?.value || "medium";
@@ -8411,7 +8541,7 @@ function renderUsersManagementList() {
             <div style="min-width:0;"><div style="font-weight:900;color:#2b102a;font-size:16px;word-break:break-word;">${escapeProductionPickHtml(user.full_name || user.email || "Unnamed user")}</div><div style="font-size:13px;color:#6b5b68;margin-top:3px;word-break:break-all;">${escapeProductionPickHtml(user.email || "")}</div></div>
             <span style="display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;color:${status.color};background:${status.background};white-space:nowrap;">${status.label}</span>
           </div>
-          <div class="ff-user-meta"><span class="ff-user-pill">${escapeProductionPickHtml(normalizeAppRole(user.role).toUpperCase())}</span>${user.access_type === "temporary" ? `<span class="ff-user-pill">Expires ${escapeProductionPickHtml(formatUserDate(user.access_expires_at))}</span>` : '<span class="ff-user-pill">Permanent</span>'}${user.last_sign_in_at ? `<span class="ff-user-pill">Last login ${escapeProductionPickHtml(formatUserDate(user.last_sign_in_at))}</span>` : ''}${isSelf ? '<span class="ff-user-pill">Your account</span>' : ''}</div>
+          <div class="ff-user-meta"><span class="ff-user-pill">${escapeProductionPickHtml(normalizeAppRole(user.role).toUpperCase())}</span>${user.access_type === "temporary" ? `<span class="ff-user-pill">Expires ${escapeProductionPickHtml(formatUserDate(user.access_expires_at))}</span>` : '<span class="ff-user-pill">Permanent</span>'}${user.last_sign_in_at ? `<span class="ff-user-pill">Last login ${escapeProductionPickHtml(formatUserDate(user.last_sign_in_at))}</span>` : ''}${user.notify_qc === true ? '<span class="ff-user-pill">QC alerts</span>' : ''}${user.notify_production !== false ? '<span class="ff-user-pill">Production alerts</span>' : ''}${user.notify_pickup !== false ? '<span class="ff-user-pill">Pickup alerts</span>' : ''}${isSelf ? '<span class="ff-user-pill">Your account</span>' : ''}</div>
           <div class="ff-user-actions"><button type="button" class="ff-user-edit">✏ Edit</button><button type="button" class="ff-user-password">🔑 Reset password</button><button type="button" class="ff-user-delete" ${isSelf ? "disabled" : ""}>🗑 Delete</button></div>`;
         card.querySelector(".ff-user-edit").addEventListener("click", function () { openEditUserModal(user); });
         card.querySelector(".ff-user-password").addEventListener("click", function () { resetUserPassword(user); });
@@ -8433,7 +8563,7 @@ function ensureEditUserModal() {
     overlay = document.createElement("div");
     overlay.id = "editFloraFlowUserOverlay";
     overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:190000;background:rgba(35,8,42,.68);padding:18px;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;";
-    overlay.innerHTML = `<div style="width:min(540px,100%);margin:5vh auto;background:white;border-radius:18px;padding:20px;box-shadow:0 25px 75px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;"><div><div style="font-size:11px;font-weight:900;letter-spacing:.12em;color:#a11375;text-transform:uppercase;">User Management</div><div style="font-size:22px;font-weight:900;color:#2b102a;margin-top:3px;">Edit user</div></div><button id="editFloraFlowUserClose" type="button" style="width:42px;height:42px;border:0;border-radius:11px;background:#2b102a;color:white;font-size:24px;">×</button></div><div style="display:grid;gap:11px;margin-top:17px;"><label style="font-weight:800;font-size:13px;">Full name<input id="editFloraFlowUserName" type="text" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Email<input id="editFloraFlowUserEmail" type="email" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Role<select id="editFloraFlowUserRole" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserActive" type="checkbox"> Active account</label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserTemporary" type="checkbox"> Temporary account</label><div id="editFloraFlowUserExpirationWrap"><label style="font-weight:800;font-size:13px;">Expiration date<input id="editFloraFlowUserExpiration" type="date" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label></div></div><div id="editFloraFlowUserMessage" style="min-height:20px;margin-top:11px;font-size:13px;"></div><div style="display:flex;justify-content:flex-end;gap:9px;margin-top:12px;"><button id="editFloraFlowUserCancel" type="button">Cancel</button><button id="editFloraFlowUserSave" type="button" style="background:#a11375;color:#fff;border:0;border-radius:10px;padding:11px 16px;font-weight:900;">Save changes</button></div></div>`;
+    overlay.innerHTML = `<div style="width:min(540px,100%);margin:5vh auto;background:white;border-radius:18px;padding:20px;box-shadow:0 25px 75px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;"><div><div style="font-size:11px;font-weight:900;letter-spacing:.12em;color:#a11375;text-transform:uppercase;">User Management</div><div style="font-size:22px;font-weight:900;color:#2b102a;margin-top:3px;">Edit user</div></div><button id="editFloraFlowUserClose" type="button" style="width:42px;height:42px;border:0;border-radius:11px;background:#2b102a;color:white;font-size:24px;">×</button></div><div style="display:grid;gap:11px;margin-top:17px;"><label style="font-weight:800;font-size:13px;">Full name<input id="editFloraFlowUserName" type="text" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Email<input id="editFloraFlowUserEmail" type="email" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Role<select id="editFloraFlowUserRole" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserActive" type="checkbox"> Active account</label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserTemporary" type="checkbox"> Temporary account</label><div style="padding:12px;border:1px solid #e2e8f0;border-radius:11px;"><div style="font-weight:900;margin-bottom:8px;">Assigned notification categories</div><label style="display:flex;align-items:center;gap:8px;margin-top:7px;"><input id="editFloraFlowNotifyProduction" type="checkbox"> Production Orders</label><label style="display:flex;align-items:center;gap:8px;margin-top:7px;"><input id="editFloraFlowNotifyPickup" type="checkbox"> Pickup Requests</label><label style="display:flex;align-items:center;gap:8px;margin-top:7px;"><input id="editFloraFlowNotifyQc" type="checkbox"> QC Review</label><label style="display:flex;align-items:center;gap:8px;margin-top:7px;"><input id="editFloraFlowNotificationSound" type="checkbox"> Sound enabled</label></div><div id="editFloraFlowUserExpirationWrap"><label style="font-weight:800;font-size:13px;">Expiration date<input id="editFloraFlowUserExpiration" type="date" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label></div></div><div id="editFloraFlowUserMessage" style="min-height:20px;margin-top:11px;font-size:13px;"></div><div style="display:flex;justify-content:flex-end;gap:9px;margin-top:12px;"><button id="editFloraFlowUserCancel" type="button">Cancel</button><button id="editFloraFlowUserSave" type="button" style="background:#a11375;color:#fff;border:0;border-radius:10px;padding:11px 16px;font-weight:900;">Save changes</button></div></div>`;
     document.body.appendChild(overlay);
     const close = function () { overlay.style.display = "none"; overlay._user = null; };
     overlay.querySelector("#editFloraFlowUserClose").addEventListener("click", close);
@@ -8452,6 +8582,10 @@ function openEditUserModal(user) {
     overlay.querySelector("#editFloraFlowUserRole").value = normalizeAppRole(user.role);
     overlay.querySelector("#editFloraFlowUserActive").checked = user.active !== false;
     overlay.querySelector("#editFloraFlowUserTemporary").checked = user.access_type === "temporary";
+    overlay.querySelector("#editFloraFlowNotifyProduction").checked = user.notify_production !== false;
+    overlay.querySelector("#editFloraFlowNotifyPickup").checked = user.notify_pickup !== false;
+    overlay.querySelector("#editFloraFlowNotifyQc").checked = user.notify_qc === true;
+    overlay.querySelector("#editFloraFlowNotificationSound").checked = user.notification_sound !== false;
     overlay.querySelector("#editFloraFlowUserExpiration").value = user.access_expires_at || "";
     overlay.querySelector("#editFloraFlowUserExpirationWrap").style.display = user.access_type === "temporary" ? "block" : "none";
     overlay.querySelector("#editFloraFlowUserMessage").textContent = "";
@@ -8470,11 +8604,15 @@ async function saveEditedFloraFlowUser() {
     const active = overlay.querySelector("#editFloraFlowUserActive").checked;
     const temporary = overlay.querySelector("#editFloraFlowUserTemporary").checked;
     const access_expires_at = temporary ? overlay.querySelector("#editFloraFlowUserExpiration").value : null;
+    const notify_production = overlay.querySelector("#editFloraFlowNotifyProduction").checked;
+    const notify_pickup = overlay.querySelector("#editFloraFlowNotifyPickup").checked;
+    const notify_qc = overlay.querySelector("#editFloraFlowNotifyQc").checked;
+    const notification_sound = overlay.querySelector("#editFloraFlowNotificationSound").checked;
     if (!full_name || !/^\S+@\S+\.\S+$/.test(email)) { message.style.color="#b91c1c"; message.textContent="Enter a valid name and email."; return; }
     if (temporary && !access_expires_at) { message.style.color="#b91c1c"; message.textContent="Choose an expiration date."; return; }
     button.disabled=true; button.textContent="Saving...";
     try {
-        await invokeManageUser("update_user", user.id, { changes: { full_name, email, role, active, access_type: temporary ? "temporary" : "permanent", access_expires_at } });
+        await invokeManageUser("update_user", user.id, { changes: { full_name, email, role, active, access_type: temporary ? "temporary" : "permanent", access_expires_at, notify_production, notify_pickup, notify_qc, notification_sound } });
         overlay.style.display="none"; overlay._user=null;
         await refreshUsersManagement();
     } catch (error) { message.style.color="#b91c1c"; message.textContent=error?.message || String(error); }
