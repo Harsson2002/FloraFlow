@@ -2647,9 +2647,72 @@ async function findLeftoversFromDetectedText() {
         const productionOrderNumber = extractProductionLot(editedText);
 
         showProductionRecommendations(
-            matches,
-            productionOrderNumber
+    matches,
+    productionOrderNumber
+);
+const resultsContainer =
+    document.getElementById("productionRecommendations");
+
+const selectorTool =
+    document.getElementById("productionSelectionTool");
+
+if (resultsContainer) {
+
+    resultsContainer.style.display = "block";
+    resultsContainer.style.visibility = "visible";
+    resultsContainer.style.width = "100%";
+    resultsContainer.style.boxSizing = "border-box";
+    resultsContainer.style.marginTop = "16px";
+
+    if (
+        selectorTool &&
+        selectorTool.parentNode
+    ) {
+        selectorTool.parentNode.insertBefore(
+            resultsContainer,
+            selectorTool.nextSibling
         );
+    }
+
+    setTimeout(function () {
+        resultsContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }, 150);
+}
+
+const resultsContainer =
+    document.getElementById("productionRecommendations");
+
+const selectorTool =
+    document.getElementById("productionSelectionTool");
+
+if (resultsContainer) {
+
+    resultsContainer.style.display = "block";
+    resultsContainer.style.visibility = "visible";
+    resultsContainer.style.width = "100%";
+    resultsContainer.style.boxSizing = "border-box";
+    resultsContainer.style.marginTop = "16px";
+
+    if (
+        selectorTool &&
+        selectorTool.parentNode
+    ) {
+        selectorTool.parentNode.insertBefore(
+            resultsContainer,
+            selectorTool.nextSibling
+        );
+    }
+
+    setTimeout(function () {
+        resultsContainer.scrollIntoView({
+            behavior: "smooth",
+            block: "start"
+        });
+    }, 150);
+}
 
         if (products.length === 0) {
             setProductionSelectionStatus(
