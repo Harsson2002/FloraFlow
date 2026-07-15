@@ -8173,8 +8173,9 @@ function buildProductionPickPage(data) {
 
     overlay.innerHTML = `
         <div style="max-width:780px;margin:0 auto;">
-            <div style="background:white;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(15,23,42,.1);margin-bottom:14px;">
-                <div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#166534;text-transform:uppercase;">
+            <div style="position:relative;background:white;border-radius:18px;padding:18px 64px 18px 18px;box-shadow:0 8px 30px rgba(15,23,42,.1);margin-bottom:14px;">
+                <button type="button" id="pickPageCloseButton" aria-label="Close confirmation" title="Close" style="position:absolute;top:12px;right:12px;width:42px;height:42px;padding:0;border:0;border-radius:12px;background:#f4e8f1;color:#6f155e;font-size:27px;line-height:1;display:grid;place-items:center;">×</button>
+                <div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#8a0f75;text-transform:uppercase;">
                     ${isManualPickup ? "FloraFlow Pickup Request" : "FloraFlow Pick Confirmation"}
                 </div>
                 <h1 style="font-size:25px;margin:6px 0;color:#0f172a;">
@@ -8189,7 +8190,7 @@ function buildProductionPickPage(data) {
             <div style="background:white;border-radius:18px;padding:16px;box-shadow:0 8px 30px rgba(15,23,42,.08);">
                 ${isClosed ? `
                     <div style="padding:18px;border-radius:12px;background:#ecfdf5;color:#166534;font-weight:800;text-align:center;">
-                        This pick list has already been completed.
+                        ${list.status === "CANCELLED" ? "This order was closed because no product was taken." : "This pick list has already been completed."}
                     </div>
                 ` : `
                     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
@@ -8218,11 +8219,16 @@ function buildProductionPickPage(data) {
                             <input type="checkbox" id="pickPhysicalCheck" style="width:19px;height:19px;margin-top:1px;">
                             I physically verified which products were taken and the quantities shown below.
                         </label>
-                        <button type="button" id="pickConfirmButton" disabled style="
-                            width:100%;padding:14px;border:none;border-radius:11px;background:#166534;color:white;font-size:16px;font-weight:800;
-                        ">
-                            Confirm Pick and Update Inventory
-                        </button>
+                        <div style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:10px;align-items:stretch;">
+                            <button type="button" id="pickConfirmButton" disabled style="
+                                width:100%;padding:14px;border:none;border-radius:11px;background:#8a0f75;color:white;font-size:16px;font-weight:800;
+                            ">
+                                Confirm Pick and Update Inventory
+                            </button>
+                            <button type="button" id="pickCloseWithoutPickupButton" style="padding:12px 14px;border:1px solid #d8bfd2;border-radius:11px;background:#fff7fb;color:#6f155e;font-weight:800;">
+                                Nothing Taken
+                            </button>
+                        </div>
                         <div id="pickPageStatus" style="margin-top:10px;font-size:14px;color:#475569;"></div>
                     </div>
                 `}
@@ -8232,6 +8238,15 @@ function buildProductionPickPage(data) {
 
     document.body.appendChild(overlay);
     document.body.style.overflow = "hidden";
+
+    const closePickPage = function () {
+        overlay.remove();
+        document.body.style.overflow = "";
+        const cleanUrl = window.location.origin + window.location.pathname;
+        window.history.replaceState({}, "", cleanUrl);
+    };
+
+    overlay.querySelector("#pickPageCloseButton")?.addEventListener("click", closePickPage);
 
     const itemsContainer = overlay.querySelector("#pickItems");
 
@@ -8282,6 +8297,7 @@ function buildProductionPickPage(data) {
                             <option value="OLD">OLD</option>
                             <option value="QC_REVIEW">QC Review</option>
                             <option value="SAMPLES">Samples</option>
+                            <option value="NOT_TAKEN">Not taken / Order changed</option>
                         </select>
                     </label>
                 </div>
@@ -8378,6 +8394,59 @@ function buildProductionPickPage(data) {
         );
     });
 
+    const closeWithoutPickupButton = overlay.querySelector("#pickCloseWithoutPickupButton");
+    closeWithoutPickupButton?.addEventListener("click", async function () {
+        if (!confirm("Close this order because nothing was taken? All reserved products will return to available inventory.")) return;
+        closeWithoutPickupButton.disabled = true;
+        closeWithoutPickupButton.textContent = "Closing...";
+        const statusElement = overlay.querySelector("#pickPageStatus");
+        try {
+            const now = new Date().toISOString();
+            const itemUpdates = items.map(function (item) {
+                return supabaseClient
+                    .from(PRODUCTION_PICK_ITEM_TABLE)
+                    .update({
+                        status: "NOT_TAKEN",
+                        destination: "NOT_TAKEN",
+                        quantity_taken: 0,
+                        confirmed_by: getCurrentUserName(),
+                        confirmed_at: now
+                    })
+                    .eq("id", item.id);
+            });
+            const itemResults = await Promise.all(itemUpdates);
+            const itemFailure = itemResults.find(function (result) { return result.error; });
+            if (itemFailure) throw itemFailure.error;
+
+            const { error: listError } = await supabaseClient
+                .from(PRODUCTION_PICK_LIST_TABLE)
+                .update({
+                    status: "CANCELLED",
+                    completed_by: getCurrentUserName(),
+                    completed_at: now
+                })
+                .eq("id", list.id)
+                .in("status", ["PENDING", "IN_PROGRESS"]);
+            if (listError) throw listError;
+
+            await Promise.all([
+                loadActiveProductionReservations(),
+                loadInventoryFromSupabase(),
+                loadHistoryFromSupabase()
+            ]);
+            if (typeof loadProductionProgressLists === "function") {
+                loadProductionProgressLists();
+            }
+            statusElement.innerHTML = '<div style="padding:14px;border-radius:10px;background:#fff7fb;color:#6f155e;font-weight:800;">Order closed. Nothing was taken and all reservations were released.</div>';
+            closeWithoutPickupButton.textContent = "Closed";
+        } catch (error) {
+            console.error("Close order error:", error);
+            closeWithoutPickupButton.disabled = false;
+            closeWithoutPickupButton.textContent = "Nothing Taken";
+            alert("The order could not be closed. " + (error?.message || String(error)));
+        }
+    });
+
     return overlay;
 }
 
@@ -8399,7 +8468,7 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
             ? card.querySelector(".pick-destination").value
             : "RETURN";
 
-        if (selected && (!Number.isFinite(quantity) || quantity <= 0 || quantity > available)) {
+        if (selected && destination !== "NOT_TAKEN" && (!Number.isFinite(quantity) || quantity <= 0 || quantity > available)) {
             alert(
                 "Enter a valid quantity for " + item.product +
                 " between 1 and " + available + "."
@@ -8434,7 +8503,7 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                 completed_by: confirmedBy
             })
             .eq("id", list.id)
-            .eq("status", "PENDING")
+            .in("status", ["PENDING", "IN_PROGRESS"])
             .select("id")
             .maybeSingle();
 
@@ -8449,12 +8518,13 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
         for (const decision of decisions) {
             const item = decision.item;
 
-            if (!decision.selected) {
+            if (!decision.selected || decision.destination === "NOT_TAKEN") {
+                const notTaken = decision.destination === "NOT_TAKEN";
                 const { error } = await supabaseClient
                     .from(PRODUCTION_PICK_ITEM_TABLE)
                     .update({
-                        status: "RETURNED",
-                        destination: "RETURN",
+                        status: notTaken ? "NOT_TAKEN" : "RETURNED",
+                        destination: notTaken ? "NOT_TAKEN" : "RETURN",
                         quantity_taken: 0,
                         confirmed_by: confirmedBy,
                         confirmed_at: new Date().toISOString()
@@ -8548,15 +8618,20 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
         confirmButton.textContent = "Completed";
 
         setTimeout(function () {
-            window.location.reload();
-        }, 1200);
+            overlay.remove();
+            document.body.style.overflow = "";
+            window.history.replaceState({}, "", window.location.origin + window.location.pathname);
+            if (typeof loadProductionProgressLists === "function") {
+                loadProductionProgressLists();
+            }
+        }, 350);
 
     } catch (error) {
         console.error("Pick confirmation error:", error);
 
         await supabaseClient
             .from(PRODUCTION_PICK_LIST_TABLE)
-            .update({ status: "PENDING" })
+            .update({ status: list.status === "IN_PROGRESS" ? "IN_PROGRESS" : "PENDING" })
             .eq("id", list.id)
             .eq("status", "PROCESSING");
 
@@ -8620,7 +8695,7 @@ function getProductionProgressColors(status) {
 function calculateProductionPickProgress(items) {
     const list = Array.isArray(items) ? items : [];
     const total = list.length;
-    const resolvedStatuses = new Set(["COMPLETED", "RETURNED", "CANCELLED"]);
+    const resolvedStatuses = new Set(["COMPLETED", "RETURNED", "CANCELLED", "NOT_TAKEN"]);
     const resolved = list.filter(function (item) {
         return resolvedStatuses.has(String(item.status || "").toUpperCase());
     }).length;

@@ -781,3 +781,66 @@ button:hover { background:var(--ff-forest); box-shadow:0 8px 18px rgba(23,63,53,
     .ff-recipient-grid { grid-template-columns:1fr; }
     .ff-segmented { grid-template-columns:1fr; }
 }
+
+/* ===== Lexiflor palette and confirmation refinements ===== */
+:root {
+    --ff-forest: #6f155e;
+    --ff-leaf: #9a167e;
+    --ff-mint: #f7eaf3;
+    --ff-cream: #fff9fc;
+    --ff-ink: #2d1729;
+    --ff-muted: #75636f;
+    --ff-line: #ead6e4;
+    --ff-shadow: 0 14px 40px rgba(111, 21, 94, .10);
+}
+body.ff-app { background: linear-gradient(180deg,#fff9fc 0,#f8f1f6 100%); }
+.ff-brand-header { background: linear-gradient(120deg,#5b104d,#9a167e 64%,#c31b8c); }
+.ff-brand-mark { background: rgba(255,255,255,.16); }
+button { background: var(--ff-leaf); }
+button:hover { background: var(--ff-forest); }
+#todayProductionBtn { background:#8a0f75; }
+#todayProductionBtn:hover { background:#650b56; }
+.status-available { background:#f7eaf3; color:#7b1268; }
+
+#productionPickPage {
+    overscroll-behavior: contain;
+    -webkit-overflow-scrolling: touch;
+}
+#productionPickPage .production-pick-item {
+    transition: border-color .15s ease, box-shadow .15s ease;
+}
+#productionPickPage .production-pick-item:focus-within {
+    border-color:#c06aac !important;
+    box-shadow:0 0 0 3px rgba(154,22,126,.10);
+}
+
+@media (max-width:720px) {
+    /* Keep alerts inside the app header area and away from bottom navigation. */
+    #floraFlowNotificationLauncher {
+        display:flex !important;
+        top:10px !important;
+        right:66px !important;
+        bottom:auto !important;
+        left:auto !important;
+        padding:4px !important;
+        border-radius:14px !important;
+        box-shadow:0 8px 22px rgba(73,18,62,.18) !important;
+    }
+    #floraFlowNotificationLauncher #floraFlowNotificationUser { display:none !important; }
+    #floraFlowNotificationBell {
+        width:42px !important;
+        height:42px !important;
+        border-radius:12px !important;
+        background:#8a0f75 !important;
+    }
+    #productionPickPage { padding:10px !important; }
+    #productionPickPage > div { max-width:none !important; }
+    #productionPickPage .pick-item-controls {
+        grid-template-columns:1fr !important;
+    }
+    #pickConfirmButton,
+    #pickCloseWithoutPickupButton {
+        min-height:48px;
+    }
+    #pickConfirmButton + #pickCloseWithoutPickupButton { width:100%; }
+}
