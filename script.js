@@ -2710,10 +2710,6 @@ if (resultsContainer) {
 }
 
 
-
-const selectorTool =
-    document.getElementById("productionSelectionTool");
-
 if (resultsContainer) {
 
     resultsContainer.style.display = "block";
