@@ -840,6 +840,12 @@ function ensureNotificationCenter() {
         if (event.target === overlay) close();
     });
 
+    overlay.addEventListener("touchmove", function (event) {
+        if (event.target === overlay) {
+            event.preventDefault();
+        }
+    }, { passive: false });
+
     overlay.querySelector("#floraFlowMarkAllReadBtn")
         .addEventListener("click", async function () {
             await markAllNotificationsRead();
@@ -8669,11 +8675,21 @@ function ensureProductionProgressCenter() {
             #floraFlowProductionProgressPanel {
                 width: min(900px, calc(100vw - 32px));
                 max-height: min(88vh, 860px);
-                overflow: auto;
+                overflow-y: auto;
+                overflow-x: hidden;
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
                 margin: 6vh auto 0;
                 background: #f8fafc;
                 border-radius: 20px;
                 box-shadow: 0 24px 70px rgba(15,23,42,.3);
+            }
+            body.flora-progress-open {
+                position: fixed;
+                width: 100%;
+                overflow: hidden;
+                touch-action: none;
             }
             @media (max-width: 720px) {
                 #floraFlowProductionProgressLauncher {
@@ -8752,9 +8768,33 @@ function ensureProductionProgressCenter() {
 
     overlay.dataset.filter = "ACTIVE";
 
-    const close = function () { overlay.style.display = "none"; };
+    let lockedScrollY = 0;
+
+    const lockProgressBackground = function () {
+        lockedScrollY = window.scrollY || document.documentElement.scrollTop || 0;
+        document.body.dataset.progressScrollY = String(lockedScrollY);
+        document.body.style.top = "-" + lockedScrollY + "px";
+        document.body.classList.add("flora-progress-open");
+    };
+
+    const unlockProgressBackground = function () {
+        const savedScrollY = Number(document.body.dataset.progressScrollY || lockedScrollY || 0);
+        document.body.classList.remove("flora-progress-open");
+        document.body.style.top = "";
+        delete document.body.dataset.progressScrollY;
+        window.scrollTo(0, savedScrollY);
+    };
+
+    const close = function () {
+        overlay.style.display = "none";
+        unlockProgressBackground();
+    };
+
     launcher.querySelector("#floraFlowProductionProgressButton").addEventListener("click", async function () {
-        overlay.style.display = "block";
+        lockProgressBackground();
+        overlay.style.display = "flex";
+        const panel = overlay.querySelector("#floraFlowProductionProgressPanel");
+        if (panel) panel.scrollTop = 0;
         await loadProductionProgressLists();
     });
     overlay.querySelector("#floraFlowProductionProgressCloseBtn").addEventListener("click", close);
