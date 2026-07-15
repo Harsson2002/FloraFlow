@@ -9910,11 +9910,23 @@ window.addEventListener("floraflow-auth-ready", function () {
 
     function syncScrollLock() {
         syncQueued = false;
+
+        const openOverlays = getOpenOverlays();
+
+        // The header notification bell belongs only to the main screen.
+        // Hide it whenever Progress, Production confirmation, Settings,
+        // or another full-screen workspace is open.
+        document.body.classList.toggle(
+            "ff-secondary-view-open",
+            openOverlays.length > 0
+        );
+
         if (!MOBILE_QUERY.matches) {
             unlockPageScroll();
             return;
         }
-        if (getOpenOverlays().length > 0) lockPageScroll();
+
+        if (openOverlays.length > 0) lockPageScroll();
         else unlockPageScroll();
     }
 
