@@ -211,6 +211,8 @@ let notificationRefreshTimer = null;
 let floraFlowKnownNotificationIds = new Set();
 let floraFlowNotificationsInitialized = false;
 let floraFlowLastSoundAt = 0;
+let floraFlowAudioContext = null;
+let floraFlowAudioUnlocked = false;
 const FLORAFLOW_NOTIFICATION_SOUND_COOLDOWN = 4000;
 
 function getNotificationCategory(type) {
@@ -234,33 +236,92 @@ function isNotificationSoundEnabled() {
     return prefs.notifications !== false && prefs.sounds !== false && currentUserProfile?.notification_sound !== false;
 }
 
-function playFloraFlowNotificationSound(force = false) {
-    if (!force && !isNotificationSoundEnabled()) return;
-    const now = Date.now();
-    if (!force && now - floraFlowLastSoundAt < FLORAFLOW_NOTIFICATION_SOUND_COOLDOWN) return;
-    floraFlowLastSoundAt = now;
+async function unlockFloraFlowAudio() {
     try {
         const AudioContextClass = window.AudioContext || window.webkitAudioContext;
-        if (!AudioContextClass) return;
-        const context = new AudioContextClass();
-        const oscillator = context.createOscillator();
-        const gain = context.createGain();
-        const volume = getFloraFlowPreferences().soundVolume || "medium";
-        const level = volume === "low" ? 0.025 : volume === "high" ? 0.065 : 0.04;
-        oscillator.type = "sine";
-        oscillator.frequency.setValueAtTime(740, context.currentTime);
-        oscillator.frequency.exponentialRampToValueAtTime(560, context.currentTime + 0.16);
-        gain.gain.setValueAtTime(level, context.currentTime);
-        gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.22);
-        oscillator.connect(gain);
-        gain.connect(context.destination);
-        oscillator.start();
-        oscillator.stop(context.currentTime + 0.23);
-        oscillator.addEventListener("ended", function () { context.close().catch(function () {}); });
+        if (!AudioContextClass) return false;
+
+        if (!floraFlowAudioContext || floraFlowAudioContext.state === "closed") {
+            floraFlowAudioContext = new AudioContextClass();
+        }
+
+        if (floraFlowAudioContext.state === "suspended") {
+            await floraFlowAudioContext.resume();
+        }
+
+        // A silent buffer created from a real user gesture unlocks audio on
+        // iPhone, Android and desktop browsers without bothering the user.
+        const buffer = floraFlowAudioContext.createBuffer(1, 1, 22050);
+        const source = floraFlowAudioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(floraFlowAudioContext.destination);
+        source.start(0);
+
+        floraFlowAudioUnlocked = floraFlowAudioContext.state === "running";
+        return floraFlowAudioUnlocked;
     } catch (error) {
-        console.warn("FloraFlow sound could not play:", error);
+        console.warn("FloraFlow audio unlock failed:", error);
+        return false;
     }
 }
+
+async function playFloraFlowNotificationSound(force = false) {
+    if (!force && !isNotificationSoundEnabled()) return false;
+
+    const now = Date.now();
+    if (!force && now - floraFlowLastSoundAt < FLORAFLOW_NOTIFICATION_SOUND_COOLDOWN) {
+        return false;
+    }
+
+    const unlocked = await unlockFloraFlowAudio();
+    if (!unlocked || !floraFlowAudioContext) return false;
+
+    floraFlowLastSoundAt = now;
+
+    try {
+        const context = floraFlowAudioContext;
+        const prefs = getFloraFlowPreferences();
+        const volume = prefs.soundVolume || "medium";
+        const level = volume === "low" ? 0.08 : volume === "high" ? 0.22 : 0.14;
+        const startedAt = context.currentTime + 0.015;
+
+        const master = context.createGain();
+        master.gain.setValueAtTime(0.0001, startedAt);
+        master.gain.exponentialRampToValueAtTime(level, startedAt + 0.015);
+        master.gain.exponentialRampToValueAtTime(0.0001, startedAt + 0.48);
+        master.connect(context.destination);
+
+        const first = context.createOscillator();
+        first.type = "sine";
+        first.frequency.setValueAtTime(660, startedAt);
+        first.frequency.exponentialRampToValueAtTime(780, startedAt + 0.16);
+        first.connect(master);
+        first.start(startedAt);
+        first.stop(startedAt + 0.22);
+
+        const second = context.createOscillator();
+        second.type = "sine";
+        second.frequency.setValueAtTime(880, startedAt + 0.20);
+        second.frequency.exponentialRampToValueAtTime(740, startedAt + 0.42);
+        second.connect(master);
+        second.start(startedAt + 0.20);
+        second.stop(startedAt + 0.46);
+
+        return true;
+    } catch (error) {
+        console.warn("FloraFlow sound could not play:", error);
+        return false;
+    }
+}
+
+// Unlock audio after the first deliberate interaction. This is required by
+// mobile browsers before sounds may play later for incoming notifications.
+["pointerdown", "touchend", "keydown"].forEach(function (eventName) {
+    document.addEventListener(eventName, function unlockOnce() {
+        unlockFloraFlowAudio();
+        document.removeEventListener(eventName, unlockOnce);
+    }, { once: true, passive: true });
+});
 
 async function showFloraFlowDeviceNotification(item) {
     if (!("Notification" in window) || Notification.permission !== "granted") return;
@@ -1790,7 +1851,17 @@ function openFloraFlowPreferencePanel(section) {
         }
     });
     const testSoundButton = card.querySelector("#testFloraFlowSoundBtn");
-    if (testSoundButton) testSoundButton.addEventListener("click", function () { playFloraFlowNotificationSound(true); });
+    if (testSoundButton) testSoundButton.addEventListener("click", async function () {
+        const originalText = testSoundButton.textContent;
+        testSoundButton.disabled = true;
+        testSoundButton.textContent = "Playing...";
+        const played = await playFloraFlowNotificationSound(true);
+        testSoundButton.textContent = played ? "Sound played ✓" : "Sound blocked — tap again";
+        setTimeout(function () {
+            testSoundButton.disabled = false;
+            testSoundButton.textContent = originalText;
+        }, 1400);
+    });
 
     card.querySelector("#closeFloraFlowPreference").addEventListener("click", function () { overlay.style.display = "none"; });
     const save = card.querySelector("#saveFloraFlowPreference");
