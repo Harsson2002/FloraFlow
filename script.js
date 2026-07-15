@@ -192,6 +192,10 @@ let learnedProductionAliases = [];
 let activeProductionReservations = new Map();
 const PRODUCTION_PICK_LIST_TABLE = "production_pick_lists";
 const PRODUCTION_PICK_ITEM_TABLE = "production_pick_items";
+const PRODUCTION_PICK_ASSIGNMENT_TABLE = "production_pick_assignments";
+const APP_NOTIFICATION_TABLE = "app_notifications";
+let appNotifications = [];
+let notificationRefreshTimer = null;
 
 
 async function loadProductionAliases() {
@@ -624,6 +628,303 @@ function applyUserPermissions() {
     if (usersBtn) usersBtn.style.display = canManageUsers() ? "" : "none";
 }
 
+
+function getCurrentAuthUserId() {
+    return currentAuthUser?.id || currentUserProfile?.id || "";
+}
+
+function formatNotificationTime(value) {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return date.toLocaleString([], {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit"
+    });
+}
+
+function ensureNotificationCenter() {
+    let bell = document.getElementById("floraFlowNotificationBell");
+    if (bell) return bell;
+
+    bell = document.createElement("button");
+    bell.id = "floraFlowNotificationBell";
+    bell.type = "button";
+    bell.setAttribute("aria-label", "Notifications");
+    bell.title = "Notifications";
+    bell.style.cssText = `
+        position:fixed;
+        top:18px;
+        right:78px;
+        z-index:90000;
+        width:46px;
+        height:46px;
+        border:none;
+        border-radius:14px;
+        background:#ffffff;
+        color:#14532d;
+        box-shadow:0 6px 20px rgba(15,23,42,.16);
+        cursor:pointer;
+        font-size:21px;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+    `;
+    bell.innerHTML = `
+        <span aria-hidden="true">🔔</span>
+        <span id="floraFlowNotificationBadge" style="
+            display:none;
+            position:absolute;
+            top:-5px;
+            right:-5px;
+            min-width:21px;
+            height:21px;
+            padding:0 5px;
+            box-sizing:border-box;
+            border-radius:999px;
+            background:#b91c1c;
+            color:white;
+            font-size:11px;
+            font-weight:800;
+            align-items:center;
+            justify-content:center;
+            border:2px solid white;
+        "></span>
+    `;
+    document.body.appendChild(bell);
+
+    const overlay = document.createElement("div");
+    overlay.id = "floraFlowNotificationOverlay";
+    overlay.style.cssText = `
+        display:none;
+        position:fixed;
+        inset:0;
+        z-index:100000;
+        background:rgba(15,23,42,.42);
+        padding:18px;
+        box-sizing:border-box;
+    `;
+    overlay.innerHTML = `
+        <section style="
+            width:min(520px,100%);
+            max-height:88vh;
+            overflow:auto;
+            margin:4vh 0 0 auto;
+            background:#f8fafc;
+            border-radius:18px;
+            box-shadow:0 24px 70px rgba(15,23,42,.28);
+        ">
+            <header style="
+                position:sticky;
+                top:0;
+                z-index:2;
+                display:flex;
+                align-items:center;
+                justify-content:space-between;
+                gap:12px;
+                padding:17px 18px;
+                background:white;
+                border-bottom:1px solid #e2e8f0;
+            ">
+                <div>
+                    <div style="font-size:20px;font-weight:850;color:#0f172a;">Notifications</div>
+                    <div style="font-size:13px;color:#64748b;margin-top:2px;">Pick lists and internal updates</div>
+                </div>
+                <div style="display:flex;gap:8px;align-items:center;">
+                    <button type="button" id="floraFlowMarkAllReadBtn">Mark all read</button>
+                    <button type="button" id="floraFlowNotificationCloseBtn" style="width:42px;height:42px;font-size:24px;">×</button>
+                </div>
+            </header>
+            <div id="floraFlowNotificationList" style="padding:14px;"></div>
+        </section>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = function () { overlay.style.display = "none"; };
+    bell.addEventListener("click", async function () {
+        overlay.style.display = "block";
+        await loadAppNotifications();
+    });
+    overlay.querySelector("#floraFlowNotificationCloseBtn").addEventListener("click", close);
+    overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) close();
+    });
+    overlay.querySelector("#floraFlowMarkAllReadBtn").addEventListener("click", async function () {
+        await markAllNotificationsRead();
+    });
+
+    return bell;
+}
+
+function renderAppNotifications() {
+    ensureNotificationCenter();
+    const list = document.getElementById("floraFlowNotificationList");
+    const badge = document.getElementById("floraFlowNotificationBadge");
+    if (!list || !badge) return;
+
+    const unreadCount = appNotifications.filter(function (item) {
+        return !item.is_read;
+    }).length;
+
+    badge.textContent = unreadCount > 99 ? "99+" : String(unreadCount);
+    badge.style.display = unreadCount > 0 ? "flex" : "none";
+
+    if (appNotifications.length === 0) {
+        list.innerHTML = `
+            <div style="padding:34px 18px;text-align:center;color:#64748b;background:white;border-radius:14px;">
+                No notifications yet.
+            </div>
+        `;
+        return;
+    }
+
+    list.innerHTML = "";
+    appNotifications.forEach(function (item) {
+        const card = document.createElement("button");
+        card.type = "button";
+        card.style.cssText = `
+            width:100%;
+            text-align:left;
+            border:1px solid ${item.is_read ? "#e2e8f0" : "#86efac"};
+            border-left:5px solid ${item.is_read ? "#cbd5e1" : "#166534"};
+            border-radius:13px;
+            padding:14px;
+            margin-bottom:10px;
+            background:${item.is_read ? "white" : "#f0fdf4"};
+            cursor:pointer;
+        `;
+        card.innerHTML = `
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:flex-start;">
+                <div style="font-weight:800;color:#0f172a;">${escapeProductionPickHtml(item.title || "Notification")}</div>
+                <div style="font-size:11px;color:#64748b;white-space:nowrap;">${escapeProductionPickHtml(formatNotificationTime(item.created_at))}</div>
+            </div>
+            <div style="font-size:13px;color:#475569;line-height:1.5;margin-top:5px;">${escapeProductionPickHtml(item.message || "")}</div>
+            ${item.sender_name ? `<div style="font-size:12px;color:#64748b;margin-top:7px;">From: ${escapeProductionPickHtml(item.sender_name)}</div>` : ""}
+        `;
+        card.addEventListener("click", async function () {
+            await openAppNotification(item);
+        });
+        list.appendChild(card);
+    });
+}
+
+async function loadAppNotifications() {
+    const userId = getCurrentAuthUserId();
+    if (!userId) return [];
+
+    const { data, error } = await supabaseClient
+        .from(APP_NOTIFICATION_TABLE)
+        .select("id, user_id, sender_id, sender_name, title, message, type, reference_id, action_url, is_read, created_at")
+        .eq("user_id", userId)
+        .order("created_at", { ascending: false })
+        .limit(100);
+
+    if (error) {
+        console.error("Could not load notifications:", error);
+        return [];
+    }
+
+    appNotifications = data || [];
+    renderAppNotifications();
+    return appNotifications;
+}
+
+async function markNotificationRead(notificationId) {
+    if (!notificationId) return;
+    const { error } = await supabaseClient
+        .from(APP_NOTIFICATION_TABLE)
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("id", notificationId)
+        .eq("user_id", getCurrentAuthUserId());
+    if (error) throw error;
+}
+
+async function markAllNotificationsRead() {
+    const userId = getCurrentAuthUserId();
+    if (!userId) return;
+    const { error } = await supabaseClient
+        .from(APP_NOTIFICATION_TABLE)
+        .update({ is_read: true, read_at: new Date().toISOString() })
+        .eq("user_id", userId)
+        .eq("is_read", false);
+    if (error) {
+        alert("Notifications could not be updated. " + error.message);
+        return;
+    }
+    await loadAppNotifications();
+}
+
+async function openAppNotification(item) {
+    try {
+        if (!item.is_read) {
+            await markNotificationRead(item.id);
+            item.is_read = true;
+            renderAppNotifications();
+        }
+        if (item.action_url) {
+            window.location.href = item.action_url;
+        }
+    } catch (error) {
+        console.error("Notification open error:", error);
+    }
+}
+
+function startNotificationRefresh() {
+    ensureNotificationCenter();
+    if (notificationRefreshTimer) {
+        clearInterval(notificationRefreshTimer);
+    }
+    loadAppNotifications();
+    notificationRefreshTimer = setInterval(loadAppNotifications, 60000);
+}
+
+function getAssignableAppUsers() {
+    return (appUsers || []).filter(function (user) {
+        return user.active !== false && user.id && user.id !== getCurrentAuthUserId();
+    });
+}
+
+async function assignProductionPickListInternally(pickList, recipientIds) {
+    const uniqueRecipientIds = Array.from(new Set(recipientIds || [])).filter(Boolean);
+    if (uniqueRecipientIds.length === 0) return;
+
+    const assignments = uniqueRecipientIds.map(function (userId) {
+        return {
+            pick_list_id: pickList.id,
+            assigned_to: userId,
+            assigned_by: getCurrentAuthUserId(),
+            status: "PENDING"
+        };
+    });
+
+    const { error: assignmentError } = await supabaseClient
+        .from(PRODUCTION_PICK_ASSIGNMENT_TABLE)
+        .insert(assignments);
+    if (assignmentError) throw assignmentError;
+
+    const actionUrl = window.location.origin + window.location.pathname + "?pick=" + encodeURIComponent(pickList.token);
+    const notifications = uniqueRecipientIds.map(function (userId) {
+        return {
+            user_id: userId,
+            sender_id: getCurrentAuthUserId(),
+            sender_name: getCurrentUserName(),
+            title: "New production pick list",
+            message: "Production Order #" + pickList.order + " is ready for review and pickup confirmation.",
+            type: "PRODUCTION_PICK_LIST",
+            reference_id: String(pickList.id),
+            action_url: actionUrl,
+            is_read: false
+        };
+    });
+
+    const { error: notificationError } = await supabaseClient
+        .from(APP_NOTIFICATION_TABLE)
+        .insert(notifications);
+    if (notificationError) throw notificationError;
+}
+
 async function initializeFloraFlow() {
 
     await initializeFloraFlowAuth();
@@ -634,6 +935,7 @@ async function initializeFloraFlow() {
     await loadProductionAliases();
     await loadLexiflorCatalog();
     await loadActiveProductionReservations();
+    startNotificationRefresh();
     await openProductionPickListFromUrl();
 
     console.log(
@@ -7441,7 +7743,8 @@ async function shareProductionList(
     productionOrderNumber,
     selectedMatches,
     statusElement,
-    shareButton
+    shareButton,
+    recipientIds = []
 ) {
     if (!Array.isArray(selectedMatches) || selectedMatches.length === 0) {
         alert("Select at least one leftover product first.");
@@ -7476,6 +7779,11 @@ async function shareProductionList(
             selectedMatches
         );
 
+        await assignProductionPickListInternally(
+            pickList,
+            recipientIds
+        );
+
         const shareText = buildProductionPickShareText(
             orderNumber,
             selectedMatches,
@@ -7500,6 +7808,7 @@ async function shareProductionList(
         if (statusElement) {
             statusElement.innerHTML = `
                 <strong>Pick list created and boxes reserved.</strong><br>
+                ${recipientIds.length ? `<span>Sent internally to ${recipientIds.length} user(s).</span><br>` : ""}
                 <a href="${pickList.link}" target="_blank" rel="noopener">
                     Open confirmation link
                 </a>
@@ -7562,6 +7871,11 @@ function appendProductionShareControls(
             Selected boxes will be reserved immediately and removed from future recommendations.
             The shared link lets the warehouse confirm quantities and destination.
         </div>
+        <div class="production-internal-recipients" style="margin-bottom:12px;">
+            <div style="font-size:13px;font-weight:800;color:#334155;margin-bottom:7px;">Send internally to</div>
+            <div class="production-recipient-list" style="display:flex;gap:8px;flex-wrap:wrap;"></div>
+            <div style="font-size:12px;color:#64748b;margin-top:6px;">Optional. Selected users receive a notification inside FloraFlow.</div>
+        </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
             <button type="button" class="production-select-all">Select All</button>
             <button type="button" class="production-clear-selection">Clear</button>
@@ -7585,6 +7899,21 @@ function appendProductionShareControls(
     const countElement = controls.querySelector(".production-share-count");
     const statusElement = controls.querySelector(".production-share-status");
     const shareButton = controls.querySelector(".production-share-list");
+    const recipientList = controls.querySelector(".production-recipient-list");
+
+    getAssignableAppUsers().forEach(function (user) {
+        const label = document.createElement("label");
+        label.style.cssText = "display:flex;align-items:center;gap:6px;padding:8px 10px;border:1px solid #cbd5e1;border-radius:999px;background:#f8fafc;font-size:13px;cursor:pointer;";
+        label.innerHTML = `
+            <input type="checkbox" class="production-recipient-checkbox" value="${escapeProductionPickHtml(user.id)}">
+            <span>${escapeProductionPickHtml(user.full_name || user.email || "User")}</span>
+        `;
+        recipientList.appendChild(label);
+    });
+
+    if (getAssignableAppUsers().length === 0) {
+        recipientList.innerHTML = `<span style="font-size:13px;color:#64748b;">No other active users are available.</span>`;
+    }
 
     const updateCount = function () {
         const selected = getSelectedProductionMatches(resultsContainer, matches);
@@ -7611,11 +7940,18 @@ function appendProductionShareControls(
 
     shareButton.addEventListener("click", async function () {
         const selected = getSelectedProductionMatches(resultsContainer, matches);
+        const recipientIds = Array.from(
+            controls.querySelectorAll(".production-recipient-checkbox:checked")
+        ).map(function (checkbox) {
+            return checkbox.value;
+        });
+
         await shareProductionList(
             productionOrderNumber,
             selected,
             statusElement,
-            shareButton
+            shareButton,
+            recipientIds
         );
     });
 
