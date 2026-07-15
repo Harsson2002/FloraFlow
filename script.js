@@ -4112,10 +4112,13 @@ function getOperationalFamilyRules() {
             family: "SNAPDRAGON",
             names: ["SNAPDRAGON", "SNAP"]
         },
-        {
-            family: "TULIP",
-            names: ["TULIP"]
-        },
+       {
+    family: "TULIP",
+    names: [
+        "TULIP",
+        "TU"
+    ]
+},
         {
             family: "VERONICA",
             names: ["VERONICA"]
