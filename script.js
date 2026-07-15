@@ -2925,6 +2925,282 @@ function appendFloraFlowBrainCard(card, match) {
     card.appendChild(brainCard);
 }
 
+
+function getTeachFloraFlowFamilies() {
+
+    const families = new Set(productsCatalog.map(normalizeMatchText));
+
+    getRuntimeOperationalFamilyRules().forEach(function (rule) {
+        const family = normalizeMatchText(rule.family);
+        if (family) {
+            families.add(family);
+        }
+    });
+
+    return Array.from(families)
+        .filter(Boolean)
+        .sort(function (a, b) {
+            return a.localeCompare(b);
+        });
+}
+
+function getSuggestedProductionAlias(match) {
+
+    const original = normalizeMatchText(
+        match?.originalOcrLine || match?.product || ""
+    );
+
+    if (!original) {
+        return "";
+    }
+
+    let alias = cleanProductionLine(original);
+    alias = removeArticleColors(alias);
+
+    return normalizeMatchText(alias || original);
+}
+
+function ensureTeachFloraFlowModal() {
+
+    let overlay = document.getElementById("teachFloraFlowOverlay");
+
+    if (overlay) {
+        return overlay;
+    }
+
+    overlay = document.createElement("div");
+    overlay.id = "teachFloraFlowOverlay";
+    overlay.style.cssText = [
+        "display:none",
+        "position:fixed",
+        "inset:0",
+        "z-index:100000",
+        "background:rgba(15,23,42,.62)",
+        "padding:18px",
+        "box-sizing:border-box",
+        "overflow:auto"
+    ].join(";");
+
+    overlay.innerHTML = `
+        <div style="
+            width:min(560px,100%);
+            margin:5vh auto;
+            background:white;
+            border-radius:16px;
+            padding:20px;
+            box-shadow:0 24px 70px rgba(0,0,0,.28);
+        ">
+            <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
+                <div>
+                    <div style="font-size:21px;font-weight:800;color:#4c1d95;">
+                        🧠 Teach FloraFlow
+                    </div>
+                    <div style="font-size:13px;color:#64748b;margin-top:4px;">
+                        Save what Production writes and the correct flower family.
+                    </div>
+                </div>
+                <button type="button" id="teachFloraFlowCloseBtn" style="font-size:20px;">✕</button>
+            </div>
+
+            <label style="display:block;font-weight:700;margin-top:18px;margin-bottom:6px;">
+                Production text / alias
+            </label>
+            <input id="teachFloraFlowAlias" type="text" autocomplete="off" style="
+                width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:9px;
+            ">
+
+            <label style="display:block;font-weight:700;margin-top:14px;margin-bottom:6px;">
+                Correct family
+            </label>
+            <select id="teachFloraFlowFamily" style="
+                width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:9px;background:white;
+            "></select>
+
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+                <div>
+                    <label style="display:block;font-weight:700;margin-top:14px;margin-bottom:6px;">
+                        Color detected
+                    </label>
+                    <input id="teachFloraFlowColor" type="text" style="
+                        width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:9px;
+                    ">
+                </div>
+                <div>
+                    <label style="display:block;font-weight:700;margin-top:14px;margin-bottom:6px;">
+                        Variety (optional)
+                    </label>
+                    <input id="teachFloraFlowVariety" type="text" style="
+                        width:100%;box-sizing:border-box;padding:11px;border:1px solid #cbd5e1;border-radius:9px;
+                    ">
+                </div>
+            </div>
+
+            <div id="teachFloraFlowMessage" style="min-height:20px;margin-top:12px;font-size:13px;color:#475569;"></div>
+
+            <div style="display:flex;justify-content:flex-end;gap:9px;margin-top:14px;flex-wrap:wrap;">
+                <button type="button" id="teachFloraFlowCancelBtn">Cancel</button>
+                <button type="button" id="teachFloraFlowSaveBtn" style="font-weight:800;">
+                    💾 Save and Analyze Again
+                </button>
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+
+    const close = function () {
+        overlay.style.display = "none";
+        overlay.dataset.originalLine = "";
+    };
+
+    overlay.querySelector("#teachFloraFlowCloseBtn")
+        .addEventListener("click", close);
+
+    overlay.querySelector("#teachFloraFlowCancelBtn")
+        .addEventListener("click", close);
+
+    overlay.addEventListener("click", function (event) {
+        if (event.target === overlay) {
+            close();
+        }
+    });
+
+    overlay.querySelector("#teachFloraFlowSaveBtn")
+        .addEventListener("click", async function () {
+
+            const saveButton = this;
+            const aliasInput = overlay.querySelector("#teachFloraFlowAlias");
+            const familyInput = overlay.querySelector("#teachFloraFlowFamily");
+            const colorInput = overlay.querySelector("#teachFloraFlowColor");
+            const varietyInput = overlay.querySelector("#teachFloraFlowVariety");
+            const message = overlay.querySelector("#teachFloraFlowMessage");
+
+            const alias = normalizeMatchText(aliasInput.value);
+            const family = normalizeMatchText(familyInput.value);
+            const color = normalizeMatchText(colorInput.value);
+            const variety = normalizeMatchText(varietyInput.value);
+
+            if (!alias || !family) {
+                message.style.color = "#b91c1c";
+                message.textContent = "Production text and family are required.";
+                return;
+            }
+
+            if (normalizeMatchText(currentUser) !== "HARSSON") {
+                message.style.color = "#b91c1c";
+                message.textContent = "Only Harsson can save new production rules.";
+                return;
+            }
+
+            saveButton.disabled = true;
+            saveButton.textContent = "Saving...";
+            message.style.color = "#1d4ed8";
+            message.textContent = "Saving the new shared rule in FloraFlow Brain...";
+
+            try {
+                await saveProductionAliasLearning(alias, family);
+
+                message.style.color = "#166534";
+                message.textContent =
+                    alias + " was saved as " + family +
+                    (color ? " | Color: " + color : "") +
+                    (variety ? " | Variety: " + variety : "") + ".";
+
+                setProductionSelectionStatus(
+                    alias + " is now recognized as " + family + ".",
+                    "success"
+                );
+
+                setTimeout(async function () {
+                    close();
+                    await findLeftoversFromDetectedText();
+                }, 450);
+
+            } catch (error) {
+                console.error("Teach FloraFlow save error:", error);
+                message.style.color = "#b91c1c";
+                message.textContent =
+                    "The rule could not be saved. " +
+                    (error?.message || String(error));
+                saveButton.disabled = false;
+                saveButton.textContent = "💾 Save and Analyze Again";
+            }
+        });
+
+    return overlay;
+}
+
+function openTeachFloraFlowModal(match) {
+
+    const overlay = ensureTeachFloraFlowModal();
+    const aliasInput = overlay.querySelector("#teachFloraFlowAlias");
+    const familyInput = overlay.querySelector("#teachFloraFlowFamily");
+    const colorInput = overlay.querySelector("#teachFloraFlowColor");
+    const varietyInput = overlay.querySelector("#teachFloraFlowVariety");
+    const message = overlay.querySelector("#teachFloraFlowMessage");
+    const saveButton = overlay.querySelector("#teachFloraFlowSaveBtn");
+
+    familyInput.innerHTML = `
+        <option value="">Select the correct family</option>
+        ${getTeachFloraFlowFamilies()
+            .map(function (family) {
+                return `<option value="${family}">${family}</option>`;
+            })
+            .join("")}
+    `;
+
+    const suggestedFamily = normalizeMatchText(match?.product || "");
+    if (suggestedFamily && getTeachFloraFlowFamilies().includes(suggestedFamily)) {
+        familyInput.value = suggestedFamily;
+    }
+
+    aliasInput.value = getSuggestedProductionAlias(match);
+    colorInput.value = normalizeMatchText(
+        match?.color || extractProductionColor(match?.originalOcrLine || "")
+    );
+    varietyInput.value = "";
+    message.textContent = "Review the alias before saving. Keep only the production name or code.";
+    message.style.color = "#475569";
+    saveButton.disabled = normalizeMatchText(currentUser) !== "HARSSON";
+    saveButton.textContent = "💾 Save and Analyze Again";
+
+    overlay.dataset.originalLine = match?.originalOcrLine || "";
+    overlay.style.display = "block";
+
+    setTimeout(function () {
+        aliasInput.focus();
+        aliasInput.select();
+    }, 50);
+}
+
+function appendTeachFloraFlowButton(card, match) {
+
+    if (!match || match.inventoryFound) {
+        return;
+    }
+
+    const canTeach = normalizeMatchText(currentUser) === "HARSSON";
+    const button = document.createElement("button");
+    button.type = "button";
+    button.textContent = "➕ Teach FloraFlow";
+    button.disabled = !canTeach;
+    button.style.marginTop = "12px";
+    button.style.fontWeight = "800";
+
+    button.addEventListener("click", function () {
+        openTeachFloraFlowModal(match);
+    });
+
+    card.appendChild(button);
+
+    if (!canTeach) {
+        const note = document.createElement("div");
+        note.textContent = "Only Harsson can add new production rules.";
+        note.style.cssText = "font-size:12px;color:#7c2d12;margin-top:6px;";
+        card.appendChild(note);
+    }
+}
+
 function showProductionRecommendations(
     matches,
     productionOrderNumber
@@ -3110,6 +3386,7 @@ function showProductionRecommendations(
         }
 
         appendFloraFlowBrainCard(card, match);
+        appendTeachFloraFlowButton(card, match);
         resultsContainer.appendChild(card);
     });
 
@@ -3309,7 +3586,15 @@ return {
             const catalogFamily =
                 detectBestCatalogFamily(preparedLine);
 
-            return Boolean(catalogFamily);
+            if (catalogFamily) {
+                return true;
+            }
+
+            // Keep plausible unknown flower lines so Harsson can teach FloraFlow.
+            // Material/header lines were already removed above.
+            return preparedTokens.some(function (token) {
+                return /[A-Z]/.test(token) && token.length >= 3;
+            });
         })
         .map(function (lineInfo) {
             return normalizeProductionLine(
@@ -3343,8 +3628,6 @@ return {
     return uniqueProducts;
 }
 function fixProductionOcrWords(text) {
-    console.log("ANTES:", text);
-
     const corrections = {
 
         // ===== PEONIES =====
@@ -3376,7 +3659,6 @@ function fixProductionOcrWords(text) {
             correct
         );
     }
-console.log("DESPUÉS:", text);
     return text;
 }
 function normalizeProductionLine(line) {
@@ -3395,7 +3677,6 @@ let correctedLine =
         ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
         : cleanOcrText;
         correctedLine = fixProductionOcrWords(correctedLine);
-        console.log("OCR corrected:", correctedLine);
         
 
 
