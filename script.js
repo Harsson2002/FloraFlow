@@ -994,15 +994,18 @@ async function assignProductionPickListInternally(pickList, recipientIds) {
         .insert(assignments);
     if (assignmentError) throw assignmentError;
 
-    const actionUrl = window.location.origin + window.location.pathname + "?pick=" + encodeURIComponent(pickList.token);
+    const isManualPickup = String(pickList.order || "").startsWith("99");
+    const actionUrl = window.location.origin + window.location.pathname + "?pick=" + encodeURIComponent(pickList.token) + (isManualPickup ? "&mode=pickup" : "");
     const notifications = uniqueRecipientIds.map(function (userId) {
         return {
             user_id: userId,
             sender_id: getCurrentAuthUserId(),
             sender_name: getCurrentUserName(),
-            title: "New production pick list",
-            message: "Production Order #" + pickList.order + " is ready for review and pickup confirmation.",
-            type: "PRODUCTION_PICK_LIST",
+            title: isManualPickup ? "New pickup request" : "New production pick list",
+            message: isManualPickup
+                ? "A leftover pickup request is waiting for acceptance."
+                : "Production Order #" + pickList.order + " is ready for review and pickup confirmation.",
+            type: isManualPickup ? "LEFTOVER_PICKUP_REQUEST" : "PRODUCTION_PICK_LIST",
             reference_id: String(pickList.id),
             action_url: actionUrl,
             is_read: false
@@ -7882,37 +7885,90 @@ async function shareProductionList(
             pickList.link
         );
 
-        if (navigator.share) {
-            try {
-                await navigator.share({
-                    title: "Production Order " + orderNumber,
-                    text: shareText
-                });
-            } catch (error) {
-                if (error?.name !== "AbortError") {
-                    throw error;
+        let externalShareCancelled = false;
+
+        // Internal delivery and external sharing are separate actions.
+        // When recipients were selected, do not force the phone/computer share menu.
+        if (recipientIds.length === 0) {
+            if (navigator.share) {
+                try {
+                    await navigator.share({
+                        title: "Production Order " + orderNumber,
+                        text: shareText
+                    });
+                } catch (error) {
+                    if (error?.name === "AbortError") {
+                        externalShareCancelled = true;
+                    } else {
+                        throw error;
+                    }
                 }
+            } else {
+                await navigator.clipboard.writeText(shareText);
             }
-        } else {
-            await navigator.clipboard.writeText(shareText);
         }
 
         if (statusElement) {
             statusElement.innerHTML = `
-                <strong>Pick list created and boxes reserved.</strong><br>
-                ${recipientIds.length ? `<span>Sent internally to ${recipientIds.length} user(s).</span><br>` : ""}
-                <a href="${pickList.link}" target="_blank" rel="noopener">
-                    Open confirmation link
-                </a>
+                <div style="padding:12px;border:1px solid #86efac;border-radius:10px;background:#f0fdf4;">
+                    <strong>Pick list created and boxes reserved.</strong><br>
+                    ${recipientIds.length
+                        ? `<span>Sent internally to ${recipientIds.length} user(s). They will receive it in FloraFlow.</span><br>`
+                        : externalShareCancelled
+                            ? `<span>The external share window was closed, but the Pick List was still created.</span><br>`
+                            : `<span>The Pick List is ready to share.</span><br>`}
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:9px;">
+                        <a href="${pickList.link}" target="_blank" rel="noopener" style="font-weight:800;">
+                            Open confirmation link
+                        </a>
+                        <button type="button" class="copy-created-pick-link" style="padding:7px 10px;">
+                            Copy link
+                        </button>
+                        <button type="button" class="share-created-pick-list" style="padding:7px 10px;">
+                            Share externally
+                        </button>
+                    </div>
+                </div>
             `;
+
+            const copyButton = statusElement.querySelector(".copy-created-pick-link");
+            const externalShareButton = statusElement.querySelector(".share-created-pick-list");
+
+            copyButton?.addEventListener("click", async function () {
+                await navigator.clipboard.writeText(pickList.link);
+                copyButton.textContent = "Copied";
+                setTimeout(function () {
+                    copyButton.textContent = "Copy link";
+                }, 1200);
+            });
+
+            externalShareButton?.addEventListener("click", async function () {
+                if (navigator.share) {
+                    try {
+                        await navigator.share({
+                            title: "Production Order " + orderNumber,
+                            text: shareText
+                        });
+                    } catch (error) {
+                        if (error?.name !== "AbortError") {
+                            alert("The Pick List could not be shared. " + (error?.message || String(error)));
+                        }
+                    }
+                } else {
+                    await navigator.clipboard.writeText(shareText);
+                    externalShareButton.textContent = "Copied";
+                    setTimeout(function () {
+                        externalShareButton.textContent = "Share externally";
+                    }, 1200);
+                }
+            });
         }
 
         await loadActiveProductionReservations();
         await loadInventoryFromSupabase();
 
-        setTimeout(function () {
-            findLeftoversFromDetectedText();
-        }, 350);
+        // Keep the confirmation and link visible. The user can close or refresh
+        // Today's Production manually when finished reviewing the created list.
 
     } catch (error) {
         console.error("Production pick-list error:", error);
@@ -8092,7 +8148,10 @@ async function fetchProductionPickList(token) {
 function buildProductionPickPage(data) {
     const list = data.list;
     const items = data.items;
+    const params = new URLSearchParams(window.location.search);
+    const isManualPickup = params.get("mode") === "pickup" || String(list.production_order || "").startsWith("99");
     const isClosed = list.status === "COMPLETED" || list.status === "CANCELLED";
+    const requiresAcceptance = !isClosed && list.status === "PENDING";
 
     const overlay = document.createElement("div");
     overlay.id = "productionPickPage";
@@ -8110,10 +8169,10 @@ function buildProductionPickPage(data) {
         <div style="max-width:780px;margin:0 auto;">
             <div style="background:white;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(15,23,42,.1);margin-bottom:14px;">
                 <div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#166534;text-transform:uppercase;">
-                    FloraFlow Pick Confirmation
+                    ${isManualPickup ? "FloraFlow Pickup Request" : "FloraFlow Pick Confirmation"}
                 </div>
                 <h1 style="font-size:25px;margin:6px 0;color:#0f172a;">
-                    Production Order #${escapeProductionPickHtml(list.production_order)}
+                    ${isManualPickup ? "Leftover Pickup" : "Production Order #" + escapeProductionPickHtml(list.production_order)}
                 </h1>
                 <div style="font-size:14px;color:#64748b;line-height:1.6;">
                     Created by ${escapeProductionPickHtml(list.created_by || "Unknown")}<br>
@@ -8132,8 +8191,15 @@ function buildProductionPickPage(data) {
                         <button type="button" id="pickClearAll" style="padding:10px 14px;">Clear</button>
                     </div>
                     <div style="font-size:13px;color:#64748b;margin-bottom:14px;line-height:1.5;">
-                        Check the products physically taken. Unchecked products will be released back to inventory.
+                        ${requiresAcceptance
+                            ? "Accept this task to reveal the case number. Product, color, quantity and date remain visible."
+                            : "Check the products physically taken. Unchecked products will be released back to inventory."}
                     </div>
+                    ${requiresAcceptance ? `
+                        <button type="button" id="pickAcceptButton" style="width:100%;margin-bottom:14px;padding:14px;border-radius:12px;background:#173f35;color:white;font-weight:800;">
+                            Accept Task &amp; View Case Number
+                        </button>
+                    ` : ""}
                 `}
                 <div id="pickItems"></div>
                 ${isClosed ? "" : `
@@ -8187,7 +8253,7 @@ function buildProductionPickPage(data) {
                     </div>
                     <div style="font-size:14px;color:#475569;line-height:1.6;margin-top:4px;">
                         Color: ${escapeProductionPickHtml(item.color || "Not specified")}<br>
-                        Case: ${escapeProductionPickHtml(item.case_number || "Not specified")}<br>
+                        Case: <span class="pick-case-value" data-case="${escapeProductionPickHtml(item.case_number || "Not specified")}">${requiresAcceptance ? "••••••" : escapeProductionPickHtml(item.case_number || "Not specified")}</span><br>
                         Available: ${available} stems<br>
                         Date received: ${escapeProductionPickHtml(formatProductionShareDate(item.date_received))}
                     </div>
@@ -8221,6 +8287,36 @@ function buildProductionPickPage(data) {
 
     if (isClosed) {
         return overlay;
+    }
+
+    const acceptButton = overlay.querySelector("#pickAcceptButton");
+    if (acceptButton) {
+        overlay.querySelectorAll(".pick-item-controls, #pickSelectAll, #pickClearAll, #pickPhysicalCheck, #pickConfirmButton").forEach(function (element) {
+            element.style.display = "none";
+        });
+        acceptButton.addEventListener("click", async function () {
+            acceptButton.disabled = true;
+            acceptButton.textContent = "Accepting task...";
+            try {
+                const { error } = await supabaseClient
+                    .from(PRODUCTION_PICK_LIST_TABLE)
+                    .update({ status: "IN_PROGRESS" })
+                    .eq("id", list.id)
+                    .eq("status", "PENDING");
+                if (error) throw error;
+                overlay.querySelectorAll(".pick-case-value").forEach(function (element) {
+                    element.textContent = element.dataset.case || "Not specified";
+                });
+                overlay.querySelectorAll(".pick-item-controls, #pickSelectAll, #pickClearAll, #pickPhysicalCheck, #pickConfirmButton").forEach(function (element) {
+                    element.style.display = "";
+                });
+                acceptButton.remove();
+            } catch (error) {
+                acceptButton.disabled = false;
+                acceptButton.textContent = "Accept Task & View Case Number";
+                alert("The task could not be accepted. " + (error?.message || String(error)));
+            }
+        });
     }
 
     const confirmedByName = overlay.querySelector("#pickConfirmedByName");
@@ -9417,3 +9513,222 @@ window.addEventListener("floraflow-auth-ready", function () {
         ensureProductionPdfImportUI();
     }
 });
+
+
+/* ===== FloraFlow Design + Optional Send Pickup ===== */
+(function initializeFloraFlowExperienceUpgrade() {
+    function createIconSvg(type) {
+        const icons = {
+            copy: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="8" y="8" width="11" height="11" rx="2"></rect><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"></path></svg>',
+            send: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M22 2 11 13"></path><path d="m22 2-7 20-4-9-9-4Z"></path></svg>',
+            rotate: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 11a8 8 0 1 0-2.3 5.7"></path><path d="M20 4v7h-7"></path></svg>',
+            edit: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"></path></svg>'
+        };
+        return icons[type] || '';
+    }
+
+    function decoratePrimaryLayout() {
+        document.body.classList.add('ff-app');
+        const container = document.querySelector('.container');
+        if (container) container.classList.add('ff-shell');
+        document.querySelectorAll('.dashboard .card').forEach(function (card, index) {
+            card.classList.add('ff-metric-card', 'ff-metric-' + (index + 1));
+        });
+        const form = document.querySelector('.form-grid');
+        if (form) {
+            form.classList.add('ff-add-panel');
+            if (!form.querySelector('.ff-panel-heading')) {
+                const heading = document.createElement('div');
+                heading.className = 'ff-panel-heading';
+                heading.innerHTML = '<div><span>Inventory intake</span><strong>Add leftover product</strong></div><small>Fast entry for Production and QC</small>';
+                form.insertBefore(heading, form.firstChild);
+            }
+        }
+        const topBar = document.querySelector('.top-bar');
+        if (topBar) topBar.classList.add('ff-command-bar');
+        ensureMobileNavigation();
+    }
+
+    function ensureMobileNavigation() {
+        if (document.getElementById('ffMobileNav')) return;
+        const nav = document.createElement('nav');
+        nav.id = 'ffMobileNav';
+        nav.className = 'ff-mobile-nav';
+        nav.innerHTML = `
+            <button type="button" data-action="inventory"><span>⌂</span><small>Inventory</small></button>
+            <button type="button" data-action="production"><span>▤</span><small>Production</small></button>
+            <button type="button" data-action="progress"><span>◔</span><small>Progress</small></button>
+            <button type="button" data-action="notifications"><span>◉</span><small>Alerts</small></button>
+            <button type="button" data-action="settings"><span>⚙</span><small>Settings</small></button>`;
+        document.body.appendChild(nav);
+        nav.addEventListener('click', function (event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+            const action = button.dataset.action;
+            if (action === 'inventory') window.scrollTo({ top: 0, behavior: 'smooth' });
+            if (action === 'production') document.getElementById('todayProductionBtn')?.click();
+            if (action === 'progress') document.getElementById('floraFlowProductionProgressButton')?.click();
+            if (action === 'notifications') document.getElementById('floraFlowNotificationBell')?.click();
+            if (action === 'settings') document.getElementById('settingsBtn')?.click();
+        });
+    }
+
+    function buildManualPickupReference() {
+        return '99' + String(Date.now()).slice(-6);
+    }
+
+    function ensureSendPickupModal() {
+        let overlay = document.getElementById('ffSendPickupOverlay');
+        if (overlay) return overlay;
+        overlay = document.createElement('div');
+        overlay.id = 'ffSendPickupOverlay';
+        overlay.className = 'ff-sheet-overlay';
+        overlay.innerHTML = `
+            <section class="ff-sheet ff-pickup-sheet">
+                <header class="ff-sheet-header">
+                    <div><span>Pickup request</span><h2>Send leftover to a teammate</h2></div>
+                    <button type="button" id="ffClosePickupModal" class="ff-icon-close">×</button>
+                </header>
+                <div id="ffPickupSummary" class="ff-pickup-summary"></div>
+                <label class="ff-field-label">Stems requested
+                    <input id="ffPickupQuantity" type="number" min="1">
+                </label>
+                <div class="ff-field-label">Destination</div>
+                <div class="ff-segmented" id="ffPickupDestination">
+                    <button type="button" data-value="Production" class="active">Production</button>
+                    <button type="button" data-value="Samples">Samples</button>
+                    <button type="button" data-value="OLD">OLD</button>
+                </div>
+                <div class="ff-field-label">Send internally to</div>
+                <div id="ffPickupRecipients" class="ff-recipient-grid"></div>
+                <div class="ff-privacy-note"><strong>Case number stays hidden</strong><span>Product, color, quantity and date remain visible. The case appears only after the teammate accepts the task.</span></div>
+                <button type="button" id="ffCreatePickupRequest" class="ff-primary-action">Send pickup request</button>
+                <div id="ffPickupStatus" class="ff-inline-status"></div>
+            </section>`;
+        document.body.appendChild(overlay);
+        overlay.querySelector('#ffClosePickupModal').addEventListener('click', function () { overlay.style.display = 'none'; });
+        overlay.addEventListener('click', function (event) { if (event.target === overlay) overlay.style.display = 'none'; });
+        overlay.querySelector('#ffPickupDestination').addEventListener('click', function (event) {
+            const button = event.target.closest('button');
+            if (!button) return;
+            overlay.querySelectorAll('#ffPickupDestination button').forEach(function (item) { item.classList.remove('active'); });
+            button.classList.add('active');
+        });
+        overlay.querySelector('#ffCreatePickupRequest').addEventListener('click', createManualPickupRequest);
+        return overlay;
+    }
+
+    let manualPickupItem = null;
+
+    function openSendPickupModal(item) {
+        manualPickupItem = item;
+        const overlay = ensureSendPickupModal();
+        overlay.querySelector('#ffPickupSummary').innerHTML = `
+            <strong>${escapeProductionPickHtml(item.product || '')}</strong>
+            <span>${escapeProductionPickHtml(item.color || '')} · ${Number(item.quantity || 0)} stems available · ${escapeProductionPickHtml(formatProductionShareDate(item.date))}</span>`;
+        const qty = overlay.querySelector('#ffPickupQuantity');
+        qty.max = Number(item.quantity || 0);
+        qty.value = Math.min(30, Number(item.quantity || 0));
+        const recipients = overlay.querySelector('#ffPickupRecipients');
+        recipients.innerHTML = getAssignableAppUsers().map(function (user) {
+            return `<label><input type="checkbox" value="${escapeProductionPickHtml(user.id)}"><span>${escapeProductionPickHtml(user.full_name || user.email || 'User')}</span></label>`;
+        }).join('') || '<div class="ff-empty-state">No other active users are available.</div>';
+        overlay.querySelector('#ffPickupStatus').textContent = '';
+        overlay.style.display = 'flex';
+    }
+
+    async function createManualPickupRequest() {
+        const overlay = ensureSendPickupModal();
+        const button = overlay.querySelector('#ffCreatePickupRequest');
+        const status = overlay.querySelector('#ffPickupStatus');
+        if (!manualPickupItem) return;
+        const quantity = Number(overlay.querySelector('#ffPickupQuantity').value || 0);
+        const recipients = Array.from(overlay.querySelectorAll('#ffPickupRecipients input:checked')).map(function (input) { return input.value; });
+        const destination = overlay.querySelector('#ffPickupDestination .active')?.dataset.value || 'Production';
+        if (!quantity || quantity < 1 || quantity > Number(manualPickupItem.quantity || 0)) {
+            alert('Enter a valid quantity.');
+            return;
+        }
+        if (recipients.length === 0) {
+            alert('Select at least one teammate.');
+            return;
+        }
+        button.disabled = true;
+        button.textContent = 'Creating request...';
+        status.textContent = 'Reserving the requested quantity and sending the internal alert...';
+        try {
+            const requestItem = Object.assign({}, manualPickupItem, {
+                quantity: quantity,
+                articleName: 'Manual pickup · ' + destination
+            });
+            const pickList = await createProductionPickList(buildManualPickupReference(), [requestItem]);
+            pickList.link += '&mode=pickup';
+            await assignProductionPickListInternally(pickList, recipients);
+            status.innerHTML = '<strong>Pickup request sent.</strong><br>The case number will appear only after the teammate accepts the task.';
+            await loadActiveProductionReservations();
+            await loadInventoryFromSupabase();
+            setTimeout(function () { overlay.style.display = 'none'; }, 1300);
+        } catch (error) {
+            console.error('Manual pickup request error:', error);
+            status.textContent = 'The request could not be created. ' + (error?.message || String(error));
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Send pickup request';
+        }
+    }
+
+    function attachSendPickupButtons() {
+        document.querySelectorAll('.mobile-inventory-card').forEach(function (card, cardIndex) {
+            if (card.querySelector('.ff-send-pickup-btn')) return;
+            const visibleCards = Array.from(document.querySelectorAll('.mobile-inventory-card'));
+            const item = inventory.filter(function (entry) {
+                const search = (searchInput?.value || '').toLowerCase().trim();
+                const matchesRemoved = showRemoved || entry.status !== 'Removed from Inventory';
+                const matchesSearch = !search || [entry.product, entry.color, entry.caseNumber, entry.notes, entry.status].some(function (value) { return String(value || '').toLowerCase().includes(search); });
+                return matchesRemoved && matchesSearch;
+            })[cardIndex];
+            if (!item || item.status === 'Removed from Inventory') return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'ff-send-pickup-btn';
+            button.title = 'Send pickup request';
+            button.setAttribute('aria-label', 'Send pickup request');
+            button.innerHTML = createIconSvg('send');
+            button.addEventListener('click', function () { openSendPickupModal(item); });
+            card.appendChild(button);
+        });
+
+        document.querySelectorAll('#inventoryTable tr').forEach(function (row) {
+            if (row.querySelector('.ff-table-send-btn')) return;
+            const productButton = row.querySelector('.product-history-link');
+            if (!productButton) return;
+            const item = inventory.find(function (entry) { return entry.product === productButton.textContent.trim() && entry.status !== 'Removed from Inventory'; });
+            const actions = row.cells?.[7];
+            if (!item || !actions) return;
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = 'ff-table-send-btn';
+            button.title = 'Send pickup request';
+            button.innerHTML = createIconSvg('send') + '<span>Send</span>';
+            button.addEventListener('click', function () { openSendPickupModal(item); });
+            actions.appendChild(button);
+        });
+    }
+
+    const originalRenderInventory = window.renderInventory;
+    if (typeof originalRenderInventory === 'function') {
+        window.renderInventory = function () {
+            originalRenderInventory.apply(this, arguments);
+            requestAnimationFrame(attachSendPickupButtons);
+        };
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        decoratePrimaryLayout();
+        setTimeout(attachSendPickupButtons, 300);
+    });
+    if (document.readyState !== 'loading') {
+        decoratePrimaryLayout();
+        setTimeout(attachSendPickupButtons, 300);
+    }
+})();
