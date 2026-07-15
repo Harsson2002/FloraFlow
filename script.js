@@ -189,6 +189,9 @@ let learnedProductAliases =
     JSON.parse(localStorage.getItem("learnedProductAliases")) || {};
     let flowerFamilies = [];
 let learnedProductionAliases = [];
+let activeProductionReservations = new Map();
+const PRODUCTION_PICK_LIST_TABLE = "production_pick_lists";
+const PRODUCTION_PICK_ITEM_TABLE = "production_pick_items";
 
 
 async function loadProductionAliases() {
@@ -478,6 +481,8 @@ async function initializeFloraFlow() {
     await loadFlowerFamilies();
     await loadProductionAliases();
     await loadLexiflorCatalog();
+    await loadActiveProductionReservations();
+    await openProductionPickListFromUrl();
 
     console.log(
         "FloraFlow ready. Catalog:",
@@ -2779,8 +2784,25 @@ async function readSelectedProductionArea() {
             articleResult?.data?.text || ""
         );
 
-        productionDetectedText.value = detectedText;
-        productionFindLeftoversBtn.disabled = detectedText === "";
+        const separatedProductionData =
+            separateProductionOrderAndArticles(detectedText);
+
+        window.lastProductionFullOcrText =
+            separatedProductionData.fullText;
+
+        if (
+            productionOrderInput &&
+            separatedProductionData.orderNumber
+        ) {
+            productionOrderInput.value =
+                separatedProductionData.orderNumber;
+        }
+
+        productionDetectedText.value =
+            separatedProductionData.articleText;
+
+        productionFindLeftoversBtn.disabled =
+            separatedProductionData.articleText === "";
 
         saveRememberedProductionSelection();
 
@@ -2792,14 +2814,21 @@ async function readSelectedProductionArea() {
             return;
         }
 
-        const lineCount = detectedText
+        const lineCount = separatedProductionData.articleText
             .split(/\r?\n/)
             .filter(Boolean)
             .length;
 
+        const orderMessage = separatedProductionData.orderNumber
+            ? " Production Order #" +
+                separatedProductionData.orderNumber +
+                " was detected automatically."
+            : " Enter the Production Order number manually if it was not included in the selection.";
+
         setProductionSelectionStatus(
-            "Text detected in " + lineCount +
-            " line(s). Review it below, correct any letter if necessary, then press Find Leftovers.",
+            "Detected " + lineCount +
+            " product line(s)." + orderMessage +
+            " Review the products below, then press Find Leftovers.",
             "success"
         );
 
@@ -2825,6 +2854,9 @@ async function findLeftoversFromDetectedText() {
     ensureProductionSelectionUI();
 
     const editedText = productionDetectedText.value.trim();
+    const fullOcrText = String(
+        window.lastProductionFullOcrText || editedText
+    );
 
     if (!editedText) {
         alert("Read the selected area or type the product lines first.");
@@ -2852,7 +2884,9 @@ async function findLeftoversFromDetectedText() {
             productionOrderInput?.value
         );
         const productionOrderNumber =
-            confirmedOrderNumber || extractProductionLot(editedText);
+            confirmedOrderNumber ||
+            extractProductionLot(fullOcrText, { strict: true }) ||
+            extractProductionLot(editedText, { strict: true });
 
         if (productionOrderInput && productionOrderNumber) {
             productionOrderInput.value = productionOrderNumber;
@@ -4107,6 +4141,70 @@ async function readProductionScreenshot() {
     return {
         lotText: "",
         articleText: productionDetectedText.value || ""
+    };
+}
+
+
+function separateProductionOrderAndArticles(text) {
+
+    const fullText = String(text || "");
+    const detectedOrder = extractProductionLot(fullText, {
+        strict: true
+    }) || "";
+
+    const headerPatterns = [
+        /\bPRODUCTION\s*(?:ORDER|0RDER|ORD\s*ER)\b/i,
+        /\b(?:ORDER|0RDER)\s*(?:NUMBER|NUM|NO|#)\b/i,
+        /\bGENERAL\s+BILL\b/i,
+        /\bBILL\s+OF\s+MATERIALS?\b/i,
+        /\bARTICLE\s+COLOR\s+REQUIRED\b/i,
+        /^\s*(?:ARTICLE|COLOR|REQUIRED|QUANTITY|QTY|LENGTH|DESCRIPTION)\s*$/i,
+        /\bCUSTOMER\b/i,
+        /\bPROJECT\b/i,
+        /\bDELIVERY\s+DATE\b/i,
+        /\bCREATED\s+(?:BY|ON)\b/i
+    ];
+
+    const articleLines = fullText
+        .split(/\r?\n/)
+        .map(function (line) {
+            return String(line || "")
+                .replace(/\s+/g, " ")
+                .trim();
+        })
+        .filter(Boolean)
+        .filter(function (line) {
+
+            const normalizedLine = normalizeMatchText(line);
+
+            if (!normalizedLine) {
+                return false;
+            }
+
+            if (headerPatterns.some(function (pattern) {
+                return pattern.test(line);
+            })) {
+                return false;
+            }
+
+            if (/^[#:\-\s0-9OIL]+$/i.test(line)) {
+                return false;
+            }
+
+            if (
+                detectedOrder &&
+                normalizeProductionOrderNumber(line) === detectedOrder
+            ) {
+                return false;
+            }
+
+            return true;
+        });
+
+    return {
+        orderNumber: detectedOrder,
+        articleText: articleLines.join("\n").trim(),
+        fullText: fullText
     };
 }
 
@@ -6322,10 +6420,13 @@ function findInventoryMatches(products) {
             const status =
                 normalizeMatchText(item.status);
 
+            const inventoryId = String(item.id ?? "");
+
             return (
                 Number(item.quantity || 0) > 0 &&
                 status !== "REMOVED FROM INVENTORY" &&
-                status !== "REMOVED"
+                status !== "REMOVED" &&
+                !activeProductionReservations.has(inventoryId)
             );
         });
 
@@ -6911,4 +7012,811 @@ if (productsBtn) {
         await refreshProductsManagementData();
         document.getElementById("newProductFamilyInput")?.focus();
     });
+}
+
+
+// ============================================================
+// PRODUCTION PICK LINKS AND SHARED CONFIRMATION WORKFLOW
+// ============================================================
+
+function createProductionPickToken() {
+    if (window.crypto?.randomUUID) {
+        return window.crypto.randomUUID().replace(/-/g, "").toUpperCase();
+    }
+
+    return (
+        Date.now().toString(36) +
+        Math.random().toString(36).slice(2) +
+        Math.random().toString(36).slice(2)
+    ).toUpperCase();
+}
+
+function getProductionPickLink(token) {
+    const url = new URL(window.location.href);
+    url.search = "";
+    url.hash = "";
+    url.searchParams.set("pick", token);
+    return url.toString();
+}
+
+async function loadActiveProductionReservations() {
+    const { data, error } = await supabaseClient
+        .from(PRODUCTION_PICK_ITEM_TABLE)
+        .select("inventory_id, pick_list_id, reserved_quantity, status")
+        .in("status", ["RESERVED", "PENDING"]);
+
+    if (error) {
+        console.warn("Could not load active production reservations:", error);
+        activeProductionReservations = new Map();
+        return;
+    }
+
+    activeProductionReservations = new Map();
+
+    (data || []).forEach(function (item) {
+        const inventoryId = String(item.inventory_id ?? "");
+
+        if (!inventoryId) {
+            return;
+        }
+
+        activeProductionReservations.set(inventoryId, {
+            pickListId: item.pick_list_id,
+            quantity: Number(item.reserved_quantity || 0),
+            status: item.status
+        });
+    });
+}
+
+async function createProductionPickList(productionOrderNumber, selectedMatches) {
+    const normalizedOrder = normalizeProductionOrderNumber(
+        productionOrderNumber
+    );
+
+    if (!normalizedOrder) {
+        throw new Error("Confirm the Production Order number first.");
+    }
+
+    const uniqueMatches = [];
+    const seenIds = new Set();
+
+    selectedMatches.forEach(function (match) {
+        const inventoryId = String(match?.id ?? "");
+
+        if (!inventoryId || seenIds.has(inventoryId)) {
+            return;
+        }
+
+        seenIds.add(inventoryId);
+        uniqueMatches.push(match);
+    });
+
+    if (uniqueMatches.length === 0) {
+        throw new Error("Select at least one leftover product.");
+    }
+
+    await loadActiveProductionReservations();
+
+    const alreadyReserved = uniqueMatches.find(function (match) {
+        return activeProductionReservations.has(String(match.id));
+    });
+
+    if (alreadyReserved) {
+        throw new Error(
+            "Case " + (alreadyReserved.caseNumber || "") +
+            " is already reserved for another production list. Refresh and try again."
+        );
+    }
+
+    const token = createProductionPickToken();
+
+    const { data: pickList, error: listError } = await supabaseClient
+        .from(PRODUCTION_PICK_LIST_TABLE)
+        .insert([{
+            token: token,
+            production_order: normalizedOrder,
+            status: "PENDING",
+            created_by: currentUser || "Unknown"
+        }])
+        .select("id, token, production_order")
+        .single();
+
+    if (listError) {
+        throw listError;
+    }
+
+    const rows = uniqueMatches.map(function (match) {
+        return {
+            pick_list_id: pickList.id,
+            inventory_id: match.id,
+            product: match.product || match.requestedProduct || "",
+            color: match.color || match.requestedColor || "",
+            case_number: match.caseNumber || "",
+            date_received: match.date || null,
+            available_quantity: Number(match.quantity || 0),
+            reserved_quantity: Number(match.quantity || 0),
+            article_name: match.articleName || "",
+            status: "RESERVED"
+        };
+    });
+
+    const { error: itemError } = await supabaseClient
+        .from(PRODUCTION_PICK_ITEM_TABLE)
+        .insert(rows);
+
+    if (itemError) {
+        await supabaseClient
+            .from(PRODUCTION_PICK_LIST_TABLE)
+            .delete()
+            .eq("id", pickList.id);
+        throw itemError;
+    }
+
+    await loadActiveProductionReservations();
+
+    return {
+        id: pickList.id,
+        token: token,
+        order: normalizedOrder,
+        link: getProductionPickLink(token)
+    };
+}
+
+function buildProductionPickShareText(productionOrderNumber, selectedMatches, link) {
+    const lines = [
+        "FLORAFLOW - PRODUCTION PICK LIST",
+        "Production Order: " + productionOrderNumber,
+        "",
+        "Products reserved:"
+    ];
+
+    selectedMatches.forEach(function (match, index) {
+        lines.push(
+            (index + 1) + ". " +
+            (match.product || match.requestedProduct || "Product") +
+            " | " +
+            (match.color || match.requestedColor || "No color") +
+            " | Case " +
+            (match.caseNumber || "Not specified") +
+            " | " +
+            (match.quantity ?? 0) + " stems"
+        );
+    });
+
+    lines.push("");
+    lines.push("Open this link to confirm what was physically taken:");
+    lines.push(link);
+
+    return lines.join("\n");
+}
+
+async function shareProductionList(
+    productionOrderNumber,
+    selectedMatches,
+    statusElement,
+    shareButton
+) {
+    if (!Array.isArray(selectedMatches) || selectedMatches.length === 0) {
+        alert("Select at least one leftover product first.");
+        return;
+    }
+
+    const orderNumber = normalizeProductionOrderNumber(
+        productionOrderInput?.value || productionOrderNumber
+    );
+
+    if (!orderNumber) {
+        alert("Confirm the Production Order number before creating the pick list.");
+        productionOrderInput?.focus();
+        return;
+    }
+
+    const previousText = shareButton?.textContent || "Create & Share Pick List";
+
+    if (shareButton) {
+        shareButton.disabled = true;
+        shareButton.textContent = "Creating reservation...";
+    }
+
+    if (statusElement) {
+        statusElement.textContent =
+            "Reserving the selected boxes so they cannot appear in another order...";
+    }
+
+    try {
+        const pickList = await createProductionPickList(
+            orderNumber,
+            selectedMatches
+        );
+
+        const shareText = buildProductionPickShareText(
+            orderNumber,
+            selectedMatches,
+            pickList.link
+        );
+
+        if (navigator.share) {
+            try {
+                await navigator.share({
+                    title: "Production Order " + orderNumber,
+                    text: shareText
+                });
+            } catch (error) {
+                if (error?.name !== "AbortError") {
+                    throw error;
+                }
+            }
+        } else {
+            await navigator.clipboard.writeText(shareText);
+        }
+
+        if (statusElement) {
+            statusElement.innerHTML = `
+                <strong>Pick list created and boxes reserved.</strong><br>
+                <a href="${pickList.link}" target="_blank" rel="noopener">
+                    Open confirmation link
+                </a>
+            `;
+        }
+
+        await loadActiveProductionReservations();
+        await loadInventoryFromSupabase();
+
+        setTimeout(function () {
+            findLeftoversFromDetectedText();
+        }, 350);
+
+    } catch (error) {
+        console.error("Production pick-list error:", error);
+        alert(
+            "The pick list could not be created. " +
+            (error?.message || String(error))
+        );
+
+        if (statusElement) {
+            statusElement.textContent = "The pick list was not created.";
+        }
+    } finally {
+        if (shareButton) {
+            shareButton.disabled = false;
+            shareButton.textContent = previousText;
+        }
+    }
+}
+
+function appendProductionShareControls(
+    resultsContainer,
+    matches,
+    productionOrderNumber
+) {
+    const foundCount = matches.filter(function (match) {
+        return match?.inventoryFound;
+    }).length;
+
+    if (foundCount === 0) {
+        return;
+    }
+
+    const controls = document.createElement("div");
+    controls.style.cssText = `
+        background:white;
+        border:1px solid #bbf7d0;
+        border-radius:14px;
+        padding:14px;
+        margin-bottom:15px;
+        box-shadow:0 2px 8px rgba(15,23,42,.06);
+    `;
+
+    controls.innerHTML = `
+        <div style="font-weight:800;margin-bottom:5px;color:#14532d;">
+            Create production pick list
+        </div>
+        <div style="font-size:13px;color:#475569;margin-bottom:11px;line-height:1.5;">
+            Selected boxes will be reserved immediately and removed from future recommendations.
+            The shared link lets the warehouse confirm quantities and destination.
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">
+            <button type="button" class="production-select-all">Select All</button>
+            <button type="button" class="production-clear-selection">Clear</button>
+            <button type="button" class="production-share-list" style="
+                font-weight:800;
+                background:#166534;
+                color:white;
+                border:none;
+                border-radius:9px;
+                padding:10px 14px;
+            ">
+                Create & Share Pick List
+            </button>
+            <span class="production-share-count" style="font-size:13px;color:#475569;"></span>
+        </div>
+        <div class="production-share-status" style="font-size:13px;color:#166534;margin-top:9px;line-height:1.5;"></div>
+    `;
+
+    resultsContainer.appendChild(controls);
+
+    const countElement = controls.querySelector(".production-share-count");
+    const statusElement = controls.querySelector(".production-share-status");
+    const shareButton = controls.querySelector(".production-share-list");
+
+    const updateCount = function () {
+        const selected = getSelectedProductionMatches(resultsContainer, matches);
+        countElement.textContent = selected.length + " of " + foundCount + " selected";
+    };
+
+    controls.querySelector(".production-select-all")
+        .addEventListener("click", function () {
+            resultsContainer.querySelectorAll(".production-share-checkbox")
+                .forEach(function (checkbox) {
+                    checkbox.checked = true;
+                });
+            updateCount();
+        });
+
+    controls.querySelector(".production-clear-selection")
+        .addEventListener("click", function () {
+            resultsContainer.querySelectorAll(".production-share-checkbox")
+                .forEach(function (checkbox) {
+                    checkbox.checked = false;
+                });
+            updateCount();
+        });
+
+    shareButton.addEventListener("click", async function () {
+        const selected = getSelectedProductionMatches(resultsContainer, matches);
+        await shareProductionList(
+            productionOrderNumber,
+            selected,
+            statusElement,
+            shareButton
+        );
+    });
+
+    resultsContainer.addEventListener("change", function (event) {
+        if (event.target?.classList.contains("production-share-checkbox")) {
+            updateCount();
+        }
+    });
+
+    setTimeout(updateCount, 0);
+}
+
+function escapeProductionPickHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
+
+async function fetchProductionPickList(token) {
+    const { data: list, error: listError } = await supabaseClient
+        .from(PRODUCTION_PICK_LIST_TABLE)
+        .select("id, token, production_order, status, created_by, created_at, completed_by, completed_at")
+        .eq("token", token)
+        .single();
+
+    if (listError) {
+        throw listError;
+    }
+
+    const { data: items, error: itemError } = await supabaseClient
+        .from(PRODUCTION_PICK_ITEM_TABLE)
+        .select("*")
+        .eq("pick_list_id", list.id)
+        .order("id", { ascending: true });
+
+    if (itemError) {
+        throw itemError;
+    }
+
+    return { list: list, items: items || [] };
+}
+
+function buildProductionPickPage(data) {
+    const list = data.list;
+    const items = data.items;
+    const isClosed = list.status === "COMPLETED" || list.status === "CANCELLED";
+
+    const overlay = document.createElement("div");
+    overlay.id = "productionPickPage";
+    overlay.style.cssText = `
+        position:fixed;
+        inset:0;
+        z-index:99999;
+        background:#f1f5f9;
+        overflow:auto;
+        padding:18px;
+        box-sizing:border-box;
+    `;
+
+    overlay.innerHTML = `
+        <div style="max-width:780px;margin:0 auto;">
+            <div style="background:white;border-radius:18px;padding:18px;box-shadow:0 8px 30px rgba(15,23,42,.1);margin-bottom:14px;">
+                <div style="font-size:13px;font-weight:800;letter-spacing:.08em;color:#166534;text-transform:uppercase;">
+                    FloraFlow Pick Confirmation
+                </div>
+                <h1 style="font-size:25px;margin:6px 0;color:#0f172a;">
+                    Production Order #${escapeProductionPickHtml(list.production_order)}
+                </h1>
+                <div style="font-size:14px;color:#64748b;line-height:1.6;">
+                    Created by ${escapeProductionPickHtml(list.created_by || "Unknown")}<br>
+                    Status: <strong>${escapeProductionPickHtml(list.status)}</strong>
+                </div>
+            </div>
+
+            <div style="background:white;border-radius:18px;padding:16px;box-shadow:0 8px 30px rgba(15,23,42,.08);">
+                ${isClosed ? `
+                    <div style="padding:18px;border-radius:12px;background:#ecfdf5;color:#166534;font-weight:800;text-align:center;">
+                        This pick list has already been completed.
+                    </div>
+                ` : `
+                    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">
+                        <button type="button" id="pickSelectAll" style="padding:10px 14px;">Select All</button>
+                        <button type="button" id="pickClearAll" style="padding:10px 14px;">Clear</button>
+                    </div>
+                    <div style="font-size:13px;color:#64748b;margin-bottom:14px;line-height:1.5;">
+                        Check the products physically taken. Unchecked products will be released back to inventory.
+                    </div>
+                `}
+                <div id="pickItems"></div>
+                ${isClosed ? "" : `
+                    <div style="margin-top:16px;padding-top:16px;border-top:1px solid #e2e8f0;">
+                        <label style="display:block;font-weight:700;margin-bottom:6px;">Confirmed by</label>
+                        <select id="pickConfirmedBy" style="width:100%;padding:11px;border:1px solid #cbd5e1;border-radius:10px;margin-bottom:12px;"></select>
+                        <label style="display:flex;gap:9px;align-items:flex-start;font-size:14px;line-height:1.45;margin-bottom:14px;">
+                            <input type="checkbox" id="pickPhysicalCheck" style="width:19px;height:19px;margin-top:1px;">
+                            I physically verified which products were taken and the quantities shown below.
+                        </label>
+                        <button type="button" id="pickConfirmButton" disabled style="
+                            width:100%;padding:14px;border:none;border-radius:11px;background:#166534;color:white;font-size:16px;font-weight:800;
+                        ">
+                            Confirm Pick and Update Inventory
+                        </button>
+                        <div id="pickPageStatus" style="margin-top:10px;font-size:14px;color:#475569;"></div>
+                    </div>
+                `}
+            </div>
+        </div>
+    `;
+
+    document.body.appendChild(overlay);
+    document.body.style.overflow = "hidden";
+
+    const itemsContainer = overlay.querySelector("#pickItems");
+
+    items.forEach(function (item) {
+        const available = Number(item.available_quantity || 0);
+        const completed = item.status !== "RESERVED" && item.status !== "PENDING";
+        const card = document.createElement("div");
+        card.className = "production-pick-item";
+        card.dataset.itemId = item.id;
+        card.dataset.inventoryId = item.inventory_id;
+        card.style.cssText = `
+            border:1px solid #dbe4ea;
+            border-radius:14px;
+            padding:14px;
+            margin-bottom:12px;
+            background:${completed ? "#f8fafc" : "white"};
+        `;
+
+        card.innerHTML = `
+            <label style="display:flex;gap:10px;align-items:flex-start;cursor:${isClosed ? "default" : "pointer"};">
+                ${isClosed ? "" : `<input type="checkbox" class="pick-item-selected" checked style="width:20px;height:20px;margin-top:3px;">`}
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:18px;font-weight:800;color:#0f172a;">
+                        ${escapeProductionPickHtml(item.product)}
+                    </div>
+                    <div style="font-size:14px;color:#475569;line-height:1.6;margin-top:4px;">
+                        Color: ${escapeProductionPickHtml(item.color || "Not specified")}<br>
+                        Case: ${escapeProductionPickHtml(item.case_number || "Not specified")}<br>
+                        Available: ${available} stems<br>
+                        Date received: ${escapeProductionPickHtml(formatProductionShareDate(item.date_received))}
+                    </div>
+                </div>
+            </label>
+            ${isClosed ? `
+                <div style="margin-top:10px;font-weight:700;color:#166534;">
+                    ${escapeProductionPickHtml(item.status)} — ${Number(item.quantity_taken || 0)} stems
+                </div>
+            ` : `
+                <div class="pick-item-controls" style="display:grid;grid-template-columns:minmax(110px,1fr) minmax(150px,1fr);gap:10px;margin-top:12px;">
+                    <label style="font-size:13px;font-weight:700;">
+                        Stems taken
+                        <input type="number" class="pick-quantity" min="0" max="${available}" value="${available}" style="width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:9px;margin-top:5px;">
+                    </label>
+                    <label style="font-size:13px;font-weight:700;">
+                        Destination
+                        <select class="pick-destination" style="width:100%;padding:10px;border:1px solid #cbd5e1;border-radius:9px;margin-top:5px;">
+                            <option value="PRODUCTION">Production</option>
+                            <option value="OLD">OLD</option>
+                            <option value="DAMAGED">Damaged</option>
+                            <option value="SAMPLES">Samples</option>
+                        </select>
+                    </label>
+                </div>
+            `}
+        `;
+
+        itemsContainer.appendChild(card);
+    });
+
+    if (isClosed) {
+        return overlay;
+    }
+
+    const userSelectElement = overlay.querySelector("#pickConfirmedBy");
+    users.forEach(function (user) {
+        const option = document.createElement("option");
+        option.value = user;
+        option.textContent = user;
+        userSelectElement.appendChild(option);
+    });
+    userSelectElement.value = users.includes(currentUser) ? currentUser : users[0];
+
+    const toggleCardControls = function (card) {
+        const selected = card.querySelector(".pick-item-selected")?.checked;
+        const controls = card.querySelector(".pick-item-controls");
+        if (controls) {
+            controls.style.opacity = selected ? "1" : ".45";
+            controls.querySelectorAll("input, select").forEach(function (field) {
+                field.disabled = !selected;
+            });
+        }
+    };
+
+    overlay.querySelectorAll(".production-pick-item").forEach(toggleCardControls);
+
+    overlay.addEventListener("change", function (event) {
+        if (event.target.classList.contains("pick-item-selected")) {
+            toggleCardControls(event.target.closest(".production-pick-item"));
+        }
+    });
+
+    overlay.querySelector("#pickSelectAll").addEventListener("click", function () {
+        overlay.querySelectorAll(".pick-item-selected").forEach(function (checkbox) {
+            checkbox.checked = true;
+            toggleCardControls(checkbox.closest(".production-pick-item"));
+        });
+    });
+
+    overlay.querySelector("#pickClearAll").addEventListener("click", function () {
+        overlay.querySelectorAll(".pick-item-selected").forEach(function (checkbox) {
+            checkbox.checked = false;
+            toggleCardControls(checkbox.closest(".production-pick-item"));
+        });
+    });
+
+    const physicalCheck = overlay.querySelector("#pickPhysicalCheck");
+    const confirmButton = overlay.querySelector("#pickConfirmButton");
+    physicalCheck.addEventListener("change", function () {
+        confirmButton.disabled = !physicalCheck.checked;
+    });
+
+    confirmButton.addEventListener("click", async function () {
+        await confirmProductionPickList(
+            list,
+            items,
+            overlay,
+            userSelectElement.value
+        );
+    });
+
+    return overlay;
+}
+
+async function confirmProductionPickList(list, items, overlay, confirmedBy) {
+    const statusElement = overlay.querySelector("#pickPageStatus");
+    const confirmButton = overlay.querySelector("#pickConfirmButton");
+    const decisions = [];
+
+    for (const item of items) {
+        const card = overlay.querySelector(
+            `.production-pick-item[data-item-id="${item.id}"]`
+        );
+        const selected = Boolean(card?.querySelector(".pick-item-selected")?.checked);
+        const available = Number(item.available_quantity || 0);
+        const quantity = selected
+            ? Number(card.querySelector(".pick-quantity").value || 0)
+            : 0;
+        const destination = selected
+            ? card.querySelector(".pick-destination").value
+            : "RETURN";
+
+        if (selected && (!Number.isFinite(quantity) || quantity <= 0 || quantity > available)) {
+            alert(
+                "Enter a valid quantity for " + item.product +
+                " between 1 and " + available + "."
+            );
+            return;
+        }
+
+        decisions.push({ item, selected, quantity, destination });
+    }
+
+    const selectedCount = decisions.filter(function (decision) {
+        return decision.selected;
+    }).length;
+
+    if (!confirm(
+        selectedCount + " product(s) will be processed. " +
+        (decisions.length - selectedCount) +
+        " unselected product(s) will return to available inventory. Continue?"
+    )) {
+        return;
+    }
+
+    confirmButton.disabled = true;
+    confirmButton.textContent = "Updating inventory...";
+    statusElement.textContent = "Saving the confirmation. Do not close this page.";
+
+    currentUser = confirmedBy || currentUser;
+    localStorage.setItem("currentUser", currentUser);
+    if (userSelect) {
+        userSelect.value = currentUser;
+    }
+
+    try {
+        const { data: claimedList, error: claimError } = await supabaseClient
+            .from(PRODUCTION_PICK_LIST_TABLE)
+            .update({
+                status: "PROCESSING",
+                completed_by: confirmedBy
+            })
+            .eq("id", list.id)
+            .eq("status", "PENDING")
+            .select("id")
+            .maybeSingle();
+
+        if (claimError) {
+            throw claimError;
+        }
+
+        if (!claimedList) {
+            throw new Error("This pick list was already processed by another user.");
+        }
+
+        for (const decision of decisions) {
+            const item = decision.item;
+
+            if (!decision.selected) {
+                const { error } = await supabaseClient
+                    .from(PRODUCTION_PICK_ITEM_TABLE)
+                    .update({
+                        status: "RETURNED",
+                        destination: "RETURN",
+                        quantity_taken: 0,
+                        confirmed_by: confirmedBy,
+                        confirmed_at: new Date().toISOString()
+                    })
+                    .eq("id", item.id);
+
+                if (error) throw error;
+                continue;
+            }
+
+            const inventoryItem = inventory.find(function (candidate) {
+                return String(candidate.id) === String(item.inventory_id);
+            });
+
+            let currentQuantity = inventoryItem
+                ? Number(inventoryItem.quantity || 0)
+                : Number(item.available_quantity || 0);
+
+            const newQuantity = Math.max(0, currentQuantity - decision.quantity);
+            const newStatus = newQuantity === 0
+                ? "Removed from Inventory"
+                : "Available";
+
+            const { error: inventoryError } = await supabaseClient
+                .from("inventory")
+                .update({
+                    quantity: newQuantity,
+                    status: newStatus
+                })
+                .eq("id", item.inventory_id)
+                .eq("quantity", currentQuantity);
+
+            if (inventoryError) {
+                throw inventoryError;
+            }
+
+            const action = decision.destination === "PRODUCTION"
+                ? "ROTATE"
+                : "REMOVE";
+
+            await addHistory(
+                item.inventory_id,
+                action,
+                item.product,
+                item.color,
+                item.case_number,
+                currentQuantity,
+                decision.quantity,
+                newQuantity,
+                "Production Order #" + list.production_order +
+                " | Destination: " + decision.destination +
+                " | Confirmed from Pick Link"
+            );
+
+            const { error: itemUpdateError } = await supabaseClient
+                .from(PRODUCTION_PICK_ITEM_TABLE)
+                .update({
+                    status: "COMPLETED",
+                    destination: decision.destination,
+                    quantity_taken: decision.quantity,
+                    confirmed_by: confirmedBy,
+                    confirmed_at: new Date().toISOString()
+                })
+                .eq("id", item.id);
+
+            if (itemUpdateError) throw itemUpdateError;
+        }
+
+        const { error: completeError } = await supabaseClient
+            .from(PRODUCTION_PICK_LIST_TABLE)
+            .update({
+                status: "COMPLETED",
+                completed_by: confirmedBy,
+                completed_at: new Date().toISOString()
+            })
+            .eq("id", list.id);
+
+        if (completeError) {
+            throw completeError;
+        }
+
+        await loadActiveProductionReservations();
+        await loadInventoryFromSupabase();
+        await loadHistoryFromSupabase();
+
+        statusElement.innerHTML = `
+            <div style="padding:14px;border-radius:10px;background:#ecfdf5;color:#166534;font-weight:800;">
+                Pick confirmed. Inventory and activity history were updated.
+            </div>
+        `;
+        confirmButton.textContent = "Completed";
+
+        setTimeout(function () {
+            window.location.reload();
+        }, 1200);
+
+    } catch (error) {
+        console.error("Pick confirmation error:", error);
+
+        await supabaseClient
+            .from(PRODUCTION_PICK_LIST_TABLE)
+            .update({ status: "PENDING" })
+            .eq("id", list.id)
+            .eq("status", "PROCESSING");
+
+        confirmButton.disabled = false;
+        confirmButton.textContent = "Confirm Pick and Update Inventory";
+        statusElement.textContent = "The confirmation failed. Nothing else should be changed until this is reviewed.";
+        alert(
+            "The pick could not be confirmed. " +
+            (error?.message || String(error))
+        );
+    }
+}
+
+async function openProductionPickListFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    const token = normalizeMatchText(params.get("pick") || "").replace(/\s/g, "");
+
+    if (!token) {
+        return;
+    }
+
+    try {
+        const data = await fetchProductionPickList(token);
+        buildProductionPickPage(data);
+    } catch (error) {
+        console.error("Could not open production pick list:", error);
+        alert(
+            "This pick-list link is invalid, expired, or unavailable. " +
+            (error?.message || "")
+        );
+    }
 }
