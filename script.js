@@ -3680,6 +3680,16 @@ function getOperationalFamilyRules() {
 
     return [
         {
+    family: "PEONY",
+    names: [
+        "PAEO",
+        "PAEO PINK",
+        "PAEO ENHANCED",
+        "PEONY",
+        "PEONIES"
+    ]
+},
+        {
             family: "MINI HYDRANGEA",
             names: [
                 "MINI HYDRANGEA",
