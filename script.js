@@ -499,7 +499,7 @@ function syncLegacyUserSelect() {
 async function loadAppUsers() {
     const { data, error } = await supabaseClient
         .from("app_profiles")
-        .select("id, full_name, email, role, active, department, created_at, access_type, access_expires_at, must_change_password, last_sign_in_at")
+        .select("id, full_name, email, role, active, department, access_type, access_expires_at, must_change_password, last_sign_in_at, created_at")
         .order("full_name", { ascending: true });
 
     if (error) {
@@ -524,12 +524,6 @@ async function loadCurrentUserProfile(authUser) {
     if (error) throw error;
     if (!data) throw new Error("Your FloraFlow profile has not been created yet.");
     if (data.active === false) throw new Error("This FloraFlow account is inactive.");
-    if (String(data.access_type || "permanent").toLowerCase() === "temporary" && data.access_expires_at) {
-        const expiresAt = new Date(String(data.access_expires_at).slice(0, 10) + "T23:59:59");
-        if (!Number.isNaN(expiresAt.getTime()) && expiresAt.getTime() < Date.now()) {
-            throw new Error("This temporary FloraFlow account has expired. Contact an administrator.");
-        }
-    }
 
     currentAuthUser = authUser;
     currentUserProfile = data;
@@ -1390,7 +1384,31 @@ function extractProductionColor(line) {
 activityBtn.addEventListener("click", function () {
     activityModal.style.display = "block";
 });
+function configureFloraFlowSettingsModal() {
+    if (!settingsModal) return;
+    const content = settingsModal.querySelector(".modal-content") || settingsModal;
+    content.style.width = "min(620px,94vw)";
+    content.style.maxHeight = "88vh";
+    content.style.overflowY = "auto";
+    content.style.overscrollBehavior = "contain";
+    content.style.borderRadius = "20px";
+    content.style.border = "1px solid #eadfea";
+    content.style.boxShadow = "0 26px 80px rgba(36,7,43,.28)";
+    const menu = settingsModal.querySelector(".settings-menu");
+    if (menu) {
+        menu.style.display = "grid";
+        menu.style.gridTemplateColumns = window.matchMedia("(max-width:720px)").matches ? "1fr" : "1fr 1fr";
+        menu.style.gap = "10px";
+        menu.querySelectorAll("button").forEach(function (button) {
+            button.style.minHeight = "54px";
+            button.style.borderRadius = "12px";
+            button.style.textAlign = "left";
+            button.style.padding = "13px 15px";
+        });
+    }
+}
 settingsBtn.addEventListener("click", function () {
+    configureFloraFlowSettingsModal();
     ensureSettingsCurrentUserPanel();
     updateSettingsCurrentUserPanel();
     applyUserPermissions();
@@ -7571,37 +7589,133 @@ function cleanProductionLine(line) {
 // ============================================================
 // USER ACCOUNTS MANAGEMENT
 // ============================================================
+let usersManagementSearchText = "";
+
+function lockBodyForUsersManagement(lock) {
+    if (lock) {
+        document.body.dataset.usersScrollY = String(window.scrollY || 0);
+        document.body.style.position = "fixed";
+        document.body.style.top = "-" + (window.scrollY || 0) + "px";
+        document.body.style.left = "0";
+        document.body.style.right = "0";
+        document.body.style.width = "100%";
+        document.body.style.overflow = "hidden";
+    } else {
+        const y = Math.abs(parseInt(document.body.style.top || "0", 10)) || Number(document.body.dataset.usersScrollY || 0);
+        document.body.style.position = "";
+        document.body.style.top = "";
+        document.body.style.left = "";
+        document.body.style.right = "";
+        document.body.style.width = "";
+        document.body.style.overflow = "";
+        delete document.body.dataset.usersScrollY;
+        window.scrollTo(0, y);
+    }
+}
+
+function closeUsersManagementModal() {
+    const overlay = document.getElementById("usersManagementOverlay");
+    if (overlay) overlay.style.display = "none";
+    lockBodyForUsersManagement(false);
+}
+
+function ensureUsersManagementStyles() {
+    if (document.getElementById("floraFlowUsersManagementStyles")) return;
+    const style = document.createElement("style");
+    style.id = "floraFlowUsersManagementStyles";
+    style.textContent = `
+      #usersManagementOverlay{align-items:center;justify-content:center;overscroll-behavior:contain;touch-action:none}
+      #usersManagementPanel{width:min(980px,100%);height:min(92vh,900px);display:flex;flex-direction:column;background:#fff;border-radius:20px;box-shadow:0 28px 85px rgba(36,7,43,.34);overflow:hidden;touch-action:pan-y}
+      #usersManagementHeader{flex:0 0 auto;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:18px 20px;border-bottom:1px solid #eadfea;background:linear-gradient(135deg,#fff 0%,#fff7fc 100%)}
+      #usersManagementBody{flex:1 1 auto;min-height:0;overflow-y:auto;overflow-x:hidden;padding:18px 20px 24px;overscroll-behavior:contain;-webkit-overflow-scrolling:touch}
+      .ff-user-create-grid{display:grid;grid-template-columns:1fr 1.2fr;gap:10px}
+      .ff-user-card{border:1px solid #eadfea;border-left:4px solid #a11375;border-radius:14px;padding:14px;margin-bottom:10px;background:#fff;box-shadow:0 3px 10px rgba(74,4,78,.06)}
+      .ff-user-card-top{display:flex;justify-content:space-between;align-items:flex-start;gap:12px}
+      .ff-user-meta{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+      .ff-user-pill{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;background:#fdf2f8;color:#9d174d}
+      .ff-user-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;padding-top:11px;border-top:1px solid #f1e5ee}
+      .ff-user-actions button{min-height:38px;border-radius:9px;padding:8px 12px;font-weight:800}
+      .ff-user-edit{background:#a11375;color:#fff;border:none}
+      .ff-user-password{background:#f8fafc;color:#334155;border:1px solid #cbd5e1}
+      .ff-user-delete{background:#fff;color:#b91c1c;border:1px solid #fecaca}
+      #usersManagementSearch{width:min(320px,100%);box-sizing:border-box;padding:10px 12px;border:1px solid #d8c9d5;border-radius:10px}
+      @media(max-width:720px){
+        #usersManagementOverlay{padding:0!important;align-items:flex-end}
+        #usersManagementPanel{height:94dvh;max-height:94dvh;border-radius:22px 22px 0 0}
+        #usersManagementHeader{padding:15px 14px}
+        #usersManagementBody{padding:14px 12px calc(24px + env(safe-area-inset-bottom))}
+        .ff-user-create-grid{grid-template-columns:1fr}
+        .ff-user-card-top{display:block}
+        .ff-user-actions{display:grid;grid-template-columns:1fr 1fr}
+        .ff-user-actions button{width:100%}
+      }
+    `;
+    document.head.appendChild(style);
+}
+
 function ensureUsersManagementModal() {
     let overlay = document.getElementById("usersManagementOverlay");
     if (overlay) return overlay;
+    ensureUsersManagementStyles();
     overlay = document.createElement("div");
     overlay.id = "usersManagementOverlay";
-    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:100000;background:rgba(15,23,42,.62);padding:18px;box-sizing:border-box;overflow:auto;";
+    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:180000;background:rgba(35,8,42,.62);padding:18px;box-sizing:border-box;";
     overlay.innerHTML = `
-      <div style="width:min(900px,100%);margin:4vh auto;background:white;border-radius:16px;padding:20px;box-shadow:0 24px 70px rgba(0,0,0,.28);">
-        <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
-          <div><div style="font-size:22px;font-weight:800;color:#0f172a;">User Management</div><div style="font-size:13px;color:#64748b;margin-top:3px;">Create accounts and control access to FloraFlow.</div></div>
-          <button id="closeUsersManagementBtn" type="button" style="width:40px;height:40px;border:none;border-radius:10px;background:#0f172a;color:white;font-size:20px;">×</button>
-        </div>
-        <div style="margin-top:18px;padding:16px;border:1px solid #dbe4ea;border-radius:12px;background:#f8fafc;">
-          <div style="font-weight:800;margin-bottom:12px;">Create account</div>
-          <div style="display:grid;grid-template-columns:1fr 1.25fr;gap:10px;">
-            <input id="newUserName" placeholder="Full name" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <input id="newUserEmail" type="email" placeholder="Email" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <input id="newUserPassword" type="password" placeholder="Temporary password" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;">
-            <select id="newUserRole" style="padding:10px;border:1px solid #cbd5e1;border-radius:9px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+      <section id="usersManagementPanel" role="dialog" aria-modal="true" aria-labelledby="usersManagementTitle">
+        <header id="usersManagementHeader">
+          <div>
+            <div style="font-size:11px;font-weight:900;letter-spacing:.13em;color:#a11375;text-transform:uppercase;">FloraFlow Settings</div>
+            <div id="usersManagementTitle" style="font-size:23px;font-weight:900;color:#2b102a;margin-top:3px;">User Management</div>
+            <div style="font-size:13px;color:#6b5b68;margin-top:3px;">Create, edit and securely control account access.</div>
           </div>
-          <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:10px 16px;border:none;border-radius:9px;background:#166534;color:white;font-weight:800;">Create Account</button>
-          <div id="usersManagementMessage" style="min-height:20px;margin-top:9px;font-size:13px;color:#475569;"></div>
+          <button id="closeUsersManagementBtn" type="button" aria-label="Close" style="width:42px;height:42px;border:none;border-radius:12px;background:#2b102a;color:white;font-size:24px;">×</button>
+        </header>
+        <div id="usersManagementBody">
+          <div style="padding:16px;border:1px solid #eadfea;border-radius:14px;background:#fff8fc;">
+            <div style="font-weight:900;margin-bottom:12px;color:#2b102a;">Create account</div>
+            <div class="ff-user-create-grid">
+              <input id="newUserName" placeholder="Full name" style="padding:11px;border:1px solid #d8c9d5;border-radius:10px;">
+              <input id="newUserEmail" type="email" placeholder="Email" style="padding:11px;border:1px solid #d8c9d5;border-radius:10px;">
+              <input id="newUserPassword" type="password" placeholder="Temporary password" style="padding:11px;border:1px solid #d8c9d5;border-radius:10px;">
+              <select id="newUserRole" style="padding:11px;border:1px solid #d8c9d5;border-radius:10px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select>
+            </div>
+            <label style="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:14px;font-weight:800;color:#4a2945;"><input id="newUserTemporary" type="checkbox"> Temporary account</label>
+            <div id="newUserExpirationWrap" style="display:none;margin-top:10px;max-width:260px;"><label style="font-size:12px;font-weight:800;color:#6b5b68;">Access expiration date</label><input id="newUserExpiration" type="date" style="width:100%;box-sizing:border-box;margin-top:5px;padding:10px;border:1px solid #d8c9d5;border-radius:10px;"></div>
+            <button id="createUserAccountBtn" type="button" style="margin-top:12px;padding:11px 17px;border:none;border-radius:10px;background:#a11375;color:white;font-weight:900;">Create Account</button>
+            <div id="usersManagementMessage" style="min-height:20px;margin-top:9px;font-size:13px;color:#475569;"></div>
+          </div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap;">
+            <div><div style="font-size:19px;font-weight:900;color:#2b102a;">All users</div><div id="usersManagementCount" style="font-size:12px;color:#7b6a77;margin-top:2px;"></div></div>
+            <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;"><input id="usersManagementSearch" type="search" placeholder="Search users..."><button id="refreshUsersBtn" type="button" style="background:#a11375;color:#fff;border:none;border-radius:10px;padding:10px 14px;font-weight:900;">Refresh</button></div>
+          </div>
+          <div id="usersManagementList" style="margin-top:10px;"></div>
         </div>
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;"><div style="font-size:18px;font-weight:800;">All users</div><button id="refreshUsersBtn" type="button">Refresh</button></div>
-        <div id="usersManagementList" style="margin-top:10px;max-height:48vh;overflow:auto;"></div>
-      </div>`;
+      </section>`;
     document.body.appendChild(overlay);
-    overlay.querySelector("#closeUsersManagementBtn").addEventListener("click", () => overlay.style.display = "none");
+    overlay.querySelector("#closeUsersManagementBtn").addEventListener("click", closeUsersManagementModal);
     overlay.querySelector("#refreshUsersBtn").addEventListener("click", refreshUsersManagement);
     overlay.querySelector("#createUserAccountBtn").addEventListener("click", createUserAccountFromSettings);
+    overlay.querySelector("#newUserTemporary").addEventListener("change", function () {
+        overlay.querySelector("#newUserExpirationWrap").style.display = this.checked ? "block" : "none";
+    });
+    overlay.querySelector("#usersManagementSearch").addEventListener("input", function () {
+        usersManagementSearchText = this.value.trim().toLowerCase();
+        renderUsersManagementList();
+    });
+    installSafeBackdropClose(overlay, closeUsersManagementModal);
+    overlay.addEventListener("touchmove", function (event) {
+        if (event.target === overlay) event.preventDefault();
+    }, { passive: false });
     return overlay;
+}
+
+async function invokeManageUser(action, userId, extra = {}) {
+    const { data, error } = await supabaseClient.functions.invoke("manage-floraflow-user", {
+        body: { action: action, user_id: userId, ...extra }
+    });
+    if (error) throw error;
+    if (data?.error) throw new Error(data.error);
+    return data;
 }
 
 async function createUserAccountFromSettings() {
@@ -7613,43 +7727,159 @@ async function createUserAccountFromSettings() {
     const email = overlay.querySelector("#newUserEmail").value.trim().toLowerCase();
     const password = overlay.querySelector("#newUserPassword").value;
     const role = normalizeAppRole(overlay.querySelector("#newUserRole").value);
-    if (!full_name || !email || password.length < 8) { message.style.color="#b91c1c"; message.textContent="Enter a name, valid email and a temporary password of at least 8 characters."; return; }
+    const temporary = overlay.querySelector("#newUserTemporary").checked;
+    const access_expires_at = temporary ? overlay.querySelector("#newUserExpiration").value : null;
+    if (!full_name || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) { message.style.color="#b91c1c"; message.textContent="Enter a name, valid email and a temporary password of at least 8 characters."; return; }
+    if (temporary && !access_expires_at) { message.style.color="#b91c1c"; message.textContent="Choose an expiration date for the temporary account."; return; }
     button.disabled = true; button.textContent = "Creating..."; message.textContent = "";
     try {
-        const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", { body: { full_name, email, password, role } });
+        const { data, error } = await supabaseClient.functions.invoke("create-floraflow-user", { body: { full_name, email, password, role, access_type: temporary ? "temporary" : "permanent", access_expires_at, must_change_password: true } });
         if (error) throw error;
         if (data?.error) throw new Error(data.error);
         message.style.color="#166534"; message.textContent = full_name + " was created successfully.";
-        overlay.querySelector("#newUserName").value=""; overlay.querySelector("#newUserEmail").value=""; overlay.querySelector("#newUserPassword").value=""; overlay.querySelector("#newUserRole").value="user";
+        ["#newUserName", "#newUserEmail", "#newUserPassword"].forEach(function (selector) { overlay.querySelector(selector).value = ""; });
+        overlay.querySelector("#newUserRole").value="user";
+        overlay.querySelector("#newUserTemporary").checked=false;
+        overlay.querySelector("#newUserExpiration").value="";
+        overlay.querySelector("#newUserExpirationWrap").style.display="none";
         await refreshUsersManagement();
     } catch (error) {
         console.error("Create user error:", error); message.style.color="#b91c1c"; message.textContent = error?.message || String(error);
     } finally { button.disabled=false; button.textContent="Create Account"; }
 }
 
-async function refreshUsersManagement() {
-    await loadAppUsers();
+function userAccessStatus(user) {
+    const temporary = user.access_type === "temporary";
+    const expired = temporary && user.access_expires_at && new Date(user.access_expires_at + "T23:59:59") < new Date();
+    if (user.active === false) return { label: "Inactive", color: "#b91c1c", background: "#fef2f2" };
+    if (expired) return { label: "Expired", color: "#b91c1c", background: "#fef2f2" };
+    if (temporary) return { label: "Temporary", color: "#a16207", background: "#fffbeb" };
+    return { label: "Active", color: "#166534", background: "#f0fdf4" };
+}
+
+function formatUserDate(value) {
+    if (!value) return "";
+    const date = new Date(String(value).length === 10 ? value + "T12:00:00" : value);
+    return Number.isNaN(date.getTime()) ? String(value) : date.toLocaleDateString();
+}
+
+function renderUsersManagementList() {
     const list = document.getElementById("usersManagementList");
+    const count = document.getElementById("usersManagementCount");
     if (!list) return;
-    list.innerHTML="";
-    appUsers.forEach(function (user) {
-        const card=document.createElement("div");
-        card.style.cssText="display:grid;grid-template-columns:1fr auto;gap:12px;align-items:center;padding:12px;border:1px solid #e2e8f0;border-radius:10px;margin-bottom:8px;background:white;";
-        card.innerHTML=`<div><div style="font-weight:800;color:#0f172a;">${user.full_name || user.email}</div><div style="font-size:13px;color:#64748b;margin-top:3px;">${user.email || ""}</div></div><div style="display:flex;gap:8px;align-items:center;"><select class="user-role-select" style="padding:8px;border:1px solid #cbd5e1;border-radius:8px;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select><label style="font-size:13px;display:flex;gap:5px;align-items:center;"><input class="user-active-check" type="checkbox"> Active</label></div>`;
-        const roleSelect=card.querySelector(".user-role-select"); const activeCheck=card.querySelector(".user-active-check");
-        roleSelect.value=normalizeAppRole(user.role); activeCheck.checked=user.active!==false;
-        const save=async function(){
-            const { error }=await supabaseClient.from("app_profiles").update({role:normalizeAppRole(roleSelect.value),active:activeCheck.checked}).eq("id",user.id);
-            if(error){alert("Could not update the user: "+error.message); return;} await loadAppUsers();
-        };
-        roleSelect.addEventListener("change",save); activeCheck.addEventListener("change",save); list.appendChild(card);
+    const filtered = (appUsers || []).filter(function (user) {
+        if (!usersManagementSearchText) return true;
+        return [user.full_name, user.email, user.role, user.access_type].some(function (value) { return String(value || "").toLowerCase().includes(usersManagementSearchText); });
     });
+    if (count) count.textContent = filtered.length + " user" + (filtered.length === 1 ? "" : "s");
+    list.innerHTML = "";
+    if (filtered.length === 0) { list.innerHTML = '<div style="padding:28px;text-align:center;color:#7b6a77;border:1px dashed #d8c9d5;border-radius:14px;">No users found.</div>'; return; }
+    filtered.forEach(function (user) {
+        const status = userAccessStatus(user);
+        const isSelf = user.id === getCurrentAuthUserId();
+        const card = document.createElement("article");
+        card.className = "ff-user-card";
+        card.innerHTML = `
+          <div class="ff-user-card-top">
+            <div style="min-width:0;"><div style="font-weight:900;color:#2b102a;font-size:16px;word-break:break-word;">${escapeProductionPickHtml(user.full_name || user.email || "Unnamed user")}</div><div style="font-size:13px;color:#6b5b68;margin-top:3px;word-break:break-all;">${escapeProductionPickHtml(user.email || "")}</div></div>
+            <span style="display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;font-size:11px;font-weight:900;color:${status.color};background:${status.background};white-space:nowrap;">${status.label}</span>
+          </div>
+          <div class="ff-user-meta"><span class="ff-user-pill">${escapeProductionPickHtml(normalizeAppRole(user.role).toUpperCase())}</span>${user.access_type === "temporary" ? `<span class="ff-user-pill">Expires ${escapeProductionPickHtml(formatUserDate(user.access_expires_at))}</span>` : '<span class="ff-user-pill">Permanent</span>'}${user.last_sign_in_at ? `<span class="ff-user-pill">Last login ${escapeProductionPickHtml(formatUserDate(user.last_sign_in_at))}</span>` : ''}${isSelf ? '<span class="ff-user-pill">Your account</span>' : ''}</div>
+          <div class="ff-user-actions"><button type="button" class="ff-user-edit">✏ Edit</button><button type="button" class="ff-user-password">🔑 Reset password</button><button type="button" class="ff-user-delete" ${isSelf ? "disabled" : ""}>🗑 Delete</button></div>`;
+        card.querySelector(".ff-user-edit").addEventListener("click", function () { openEditUserModal(user); });
+        card.querySelector(".ff-user-password").addEventListener("click", function () { resetUserPassword(user); });
+        card.querySelector(".ff-user-delete").addEventListener("click", function () { deleteFloraFlowUser(user); });
+        list.appendChild(card);
+    });
+}
+
+async function refreshUsersManagement() {
+    const list = document.getElementById("usersManagementList");
+    if (list) list.innerHTML = '<div style="padding:22px;text-align:center;color:#7b6a77;">Loading users...</div>';
+    await loadAppUsers();
+    renderUsersManagementList();
+}
+
+function ensureEditUserModal() {
+    let overlay = document.getElementById("editFloraFlowUserOverlay");
+    if (overlay) return overlay;
+    overlay = document.createElement("div");
+    overlay.id = "editFloraFlowUserOverlay";
+    overlay.style.cssText = "display:none;position:fixed;inset:0;z-index:190000;background:rgba(35,8,42,.68);padding:18px;box-sizing:border-box;overflow:auto;overscroll-behavior:contain;";
+    overlay.innerHTML = `<div style="width:min(540px,100%);margin:5vh auto;background:white;border-radius:18px;padding:20px;box-shadow:0 25px 75px rgba(0,0,0,.3);"><div style="display:flex;justify-content:space-between;gap:12px;align-items:center;"><div><div style="font-size:11px;font-weight:900;letter-spacing:.12em;color:#a11375;text-transform:uppercase;">User Management</div><div style="font-size:22px;font-weight:900;color:#2b102a;margin-top:3px;">Edit user</div></div><button id="editFloraFlowUserClose" type="button" style="width:42px;height:42px;border:0;border-radius:11px;background:#2b102a;color:white;font-size:24px;">×</button></div><div style="display:grid;gap:11px;margin-top:17px;"><label style="font-weight:800;font-size:13px;">Full name<input id="editFloraFlowUserName" type="text" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Email<input id="editFloraFlowUserEmail" type="email" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label><label style="font-weight:800;font-size:13px;">Role<select id="editFloraFlowUserRole" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;background:white;"><option value="user">User</option><option value="manager">Manager</option><option value="admin">Admin</option></select></label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserActive" type="checkbox"> Active account</label><label style="display:flex;align-items:center;gap:8px;font-weight:800;"><input id="editFloraFlowUserTemporary" type="checkbox"> Temporary account</label><div id="editFloraFlowUserExpirationWrap"><label style="font-weight:800;font-size:13px;">Expiration date<input id="editFloraFlowUserExpiration" type="date" style="width:100%;box-sizing:border-box;margin-top:5px;padding:11px;border:1px solid #d8c9d5;border-radius:10px;"></label></div></div><div id="editFloraFlowUserMessage" style="min-height:20px;margin-top:11px;font-size:13px;"></div><div style="display:flex;justify-content:flex-end;gap:9px;margin-top:12px;"><button id="editFloraFlowUserCancel" type="button">Cancel</button><button id="editFloraFlowUserSave" type="button" style="background:#a11375;color:#fff;border:0;border-radius:10px;padding:11px 16px;font-weight:900;">Save changes</button></div></div>`;
+    document.body.appendChild(overlay);
+    const close = function () { overlay.style.display = "none"; overlay._user = null; };
+    overlay.querySelector("#editFloraFlowUserClose").addEventListener("click", close);
+    overlay.querySelector("#editFloraFlowUserCancel").addEventListener("click", close);
+    installSafeBackdropClose(overlay, close);
+    overlay.querySelector("#editFloraFlowUserTemporary").addEventListener("change", function () { overlay.querySelector("#editFloraFlowUserExpirationWrap").style.display = this.checked ? "block" : "none"; });
+    overlay.querySelector("#editFloraFlowUserSave").addEventListener("click", saveEditedFloraFlowUser);
+    return overlay;
+}
+
+function openEditUserModal(user) {
+    const overlay = ensureEditUserModal();
+    overlay._user = user;
+    overlay.querySelector("#editFloraFlowUserName").value = user.full_name || "";
+    overlay.querySelector("#editFloraFlowUserEmail").value = user.email || "";
+    overlay.querySelector("#editFloraFlowUserRole").value = normalizeAppRole(user.role);
+    overlay.querySelector("#editFloraFlowUserActive").checked = user.active !== false;
+    overlay.querySelector("#editFloraFlowUserTemporary").checked = user.access_type === "temporary";
+    overlay.querySelector("#editFloraFlowUserExpiration").value = user.access_expires_at || "";
+    overlay.querySelector("#editFloraFlowUserExpirationWrap").style.display = user.access_type === "temporary" ? "block" : "none";
+    overlay.querySelector("#editFloraFlowUserMessage").textContent = "";
+    overlay.style.display = "block";
+}
+
+async function saveEditedFloraFlowUser() {
+    const overlay = ensureEditUserModal();
+    const user = overlay._user;
+    const message = overlay.querySelector("#editFloraFlowUserMessage");
+    const button = overlay.querySelector("#editFloraFlowUserSave");
+    if (!user) return;
+    const full_name = overlay.querySelector("#editFloraFlowUserName").value.trim();
+    const email = overlay.querySelector("#editFloraFlowUserEmail").value.trim().toLowerCase();
+    const role = normalizeAppRole(overlay.querySelector("#editFloraFlowUserRole").value);
+    const active = overlay.querySelector("#editFloraFlowUserActive").checked;
+    const temporary = overlay.querySelector("#editFloraFlowUserTemporary").checked;
+    const access_expires_at = temporary ? overlay.querySelector("#editFloraFlowUserExpiration").value : null;
+    if (!full_name || !/^\S+@\S+\.\S+$/.test(email)) { message.style.color="#b91c1c"; message.textContent="Enter a valid name and email."; return; }
+    if (temporary && !access_expires_at) { message.style.color="#b91c1c"; message.textContent="Choose an expiration date."; return; }
+    button.disabled=true; button.textContent="Saving...";
+    try {
+        await invokeManageUser("update_user", user.id, { changes: { full_name, email, role, active, access_type: temporary ? "temporary" : "permanent", access_expires_at } });
+        overlay.style.display="none"; overlay._user=null;
+        await refreshUsersManagement();
+    } catch (error) { message.style.color="#b91c1c"; message.textContent=error?.message || String(error); }
+    finally { button.disabled=false; button.textContent="Save changes"; }
+}
+
+async function resetUserPassword(user) {
+    const password = window.prompt("Enter a new temporary password for " + (user.full_name || user.email) + ". It must contain at least 8 characters.");
+    if (password === null) return;
+    if (password.length < 8) { alert("Password must contain at least 8 characters."); return; }
+    try { await invokeManageUser("reset_password", user.id, { password }); alert("Temporary password updated successfully."); await refreshUsersManagement(); }
+    catch (error) { alert("Password could not be reset. " + (error?.message || String(error))); }
+}
+
+async function deleteFloraFlowUser(user) {
+    if (user.id === getCurrentAuthUserId()) { alert("You cannot delete your own account."); return; }
+    const first = window.confirm("Delete " + (user.full_name || user.email) + "? This removes the login and profile. Historical activity remains saved.");
+    if (!first) return;
+    const second = window.confirm("This action cannot be undone. Confirm permanent deletion.");
+    if (!second) return;
+    try { await invokeManageUser("delete_user", user.id); await refreshUsersManagement(); }
+    catch (error) { alert("The user could not be deleted. " + (error?.message || String(error))); }
 }
 
 if (usersBtn) {
     usersBtn.addEventListener("click", async function () {
         if (!canManageUsers()) return;
-        const overlay=ensureUsersManagementModal(); overlay.style.display="block"; settingsModal.style.display="none"; await refreshUsersManagement();
+        const overlay=ensureUsersManagementModal();
+        settingsModal.style.display="none";
+        lockBodyForUsersManagement(true);
+        overlay.style.display="flex";
+        await refreshUsersManagement();
     });
 }
 
