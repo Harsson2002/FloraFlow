@@ -642,6 +642,49 @@ function getCurrentAuthUserId() {
     return currentAuthUser?.id || currentUserProfile?.id || "";
 }
 
+function installSafeBackdropClose(overlay, closeHandler) {
+    if (!overlay || typeof closeHandler !== "function" || overlay.dataset.safeBackdropClose === "true") {
+        return;
+    }
+
+    overlay.dataset.safeBackdropClose = "true";
+
+    let startedOnBackdrop = false;
+    let moved = false;
+    let startX = 0;
+    let startY = 0;
+
+    overlay.addEventListener("pointerdown", function (event) {
+        startedOnBackdrop = event.target === overlay;
+        moved = false;
+        startX = event.clientX;
+        startY = event.clientY;
+    });
+
+    overlay.addEventListener("pointermove", function (event) {
+        if (!startedOnBackdrop) return;
+
+        if (Math.abs(event.clientX - startX) > 6 || Math.abs(event.clientY - startY) > 6) {
+            moved = true;
+        }
+    });
+
+    overlay.addEventListener("pointerup", function (event) {
+        const shouldClose = startedOnBackdrop && !moved && event.target === overlay;
+        startedOnBackdrop = false;
+        moved = false;
+
+        if (shouldClose) {
+            closeHandler();
+        }
+    });
+
+    overlay.addEventListener("pointercancel", function () {
+        startedOnBackdrop = false;
+        moved = false;
+    });
+}
+
 function formatNotificationTime(value) {
     if (!value) return "";
     const date = new Date(value);
@@ -836,9 +879,7 @@ function ensureNotificationCenter() {
     overlay.querySelector("#floraFlowNotificationCloseBtn")
         .addEventListener("click", close);
 
-    overlay.addEventListener("click", function (event) {
-        if (event.target === overlay) close();
-    });
+    installSafeBackdropClose(overlay, close);
 
     overlay.addEventListener("touchmove", function (event) {
         if (event.target === overlay) {
@@ -3749,11 +3790,7 @@ function ensureTeachFloraFlowModal() {
     overlay.querySelector("#teachFloraFlowCancelBtn")
         .addEventListener("click", close);
 
-    overlay.addEventListener("click", function (event) {
-        if (event.target === overlay) {
-            close();
-        }
-    });
+    installSafeBackdropClose(overlay, close);
 
     overlay.querySelector("#teachFloraFlowSaveBtn")
         .addEventListener("click", async function () {
@@ -8318,24 +8355,79 @@ function buildProductionPickPage(data) {
         overlay.querySelectorAll(".pick-item-controls, #pickSelectAll, #pickClearAll, #pickPhysicalCheck, #pickConfirmButton").forEach(function (element) {
             element.style.display = "none";
         });
-        acceptButton.addEventListener("click", async function () {
+        acceptButton.addEventListener("click", async function (event) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            if (acceptButton.dataset.accepting === "true") {
+                return;
+            }
+
+            acceptButton.dataset.accepting = "true";
             acceptButton.disabled = true;
             acceptButton.textContent = "Accepting task...";
+
             try {
-                const { error } = await supabaseClient
+                const { data: acceptedList, error } = await supabaseClient
                     .from(PRODUCTION_PICK_LIST_TABLE)
                     .update({ status: "IN_PROGRESS" })
                     .eq("id", list.id)
-                    .eq("status", "PENDING");
+                    .eq("status", "PENDING")
+                    .select("id, status")
+                    .maybeSingle();
+
                 if (error) throw error;
-                overlay.querySelectorAll(".pick-case-value").forEach(function (element) {
+
+                // The task may already have been accepted in another tab/device.
+                // In either case, keep this confirmation page open and reveal the case.
+                list.status = acceptedList?.status || "IN_PROGRESS";
+
+                const caseValues = Array.from(
+                    overlay.querySelectorAll(".pick-case-value")
+                );
+
+                caseValues.forEach(function (element) {
                     element.textContent = element.dataset.case || "Not specified";
+                    element.style.fontWeight = "900";
+                    element.style.color = "#8a0f75";
+                    element.style.background = "#fff1f8";
+                    element.style.padding = "2px 7px";
+                    element.style.borderRadius = "7px";
                 });
-                overlay.querySelectorAll(".pick-item-controls, #pickSelectAll, #pickClearAll, #pickPhysicalCheck, #pickConfirmButton").forEach(function (element) {
+
+                overlay.querySelectorAll(
+                    ".pick-item-controls, #pickSelectAll, #pickClearAll, #pickPhysicalCheck, #pickConfirmButton"
+                ).forEach(function (element) {
                     element.style.display = "";
                 });
-                acceptButton.remove();
+
+                const instruction = acceptButton.previousElementSibling;
+                if (instruction) {
+                    instruction.textContent =
+                        "Task accepted. The case number is now visible. Confirm what was physically taken when finished.";
+                    instruction.style.color = "#166534";
+                    instruction.style.fontWeight = "800";
+                }
+
+                const acceptedNotice = document.createElement("div");
+                acceptedNotice.id = "pickAcceptedNotice";
+                acceptedNotice.style.cssText =
+                    "margin:0 0 14px;padding:12px 14px;border:1px solid #86efac;border-radius:12px;background:#ecfdf5;color:#166534;font-weight:800;line-height:1.45;";
+                acceptedNotice.textContent =
+                    "Task accepted. Case number revealed below — this page will remain open until you close or confirm it.";
+                acceptButton.replaceWith(acceptedNotice);
+
+                const firstCase = caseValues[0];
+                if (firstCase) {
+                    setTimeout(function () {
+                        firstCase.closest(".production-pick-item")?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "center"
+                        });
+                    }, 80);
+                }
             } catch (error) {
+                acceptButton.dataset.accepting = "false";
                 acceptButton.disabled = false;
                 acceptButton.textContent = "Accept Task & View Case Number";
                 alert("The task could not be accepted. " + (error?.message || String(error)));
@@ -8872,9 +8964,7 @@ function ensureProductionProgressCenter() {
     });
     overlay.querySelector("#floraFlowProductionProgressCloseBtn").addEventListener("click", close);
     overlay.querySelector("#floraFlowProductionProgressRefreshBtn").addEventListener("click", loadProductionProgressLists);
-    overlay.addEventListener("click", function (event) {
-        if (event.target === overlay) close();
-    });
+    installSafeBackdropClose(overlay, close);
     overlay.querySelectorAll(".progress-filter-btn").forEach(function (button) {
         button.addEventListener("click", function () {
             overlay.dataset.filter = button.dataset.filter || "ACTIVE";
@@ -9723,7 +9813,9 @@ window.addEventListener("floraflow-auth-ready", function () {
             </section>`;
         document.body.appendChild(overlay);
         overlay.querySelector('#ffClosePickupModal').addEventListener('click', function () { overlay.style.display = 'none'; });
-        overlay.addEventListener('click', function (event) { if (event.target === overlay) overlay.style.display = 'none'; });
+        installSafeBackdropClose(overlay, function () {
+            overlay.style.display = 'none';
+        });
         overlay.querySelector('#ffPickupDestination').addEventListener('click', function (event) {
             const button = event.target.closest('button');
             if (!button) return;
