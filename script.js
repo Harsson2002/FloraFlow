@@ -3359,8 +3359,10 @@ let correctedLine =
         : cleanOcrText;
 
 correctedLine = correctedLine
-    .replace(/\bPAEQ\b/g, "PAEO")
-    .replace(/\bPAE0\b/g, "PAEO");
+    .replace(/\b[PF]AE[OQ0]\b/g, "PAEO");
+
+let articleLine = correctedLine;
+let colorCode = "";
     
     if (
         window.flowerBrain &&
