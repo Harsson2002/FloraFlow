@@ -608,25 +608,142 @@ async function initializeFloraFlowAuth() {
     });
 }
 
+const FLORAFLOW_VERSION = "2.6.0";
+let floraFlowHealthRefreshTimer = null;
+
 function ensureSettingsCurrentUserPanel() {
     if (!settingsModal || document.getElementById("settingsCurrentUserPanel")) return;
     const panel = document.createElement("div");
     panel.id = "settingsCurrentUserPanel";
-    panel.style.cssText = "margin:14px 0;padding:14px;border:1px solid #dbe4ea;border-radius:12px;background:#f8fafc;";
+    panel.style.cssText = "margin:14px 0;padding:14px;border:1px solid #eadfea;border-radius:16px;background:linear-gradient(145deg,#ffffff,#fbf7fb);";
     const content = settingsModal.querySelector(".modal-content") || settingsModal;
     content.insertBefore(panel, content.children[1] || null);
     updateSettingsCurrentUserPanel();
 }
 
+function getSettingsDisplayName() {
+    const raw = String(getCurrentUserName() || "FloraFlow User").replace(/[._-]+/g, " ").trim();
+    return raw.replace(/\b\w/g, function (letter) { return letter.toUpperCase(); });
+}
+
 function updateSettingsCurrentUserPanel() {
     const panel = document.getElementById("settingsCurrentUserPanel");
     if (!panel) return;
+    const role = normalizeAppRole(currentUserProfile?.role);
+    const roleLabel = role === "admin" ? "Administrator" : role === "manager" ? "Manager" : "User";
+    const initials = getSettingsDisplayName().split(/\s+/).slice(0, 2).map(function (part) { return part.charAt(0); }).join("").toUpperCase();
     panel.innerHTML = `
-        <div style="font-size:12px;font-weight:800;color:#64748b;text-transform:uppercase;letter-spacing:.08em;">Current user</div>
-        <div style="font-size:18px;font-weight:800;color:#0f172a;margin-top:4px;">${getCurrentUserName()}</div>
-        <div style="font-size:13px;color:#64748b;margin-top:3px;">${currentUserProfile?.email || ""} · ${normalizeAppRole(currentUserProfile?.role)}</div>`;
+        <div style="display:flex;align-items:center;gap:12px;">
+            <div style="width:48px;height:48px;border-radius:50%;display:flex;align-items:center;justify-content:center;background:#f3e8f1;color:#7a145f;font-weight:900;font-size:16px;border:1px solid #e8cfe2;">${initials || "FF"}</div>
+            <div style="min-width:0;flex:1;">
+                <div style="font-size:18px;font-weight:900;color:#231123;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${getSettingsDisplayName()}</div>
+                <div style="font-size:12px;color:#8a3f76;font-weight:800;text-transform:uppercase;letter-spacing:.08em;margin-top:2px;">${roleLabel}</div>
+                <div style="font-size:13px;color:#64748b;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${currentUserProfile?.email || ""}</div>
+            </div>
+            <span id="floraFlowOnlineBadge" style="padding:6px 9px;border-radius:999px;background:#ecfdf3;color:#166534;font-size:11px;font-weight:900;white-space:nowrap;">● Online</span>
+        </div>`;
 
     updateNotificationCurrentUser();
+}
+
+function ensureFloraFlowHealthPanel() {
+    if (!settingsModal) return null;
+    let panel = document.getElementById("floraFlowHealthPanel");
+    if (panel) return panel;
+    panel = document.createElement("section");
+    panel.id = "floraFlowHealthPanel";
+    panel.style.cssText = "margin-top:14px;padding:15px;border:1px solid #eadfea;border-radius:16px;background:#fff;";
+    panel.innerHTML = `
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;">
+            <div>
+                <div style="font-size:12px;font-weight:900;color:#8a3f76;text-transform:uppercase;letter-spacing:.1em;">FloraFlow Health</div>
+                <div id="floraFlowHealthMessage" style="font-size:18px;font-weight:900;color:#231123;margin-top:3px;">Checking services...</div>
+            </div>
+            <button id="floraFlowHealthRefreshBtn" type="button" style="min-height:36px;padding:8px 11px;border-radius:10px;background:#f8edf6;color:#7a145f;border:1px solid #e8cfe2;font-weight:800;">Refresh</button>
+        </div>
+        <div style="height:10px;border-radius:999px;background:#f1e7ef;overflow:hidden;margin-top:13px;">
+            <div id="floraFlowHealthBar" style="height:100%;width:0%;background:linear-gradient(90deg,#8b145f,#d51a8f);transition:width .35s ease;"></div>
+        </div>
+        <div id="floraFlowHealthPercent" style="font-size:12px;font-weight:900;color:#7a145f;margin-top:6px;">0%</div>
+        <div id="floraFlowHealthServices" style="display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px;"></div>
+        <div style="display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-top:13px;padding-top:12px;border-top:1px solid #f0e7ee;font-size:12px;color:#64748b;">
+            <span>FloraFlow v${FLORAFLOW_VERSION}</span>
+            <span id="floraFlowHealthChecked">Last checked: --</span>
+        </div>`;
+    const content = settingsModal.querySelector(".modal-content") || settingsModal;
+    const menu = settingsModal.querySelector(".settings-menu");
+    if (menu && menu.parentNode) menu.parentNode.insertBefore(panel, menu.nextSibling);
+    else content.appendChild(panel);
+    panel.querySelector("#floraFlowHealthRefreshBtn").addEventListener("click", refreshFloraFlowHealth);
+    return panel;
+}
+
+async function measureFloraFlowService(name, task, slowMs) {
+    const started = performance.now();
+    try {
+        await task();
+        const elapsed = Math.round(performance.now() - started);
+        return { name: name, ok: true, slow: elapsed > slowMs, ms: elapsed };
+    } catch (error) {
+        return { name: name, ok: false, slow: false, ms: null, error: error?.message || String(error) };
+    }
+}
+
+async function refreshFloraFlowHealth() {
+    const panel = ensureFloraFlowHealthPanel();
+    if (!panel) return;
+    const services = panel.querySelector("#floraFlowHealthServices");
+    const message = panel.querySelector("#floraFlowHealthMessage");
+    const bar = panel.querySelector("#floraFlowHealthBar");
+    const percent = panel.querySelector("#floraFlowHealthPercent");
+    const checked = panel.querySelector("#floraFlowHealthChecked");
+    const refreshButton = panel.querySelector("#floraFlowHealthRefreshBtn");
+    refreshButton.disabled = true;
+    refreshButton.textContent = "Checking...";
+    message.textContent = "Checking services...";
+
+    const results = await Promise.all([
+        Promise.resolve({ name: "Internet", ok: navigator.onLine, slow: false, ms: null }),
+        measureFloraFlowService("Database", async function () {
+            const result = await supabaseClient.from("app_profiles").select("id", { count: "exact", head: true });
+            if (result.error) throw result.error;
+        }, 900),
+        measureFloraFlowService("Authentication", async function () {
+            const result = await supabaseClient.auth.getSession();
+            if (result.error) throw result.error;
+        }, 700),
+        Promise.resolve({ name: "Notifications", ok: Boolean(getCurrentAuthUserId()), slow: notificationRefreshTimer === null, ms: null }),
+        Promise.resolve({ name: "PDF Reader", ok: Boolean(window.pdfjsLib || window.__floraFlowPdfJsPromise), slow: false, ms: null }),
+        Promise.resolve({ name: "FlowerBrain", ok: Array.isArray(learnedProductionAliases) && learnedProductionAliases.length >= 0, slow: false, ms: null })
+    ]);
+
+    const scoreParts = results.map(function (item) { return item.ok ? (item.slow ? 0.75 : 1) : 0; });
+    const score = Math.round(scoreParts.reduce(function (sum, value) { return sum + value; }, 0) / results.length * 100);
+    bar.style.width = score + "%";
+    percent.textContent = score + "%";
+    const problem = results.find(function (item) { return !item.ok || item.slow; });
+    message.textContent = !problem ? "All services operational" : (!problem.ok ? problem.name + " is unavailable" : problem.name + " response is slow");
+
+    services.innerHTML = results.map(function (item) {
+        const state = !item.ok ? "Unavailable" : item.slow ? "Slow" : "Operational";
+        const symbol = !item.ok ? "●" : item.slow ? "●" : "●";
+        const bg = !item.ok ? "#fff1f2" : item.slow ? "#fff7ed" : "#f0fdf4";
+        const color = !item.ok ? "#b91c1c" : item.slow ? "#b45309" : "#166534";
+        const timing = item.ms === null ? "" : " · " + item.ms + " ms";
+        return `<div style="padding:10px;border-radius:11px;background:${bg};border:1px solid ${color}22;min-width:0;">
+            <div style="font-size:13px;font-weight:900;color:#334155;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${item.name}</div>
+            <div style="font-size:12px;font-weight:800;color:${color};margin-top:3px;">${symbol} ${state}${timing}</div>
+        </div>`;
+    }).join("");
+    checked.textContent = "Last checked: " + new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    const badge = document.getElementById("floraFlowOnlineBadge");
+    if (badge) {
+        badge.textContent = navigator.onLine ? "● Online" : "● Offline";
+        badge.style.background = navigator.onLine ? "#ecfdf3" : "#fff1f2";
+        badge.style.color = navigator.onLine ? "#166534" : "#b91c1c";
+    }
+    refreshButton.disabled = false;
+    refreshButton.textContent = "Refresh";
 }
 
 function updateNotificationCurrentUser() {
@@ -1411,12 +1528,22 @@ settingsBtn.addEventListener("click", function () {
     configureFloraFlowSettingsModal();
     ensureSettingsCurrentUserPanel();
     updateSettingsCurrentUserPanel();
+    ensureFloraFlowHealthPanel();
     applyUserPermissions();
     settingsModal.style.display = "block";
+    refreshFloraFlowHealth();
+    if (floraFlowHealthRefreshTimer) clearInterval(floraFlowHealthRefreshTimer);
+    floraFlowHealthRefreshTimer = setInterval(function () {
+        if (settingsModal.style.display === "block") refreshFloraFlowHealth();
+    }, 30000);
 });
 closeSettingsModal.addEventListener("click", function () {
 
     settingsModal.style.display = "none";
+    if (floraFlowHealthRefreshTimer) {
+        clearInterval(floraFlowHealthRefreshTimer);
+        floraFlowHealthRefreshTimer = null;
+    }
 
 });
 
