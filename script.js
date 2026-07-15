@@ -3391,6 +3391,7 @@ let correctedLine =
         ? window.flowerBrain.fixCommonOcrErrors(cleanOcrText)
         : cleanOcrText;
         correctedLine = fixProductionOcrWords(correctedLine);
+        console.log("OCR corrected:", correctedLine);
         
 
 
