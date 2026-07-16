@@ -254,6 +254,15 @@ async function saveProductionAliasLearning(alias, family) {
         throw new Error("The alias or family is empty.");
     }
 
+    if (isProtectedCanonicalFamilyAlias(normalizedAlias, normalizedFamily)) {
+        throw new Error(
+            normalizedAlias +
+            " is an official product family and cannot be assigned to " +
+            normalizedFamily +
+            "."
+        );
+    }
+
     const { data: existingRows, error: selectError } = await supabaseClient
         .from("production_aliases")
         .select("id")
@@ -6158,12 +6167,24 @@ let colorCode = "";
         }
     }
 
+    const canonicalFamilyInLine =
+        findCanonicalFamilyInProductionLine(articleLine);
+
     const learnedAlias =
         getLearnedProductAlias(
             normalizeMatchText(articleLine)
         );
 
-    if (learnedAlias) {
+    // Never allow an old browser/localStorage rule to replace an official
+    // family already written in the production line. ROSE YELLOW must stay
+    // ROSE, even if an obsolete rule says CURLY WILLOW.
+    if (
+        learnedAlias &&
+        (
+            !canonicalFamilyInLine ||
+            normalizeMatchText(learnedAlias) === canonicalFamilyInLine
+        )
+    ) {
         articleLine = learnedAlias;
     }
 
@@ -6889,6 +6910,55 @@ function addFamilyRuleName(ruleMap, family, name) {
     );
 }
 
+function isProtectedCanonicalFamilyAlias(alias, assignedFamily) {
+
+    const normalizedAlias = normalizeMatchText(alias);
+    const normalizedAssignedFamily = normalizeMatchText(assignedFamily);
+
+    if (!normalizedAlias || !normalizedAssignedFamily) {
+        return false;
+    }
+
+    const canonicalFamilies = new Set(
+        (productsCatalog || [])
+            .map(normalizeMatchText)
+            .filter(Boolean)
+    );
+
+    (flowerFamilies || []).forEach(function (item) {
+        const family = normalizeMatchText(item?.family);
+        if (family) canonicalFamilies.add(family);
+    });
+
+    return (
+        canonicalFamilies.has(normalizedAlias) &&
+        normalizedAlias !== normalizedAssignedFamily
+    );
+}
+
+function findCanonicalFamilyInProductionLine(value) {
+
+    const normalizedLine = normalizeMatchText(value);
+    if (!normalizedLine) return "";
+
+    const canonicalFamilies = Array.from(new Set(
+        (productsCatalog || [])
+            .map(normalizeMatchText)
+            .filter(Boolean)
+            .concat(
+                (flowerFamilies || [])
+                    .map(function (item) { return normalizeMatchText(item?.family); })
+                    .filter(Boolean)
+            )
+    )).sort(function (a, b) {
+        return b.length - a.length;
+    });
+
+    return canonicalFamilies.find(function (family) {
+        return containsNormalizedPhrase(normalizedLine, family);
+    }) || "";
+}
+
 function getRuntimeOperationalFamilyRules() {
 
     const ruleMap = new Map();
@@ -6911,6 +6981,18 @@ function getRuntimeOperationalFamilyRules() {
     });
 
     (learnedProductionAliases || []).forEach(function (item) {
+        // A learned rule must never reassign an official family name to a
+        // different family. Example: ROSE -> CURLY WILLOW.
+        if (isProtectedCanonicalFamilyAlias(item.alias, item.family)) {
+            console.warn(
+                "Ignored unsafe production alias:",
+                item.alias,
+                "->",
+                item.family
+            );
+            return;
+        }
+
         addFamilyRuleName(
             ruleMap,
             item.family,
