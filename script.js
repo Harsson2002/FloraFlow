@@ -187,6 +187,18 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 const INVENTORY_FETCH_PAGE_SIZE = 1000;
 const INVENTORY_RENDER_PAGE_SIZE = 75;
 let inventoryCurrentPage = 1;
+const INVENTORY_SORT_STORAGE_KEY = "floraFlowInventorySort";
+let inventorySort = (function () {
+    try {
+        const saved = JSON.parse(localStorage.getItem(INVENTORY_SORT_STORAGE_KEY) || "null");
+        if (saved && saved.key && ["asc", "desc"].includes(saved.direction)) {
+            return saved;
+        }
+    } catch (error) {
+        console.warn("Could not restore inventory sorting.", error);
+    }
+    return { key: "", direction: "" };
+})();
 let removedInventoryLoaded = inventory.some(function (item) {
     return item.status === "Removed from Inventory";
 });
@@ -1483,8 +1495,12 @@ function extractProductionColor(line) {
             aliases: ["OLIVE GREEN"]
         },
         {
+            color: "BIPURPLE",
+            aliases: ["BIPURPLE", "BI PURPLE", "BIPURP", "BIPURPLEE"]
+        },
+        {
             color: "BLUE PURPLE",
-            aliases: ["BLUE PURPLE"]
+            aliases: ["BLUE PURPLE", "BLUEPURPLE"]
         },
         {
             color: "YELLOW",
@@ -3140,10 +3156,129 @@ function queueInventoryRender(options = {}) {
     }
 }
 
+function saveInventorySort() {
+    localStorage.setItem(INVENTORY_SORT_STORAGE_KEY, JSON.stringify(inventorySort));
+}
+
+function getInventorySortValue(item, key) {
+    if (key === "quantity") return Number(item.quantity || 0);
+    if (key === "date") {
+        const timestamp = Date.parse(String(item.date || ""));
+        return Number.isNaN(timestamp) ? 0 : timestamp;
+    }
+    return String(item[key] ?? "").trim().toUpperCase();
+}
+
+function applyInventorySort(items) {
+    if (!inventorySort.key || !inventorySort.direction) return items.slice();
+    const direction = inventorySort.direction === "asc" ? 1 : -1;
+    return items.slice().sort(function (a, b) {
+        const aValue = getInventorySortValue(a, inventorySort.key);
+        const bValue = getInventorySortValue(b, inventorySort.key);
+        if (typeof aValue === "number" && typeof bValue === "number") {
+            return (aValue - bValue) * direction;
+        }
+        return String(aValue).localeCompare(String(bValue), undefined, {
+            numeric: true,
+            sensitivity: "base"
+        }) * direction;
+    });
+}
+
+function cycleInventorySort(key) {
+    if (inventorySort.key !== key) {
+        inventorySort = { key: key, direction: "asc" };
+    } else if (inventorySort.direction === "asc") {
+        inventorySort.direction = "desc";
+    } else if (inventorySort.direction === "desc") {
+        inventorySort = { key: "", direction: "" };
+    } else {
+        inventorySort = { key: key, direction: "asc" };
+    }
+    saveInventorySort();
+    inventoryCurrentPage = 1;
+    updateInventorySortHeaders();
+    renderInventory();
+}
+
+function updateInventorySortHeaders() {
+    document.querySelectorAll("[data-inventory-sort]").forEach(function (button) {
+        const key = button.dataset.inventorySort;
+        const indicator = button.querySelector(".inventory-sort-indicator");
+        if (!indicator) return;
+        indicator.textContent = inventorySort.key === key
+            ? (inventorySort.direction === "asc" ? "▲" : "▼")
+            : "↕";
+        button.setAttribute("aria-sort", inventorySort.key === key
+            ? (inventorySort.direction === "asc" ? "ascending" : "descending")
+            : "none");
+    });
+}
+
+function initializeInventorySortHeaders() {
+    if (!document.getElementById("floraFlowInventorySortStyles")) {
+        const style = document.createElement("style");
+        style.id = "floraFlowInventorySortStyles";
+        style.textContent = `
+            .inventory-sort-button{display:inline-flex;align-items:center;justify-content:center;gap:5px;width:100%;padding:0;border:0;background:transparent;color:inherit;font:inherit;font-weight:inherit;cursor:pointer;white-space:nowrap}
+            .inventory-sort-button:hover{opacity:.82}
+            .inventory-sort-indicator{font-size:10px;line-height:1;opacity:.9}
+            .flower-life-dot{display:inline-block;width:16px;height:16px;border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.9),0 1px 4px rgba(15,23,42,.25);vertical-align:middle}
+            .flower-life-cell{text-align:center;min-width:42px}
+            .mobile-flower-life{display:inline-flex;align-items:center;gap:7px}
+        `;
+        document.head.appendChild(style);
+    }
+
+    const headerConfig = [
+        ["product", "Product"], ["color", "Color"], ["quantity", "Qty"],
+        ["caseNumber", "Case"], ["date", "Date"], ["status", "Status"]
+    ];
+    const headers = document.querySelectorAll("table thead th");
+    headerConfig.forEach(function (config, index) {
+        const th = headers[index];
+        if (!th || th.querySelector("[data-inventory-sort]")) return;
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "inventory-sort-button";
+        button.dataset.inventorySort = config[0];
+        button.innerHTML = `<span>${config[1]}</span><span class="inventory-sort-indicator">↕</span>`;
+        button.addEventListener("click", function () { cycleInventorySort(config[0]); });
+        th.textContent = "";
+        th.appendChild(button);
+    });
+    updateInventorySortHeaders();
+}
+
+function getFlowerLifeIndicator(dateValue) {
+    const received = new Date(String(dateValue || "") + "T00:00:00");
+    if (Number.isNaN(received.getTime())) {
+        return { color: "#94a3b8", days: null, title: "Date unavailable" };
+    }
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const days = Math.max(0, Math.floor((today.getTime() - received.getTime()) / 86400000));
+    if (days <= 1) return { color: "#22a447", days: days, title: days + " day(s) in inventory" };
+    if (days === 2) return { color: "#f4bf00", days: days, title: "2 days in inventory" };
+    if (days === 3) return { color: "#f58216", days: days, title: "3 days in inventory" };
+    if (days === 4) return { color: "#ef2b2d", days: days, title: "4 days in inventory" };
+    return { color: "#b40712", days: days, title: days + " days in inventory" };
+}
+
+function createFlowerLifeDot(dateValue) {
+    const life = getFlowerLifeIndicator(dateValue);
+    const dot = document.createElement("span");
+    dot.className = "flower-life-dot";
+    dot.style.background = life.color;
+    dot.title = life.title;
+    dot.setAttribute("aria-label", life.title);
+    return dot;
+}
+
 function getVisibleInventoryItems() {
     const inventorySearch = searchInput.value.toLowerCase().trim();
 
-    return inventory.filter(function (item) {
+    const filteredItems = inventory.filter(function (item) {
         const matchesRemoved = showRemoved || item.status !== "Removed from Inventory";
         if (!matchesRemoved) return false;
         if (!inventorySearch) return true;
@@ -3158,6 +3293,8 @@ function getVisibleInventoryItems() {
             return String(value ?? "").toLowerCase().includes(inventorySearch);
         });
     });
+
+    return applyInventorySort(filteredItems);
 }
 
 function renderInventory() {
@@ -3194,11 +3331,20 @@ function renderInventory() {
         productCell.appendChild(productLink);
         row.appendChild(productCell);
 
-        [item.color, item.quantity, item.caseNumber, item.date, item.notes].forEach(function (value) {
+        [item.color, item.quantity, item.caseNumber, item.date].forEach(function (value) {
             const cell = document.createElement("td");
             cell.textContent = value ?? "";
             row.appendChild(cell);
         });
+
+        const lifeCell = document.createElement("td");
+        lifeCell.className = "flower-life-cell";
+        lifeCell.appendChild(createFlowerLifeDot(item.date));
+        row.appendChild(lifeCell);
+
+        const notesCell = document.createElement("td");
+        notesCell.textContent = item.notes ?? "";
+        row.appendChild(notesCell);
 
         const statusCell = document.createElement("td");
         statusCell.innerHTML = getStatusBadge(item.status);
@@ -3230,9 +3376,13 @@ function renderInventory() {
                 <span>📦 Case ${escapeProductionPickHtml(item.caseNumber || "")}</span>
                 <span>🌿 ${Number(item.quantity ?? 0)} stems</span>
                 <span>📅 ${escapeProductionPickHtml(item.date || "")}</span>
+                <span class="mobile-flower-life">Life <span class="mobile-life-dot-slot"></span></span>
             </div>
             <div class="mobile-product-status">${getStatusBadge(item.status)}</div>
         `;
+
+        const mobileLifeSlot = mobileCard.querySelector(".mobile-life-dot-slot");
+        if (mobileLifeSlot) mobileLifeSlot.appendChild(createFlowerLifeDot(item.date));
 
         mobileCard.querySelector(".mobile-copy-btn").addEventListener("click", async function () {
             const productText = `🌸 ${item.product || ""}\n🎨 ${item.color || ""}\n📦 Case ${item.caseNumber || ""}\n🌿 ${item.quantity ?? 0} stems\n📅 ${item.date || ""}\nStatus: ${item.status || ""}`;
@@ -4107,6 +4257,7 @@ async function loadInventoryFromSupabase() {
 
             inventory = activeRows.concat(existingRemovedRows);
             inventoryCurrentPage = 1;
+            initializeInventorySortHeaders();
             renderInventory();
             updateDashboard();
             return inventory;
@@ -7364,6 +7515,37 @@ function detectOperationalFamilyFromLine(value) {
 
     if (!normalizedLine) {
         return null;
+    }
+
+    // Deterministic protection for the rose families. Curly Willow is only
+    // valid when the OCR actually contains CURLY WILLOW / CURLY WILOW.
+    if (
+        containsNormalizedPhrase(normalizedLine, "SPRAY ROSE") ||
+        containsNormalizedPhrase(normalizedLine, "ROSE SPRAY")
+    ) {
+        return {
+            family: "SPRAY ROSE",
+            alias: containsNormalizedPhrase(normalizedLine, "SPRAY ROSE") ? "SPRAY ROSE" : "ROSE SPRAY",
+            observedAlias: containsNormalizedPhrase(normalizedLine, "SPRAY ROSE") ? "SPRAY ROSE" : "ROSE SPRAY",
+            source: "PROTECTED_ROSE_RULE",
+            score: 100,
+            distance: 0,
+            needsReview: false,
+            alternatives: []
+        };
+    }
+
+    if (containsNormalizedPhrase(normalizedLine, "ROSE")) {
+        return {
+            family: "ROSE",
+            alias: "ROSE",
+            observedAlias: "ROSE",
+            source: "PROTECTED_ROSE_RULE",
+            score: 100,
+            distance: 0,
+            needsReview: false,
+            alternatives: []
+        };
     }
 
     // An official family written directly in the production text always wins.

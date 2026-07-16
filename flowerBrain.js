@@ -70,9 +70,7 @@ window.flowerBrain = {
             product: "CURLY WILLOW",
             aliases: [
                 "CURLY WILLOW",
-                "CURLY WILOW",
-                "CURLY",
-                "WILLOW"
+                "CURLY WILOW"
             ]
         },
 
@@ -268,6 +266,11 @@ window.flowerBrain = {
         HPNK: "HOT PINK",
         "HOT PINK": "HOT PINK",
 
+        BIPURPLE: "BIPURPLE",
+        "BI PURPLE": "BIPURPLE",
+        BIPURP: "BIPURPLE",
+        BIPURPLEE: "BIPURPLE",
+
         PURP: "PURPLE",
         PURPLE: "PURPLE",
 
@@ -284,7 +287,7 @@ window.flowerBrain = {
     colorCodes: {
     AN: "ANTIQUE",
     BL: "BLUE",
-    BP: "BLUE PURPLE",
+    BP: "BIPURPLE",
     BR: "BROWN",
     BU: "BURGUNDY",
     BZ: "BRONZE",
@@ -336,6 +339,15 @@ window.flowerBrain = {
         let product = "";
         let variety = "";
         let color = "";
+
+        // Protected canonical rose rules. They run before any generic alias.
+        if (/\b(?:SPRAY ROSE|ROSE SPRAY)\b/.test(cleaned)) {
+            product = "SPRAY ROSE";
+            cleaned = cleaned.replace(/\b(?:SPRAY ROSE|ROSE SPRAY)\b/g, " ").replace(/\s+/g, " ").trim();
+        } else if (/\bROSE\b/.test(cleaned)) {
+            product = "ROSE";
+            cleaned = cleaned.replace(/\bROSE\b/g, " ").replace(/\s+/g, " ").trim();
+        }
 
         const phraseEntries = Object.entries(
             this.productPhrases || {}
