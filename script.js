@@ -10635,6 +10635,126 @@ function updateProductionProgressBadge() {
     badge.style.display = activeCount > 0 ? "flex" : "none";
 }
 
+async function cancelProductionProgressOrder(list, button) {
+    const status = String(list?.status || "PENDING").toUpperCase();
+
+    if (!list?.id || ["COMPLETED", "CANCELLED"].includes(status)) {
+        return;
+    }
+
+    const orderNumber = String(list.production_order || "").trim();
+    const confirmed = window.confirm(
+        "Cancel Production Order #" + orderNumber + "?\n\n" +
+        "Nothing will be removed from inventory. All reserved products will become available again."
+    );
+
+    if (!confirmed) {
+        return;
+    }
+
+    const originalText = button?.textContent || "Cancel";
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Cancelling...";
+    }
+
+    const statusElement = document.getElementById("floraFlowProductionProgressStatus");
+
+    try {
+        const now = new Date().toISOString();
+        const activeItems = (list.items || []).filter(function (item) {
+            return !["COMPLETED", "RETURNED", "CANCELLED", "NOT_TAKEN"].includes(
+                String(item.status || "").toUpperCase()
+            );
+        });
+
+        if (activeItems.length > 0) {
+            const itemResults = await Promise.all(activeItems.map(function (item) {
+                return supabaseClient
+                    .from(PRODUCTION_PICK_ITEM_TABLE)
+                    .update({
+                        status: "NOT_TAKEN",
+                        destination: "NOT_TAKEN",
+                        quantity_taken: 0,
+                        confirmed_by: getCurrentUserName(),
+                        confirmed_at: now
+                    })
+                    .eq("id", item.id);
+            }));
+
+            const failedItem = itemResults.find(function (result) {
+                return result.error;
+            });
+
+            if (failedItem) {
+                throw failedItem.error;
+            }
+        }
+
+        const { error: listError } = await supabaseClient
+            .from(PRODUCTION_PICK_LIST_TABLE)
+            .update({
+                status: "CANCELLED",
+                completed_by: getCurrentUserName(),
+                completed_at: now
+            })
+            .eq("id", list.id)
+            .in("status", ["PENDING", "IN_PROGRESS"]);
+
+        if (listError) {
+            throw listError;
+        }
+
+        const { error: assignmentError } = await supabaseClient
+            .from(PRODUCTION_PICK_ASSIGNMENT_TABLE)
+            .update({
+                status: "CANCELLED",
+                completed_at: now
+            })
+            .eq("pick_list_id", list.id)
+            .in("status", ["PENDING", "IN_PROGRESS"]);
+
+        if (assignmentError) {
+            console.warn("The order was cancelled, but assignment status could not be updated:", assignmentError);
+        }
+
+        list.status = "CANCELLED";
+        (list.items || []).forEach(function (item) {
+            if (!["COMPLETED", "RETURNED"].includes(String(item.status || "").toUpperCase())) {
+                item.status = "NOT_TAKEN";
+                item.destination = "NOT_TAKEN";
+                item.quantity_taken = 0;
+                item.confirmed_by = getCurrentUserName();
+                item.confirmed_at = now;
+            }
+        });
+
+        await Promise.all([
+            loadActiveProductionReservations(),
+            loadInventoryFromSupabase()
+        ]);
+
+        if (statusElement) {
+            statusElement.style.color = "#166534";
+            statusElement.textContent = "Production Order #" + orderNumber + " was cancelled. Reserved products are available again.";
+        }
+
+        renderProductionProgressLists();
+        updateProductionProgressBadge();
+    } catch (error) {
+        console.error("Cancel production order error:", error);
+        if (button) {
+            button.disabled = false;
+            button.textContent = originalText;
+        }
+        if (statusElement) {
+            statusElement.style.color = "#b91c1c";
+            statusElement.textContent = "The production order could not be cancelled.";
+        }
+        alert("The production order could not be cancelled. " + (error?.message || String(error)));
+    }
+}
+
 function renderProductionProgressLists() {
     const container = document.getElementById("floraFlowProductionProgressList");
     const overlay = document.getElementById("floraFlowProductionProgressOverlay");
@@ -10694,6 +10814,9 @@ function renderProductionProgressLists() {
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
                 <button type="button" class="open-progress-pick" style="background:#166534;color:white;border:0;border-radius:9px;padding:10px 13px;font-weight:800;">Open Pick List</button>
                 <button type="button" class="copy-progress-link">Copy Link</button>
+                ${!["COMPLETED", "CANCELLED"].includes(String(list.status || "").toUpperCase())
+                    ? '<button type="button" class="cancel-progress-order" style="margin-left:auto;background:#fff1f2;color:#b91c1c;border:1px solid #fecaca;border-radius:9px;padding:10px 13px;font-weight:800;">Cancel</button>'
+                    : ''}
             </div>
         `;
 
@@ -10708,6 +10831,9 @@ function renderProductionProgressLists() {
             } catch (error) {
                 alert("The Pick List link could not be copied.");
             }
+        });
+        card.querySelector(".cancel-progress-order")?.addEventListener("click", async function () {
+            await cancelProductionProgressOrder(list, this);
         });
         container.appendChild(card);
     });
