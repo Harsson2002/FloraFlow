@@ -1702,9 +1702,28 @@ async function sendFloraFlowExteriorTest(statusElement) {
     });
 
     if (error) throw error;
-    if (data?.ok === false) throw new Error(data.error || "The test notification could not be sent.");
 
-    if (statusElement) statusElement.textContent = "Test sent. Check your phone notifications ✓";
+    if (!data || data.ok !== true) {
+        const firstFailure = Array.isArray(data?.results)
+            ? data.results.find(function (item) { return item && item.sent === false; })
+            : null;
+
+        const failureMessage =
+            firstFailure?.message ||
+            data?.error ||
+            "The test notification could not be delivered.";
+
+        throw new Error(failureMessage);
+    }
+
+    const sentCount = Number(data.sent || 0);
+    const failedCount = Number(data.failed || 0);
+
+    if (statusElement) {
+        statusElement.textContent = failedCount > 0
+            ? `Sent to ${sentCount} device(s), but ${failedCount} failed.`
+            : `Notification delivered to ${sentCount} device(s) ✓`;
+    }
 }
 
 function openFloraFlowPreferencePanel(section) {
