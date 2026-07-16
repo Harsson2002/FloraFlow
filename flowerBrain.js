@@ -56,6 +56,17 @@ window.flowerBrain = {
         },
 
         {
+            product: "ROSE",
+            aliases: [
+                "ROSE",
+                "ROSES",
+                "ROSA",
+                "R0SE",
+                "R0SA"
+            ]
+        },
+
+        {
             product: "CURLY WILLOW",
             aliases: [
                 "CURLY WILLOW",
@@ -192,6 +203,12 @@ window.flowerBrain = {
 
         SUNFL: "SUNFLOWER",
         SUNFLOWER: "SUNFLOWER",
+
+        ROSE: "ROSE",
+        ROSES: "ROSE",
+        ROSA: "ROSE",
+        R0SE: "ROSE",
+        R0SA: "ROSE",
 
         ALSTROE: "ALSTROMERIA",
         ALSTROMERIA: "ALSTROMERIA",
@@ -539,7 +556,10 @@ window.flowerBrain.fixCommonOcrErrors = function (line) {
         .replace(/\bJASTER\b/g, "ASTER")
         .replace(/\bJPOM\b/g, "POM")
         .replace(/\bPITOSPORUM\b/g, "PITTOSPORUM")
-        .replace(/\bPRRROSEORUM\b/g, "PITTOSPORUM");
+        .replace(/\bPRRROSEORUM\b/g, "PITTOSPORUM")
+        .replace(/\bR0SA\b/g, "ROSE")
+        .replace(/\bR0SE\b/g, "ROSE")
+        .replace(/\bROSA\b/g, "ROSE");
 
     return text;
 };

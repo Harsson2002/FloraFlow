@@ -1382,6 +1382,11 @@ function replaceFamilyAliasesInLine(line) {
                 return;
             }
 
+            if (isProtectedCanonicalFamilyAlias(cleanAlias, familyName)) {
+                console.warn("Ignored unsafe family replacement:", cleanAlias, "->", familyName);
+                return;
+            }
+
             const escapedAlias = cleanAlias.replace(
                 /[.*+?^${}()|[\]\\]/g,
                 "\\$&"
@@ -4596,9 +4601,13 @@ function ensureTeachFloraFlowModal() {
         "inset:0",
         "z-index:100000",
         "background:rgba(15,23,42,.62)",
-        "padding:18px",
+        "padding:12px",
         "box-sizing:border-box",
-        "overflow:auto"
+        "overflow:hidden",
+        "align-items:center",
+        "justify-content:center",
+        "overscroll-behavior:contain",
+        "touch-action:pan-y"
     ].join(";");
 
     overlay.innerHTML = `
@@ -6930,9 +6939,15 @@ function isProtectedCanonicalFamilyAlias(alias, assignedFamily) {
         if (family) canonicalFamilies.add(family);
     });
 
-    return (
-        canonicalFamilies.has(normalizedAlias) &&
-        normalizedAlias !== normalizedAssignedFamily
+    const canonicalFamilyInsideAlias = Array.from(canonicalFamilies)
+        .sort(function (a, b) { return b.length - a.length; })
+        .find(function (family) {
+            return containsNormalizedPhrase(normalizedAlias, family);
+        }) || "";
+
+    return Boolean(
+        canonicalFamilyInsideAlias &&
+        canonicalFamilyInsideAlias !== normalizedAssignedFamily
     );
 }
 
@@ -7009,6 +7024,10 @@ function getRuntimeOperationalFamilyRules() {
         );
 
         (item.aliases || []).forEach(function (alias) {
+            if (isProtectedCanonicalFamilyAlias(alias, item.family)) {
+                console.warn("Ignored unsafe flower family alias:", alias, "->", item.family);
+                return;
+            }
             addFamilyRuleName(
                 ruleMap,
                 item.family,
@@ -7289,6 +7308,23 @@ function detectOperationalFamilyFromLine(value) {
 
     if (!normalizedLine) {
         return null;
+    }
+
+    // An official family written directly in the production text always wins.
+    // This prevents a wrong database alias such as ROSE YELLOW -> CURLY WILLOW
+    // from replacing the real family ROSE.
+    const canonicalFamily = findCanonicalFamilyInProductionLine(normalizedLine);
+    if (canonicalFamily) {
+        return {
+            family: canonicalFamily,
+            alias: canonicalFamily,
+            observedAlias: canonicalFamily,
+            source: "CANONICAL_FAMILY",
+            score: 100,
+            distance: 0,
+            needsReview: false,
+            alternatives: []
+        };
     }
 
     const exactCandidates = [];
@@ -8806,10 +8842,17 @@ function ensureProductsManagementModal() {
     overlay.innerHTML = `
         <div style="
             width:min(850px,100%);
-            margin:4vh auto;
+            max-height:calc(100dvh - 24px);
+            margin:0 auto;
             background:white;
             border-radius:16px;
             padding:20px;
+            box-sizing:border-box;
+            overflow-y:auto;
+            overflow-x:hidden;
+            overscroll-behavior:contain;
+            -webkit-overflow-scrolling:touch;
+            touch-action:pan-y;
             box-shadow:0 24px 70px rgba(0,0,0,.28);
         ">
             <div style="display:flex;justify-content:space-between;gap:12px;align-items:center;">
@@ -8920,6 +8963,38 @@ function ensureProductsManagementModal() {
 
     document.body.appendChild(overlay);
 
+    if (!document.getElementById("floraFlowProductsManagementScrollFix")) {
+        const style = document.createElement("style");
+        style.id = "floraFlowProductsManagementScrollFix";
+        style.textContent = `
+            #productsManagementOverlay > div { scrollbar-gutter: stable; }
+            #productsFamiliesList, #productionRulesList {
+                overscroll-behavior: contain;
+                -webkit-overflow-scrolling: touch;
+                touch-action: pan-y;
+            }
+            @media (max-width: 720px) {
+                #productsManagementOverlay { padding: 0 !important; align-items: stretch !important; }
+                #productsManagementOverlay > div {
+                    width: 100% !important;
+                    max-height: 100dvh !important;
+                    min-height: 100dvh !important;
+                    border-radius: 0 !important;
+                    padding: 16px !important;
+                }
+                #productsManagementOverlay [style*="grid-template-columns:1fr 1.3fr"] {
+                    grid-template-columns: 1fr !important;
+                }
+                #productsFamiliesList, #productionRulesList { max-height: none !important; overflow: visible !important; }
+                #productsFamiliesList > div, #productionRulesList > div {
+                    flex-direction: column !important;
+                    align-items: stretch !important;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+    }
+
     overlay.querySelector("#openArticleCatalogFromProducts")?.addEventListener("click", function () {
         overlay.style.display = "none";
         if (articlesBtn) articlesBtn.click();
@@ -8928,11 +9003,13 @@ function ensureProductsManagementModal() {
     overlay.querySelector("#closeProductsManagementBtn")
         .addEventListener("click", function () {
             overlay.style.display = "none";
+            lockFloraFlowPageScroll(false);
         });
 
     overlay.addEventListener("click", function (event) {
         if (event.target === overlay) {
             overlay.style.display = "none";
+            lockFloraFlowPageScroll(false);
         }
     });
 
@@ -9367,8 +9444,9 @@ async function saveNewProductFamilyFromSettings() {
 if (productsBtn) {
     productsBtn.addEventListener("click", async function () {
         const overlay = ensureProductsManagementModal();
-        overlay.style.display = "block";
         settingsModal.style.display = "none";
+        lockFloraFlowPageScroll(false);
+        overlay.style.display = "flex";
         await refreshProductsManagementData();
         document.getElementById("newProductFamilyInput")?.focus();
     });
