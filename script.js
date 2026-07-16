@@ -6956,22 +6956,44 @@ function findCanonicalFamilyInProductionLine(value) {
     const normalizedLine = normalizeMatchText(value);
     if (!normalizedLine) return "";
 
-    const canonicalFamilies = Array.from(new Set(
-        (productsCatalog || [])
-            .map(normalizeMatchText)
-            .filter(Boolean)
-            .concat(
-                (flowerFamilies || [])
-                    .map(function (item) { return normalizeMatchText(item?.family); })
-                    .filter(Boolean)
-            )
-    )).sort(function (a, b) {
-        return b.length - a.length;
+    // Search every official family and its approved aliases together.
+    // The most specific phrase must win. For example:
+    // ROSE SPRAY ORANGE -> SPRAY ROSE (not ROSE)
+    // MINI HYDRANGEA -> MINI HYDRANGEA (not HYDRANGEA)
+    const candidates = [];
+
+    getRuntimeOperationalFamilyRules().forEach(function (rule, ruleIndex) {
+        const family = normalizeMatchText(rule.family);
+
+        (rule.names || []).concat([rule.family]).forEach(function (name) {
+            const normalizedName = normalizeMatchText(name);
+
+            if (
+                !family ||
+                !normalizedName ||
+                !containsNormalizedPhrase(normalizedLine, normalizedName)
+            ) {
+                return;
+            }
+
+            candidates.push({
+                family: family,
+                alias: normalizedName,
+                wordCount: normalizedName.split(" ").length,
+                length: normalizedName.length,
+                priority: ruleIndex,
+                score: 100,
+                distance: 0
+            });
+        });
     });
 
-    return canonicalFamilies.find(function (family) {
-        return containsNormalizedPhrase(normalizedLine, family);
-    }) || "";
+    if (candidates.length === 0) {
+        return "";
+    }
+
+    sortFamilyCandidates(candidates);
+    return candidates[0].family;
 }
 
 function getRuntimeOperationalFamilyRules() {
