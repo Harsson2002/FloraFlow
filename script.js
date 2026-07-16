@@ -209,20 +209,6 @@ const APP_NOTIFICATION_TABLE = "app_notifications";
 let appNotifications = [];
 let notificationRefreshTimer = null;
 
-// Inventory table sorting (Excel-style: neutral -> ascending -> descending).
-const INVENTORY_SORT_STORAGE_KEY = "floraFlowInventorySort";
-let inventorySortState = (function () {
-    try {
-        const saved = JSON.parse(localStorage.getItem(INVENTORY_SORT_STORAGE_KEY) || "null");
-        if (saved && saved.key && ["asc", "desc"].includes(saved.direction)) {
-            return saved;
-        }
-    } catch (error) {
-        console.warn("Could not restore inventory sorting.", error);
-    }
-    return { key: "", direction: "" };
-})();
-
 
 async function loadProductionAliases() {
 
@@ -374,18 +360,27 @@ async function loadFlowerFamilies() {
 
     flowerFamilies = (data || []).map(function (item) {
 
+        const familyName = String(item.family || "")
+            .trim()
+            .toUpperCase();
+
         const aliases = String(item.aliases || "")
             .split(",")
             .map(function (alias) {
                 return alias.trim().toUpperCase();
             })
-            .filter(Boolean);
+            .filter(Boolean)
+            .filter(function (alias) {
+                const unsafe = isProtectedCanonicalFamilyAlias(alias, familyName);
+                if (unsafe) {
+                    console.warn("Removed unsafe flower family alias:", alias, "->", familyName);
+                }
+                return !unsafe;
+            });
 
         return {
             id: item.id,
-            family: String(item.family || "")
-                .trim()
-                .toUpperCase(),
+            family: familyName,
 
             aliases: aliases,
             active: item.active !== false
@@ -3145,199 +3140,10 @@ function queueInventoryRender(options = {}) {
     }
 }
 
-function normalizeInventorySortValue(item, key) {
-    if (key === "quantity") {
-        return Number(item.quantity || 0);
-    }
-
-    if (key === "date") {
-        const timestamp = Date.parse(item.date || "");
-        return Number.isNaN(timestamp) ? 0 : timestamp;
-    }
-
-    if (key === "caseNumber") {
-        const rawCase = String(item.caseNumber || "").trim();
-        const numericCase = Number(rawCase);
-        return rawCase !== "" && Number.isFinite(numericCase)
-            ? numericCase
-            : rawCase.toUpperCase();
-    }
-
-    return String(item[key] || "").trim().toUpperCase();
-}
-
-function compareInventorySortValues(a, b) {
-    if (typeof a === "number" && typeof b === "number") {
-        return a - b;
-    }
-
-    return String(a).localeCompare(String(b), undefined, {
-        numeric: true,
-        sensitivity: "base"
-    });
-}
-
-function sortInventoryItems(items) {
-    if (!inventorySortState.key || !inventorySortState.direction) {
-        return items;
-    }
-
-    const directionMultiplier = inventorySortState.direction === "desc" ? -1 : 1;
-
-    return items
-        .map(function (item, originalIndex) {
-            return { item: item, originalIndex: originalIndex };
-        })
-        .sort(function (left, right) {
-            const leftValue = normalizeInventorySortValue(left.item, inventorySortState.key);
-            const rightValue = normalizeInventorySortValue(right.item, inventorySortState.key);
-            const comparison = compareInventorySortValues(leftValue, rightValue);
-
-            if (comparison !== 0) {
-                return comparison * directionMultiplier;
-            }
-
-            return left.originalIndex - right.originalIndex;
-        })
-        .map(function (entry) {
-            return entry.item;
-        });
-}
-
-function saveInventorySortState() {
-    localStorage.setItem(
-        INVENTORY_SORT_STORAGE_KEY,
-        JSON.stringify(inventorySortState)
-    );
-}
-
-function updateInventorySortHeaders() {
-    const inventoryTableElement = table?.closest("table");
-    if (!inventoryTableElement) return;
-
-    inventoryTableElement.querySelectorAll("[data-inventory-sort-key]").forEach(function (button) {
-        const key = button.dataset.inventorySortKey;
-        const indicator = button.querySelector(".inventory-sort-indicator");
-        const active = inventorySortState.key === key && inventorySortState.direction;
-
-        if (indicator) {
-            indicator.textContent = !active
-                ? "↕"
-                : inventorySortState.direction === "asc"
-                    ? "▲"
-                    : "▼";
-        }
-
-        button.setAttribute(
-            "aria-sort",
-            !active
-                ? "none"
-                : inventorySortState.direction === "asc"
-                    ? "ascending"
-                    : "descending"
-        );
-    });
-}
-
-function cycleInventorySort(key) {
-    if (inventorySortState.key !== key) {
-        inventorySortState = { key: key, direction: "asc" };
-    } else if (inventorySortState.direction === "asc") {
-        inventorySortState = { key: key, direction: "desc" };
-    } else {
-        inventorySortState = { key: "", direction: "" };
-    }
-
-    saveInventorySortState();
-    inventoryCurrentPage = 1;
-    updateInventorySortHeaders();
-    renderInventory();
-}
-
-function ensureInventorySortHeaders() {
-    const inventoryTableElement = table?.closest("table");
-    const headerCells = inventoryTableElement?.querySelectorAll("thead th");
-    if (!headerCells || headerCells.length === 0) return;
-
-    if (!document.getElementById("floraFlowInventorySortStyles")) {
-        const style = document.createElement("style");
-        style.id = "floraFlowInventorySortStyles";
-        style.textContent = `
-            .inventory-sort-button {
-                width: 100%;
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-                padding: 0;
-                border: 0;
-                background: transparent;
-                color: inherit;
-                font: inherit;
-                font-weight: inherit;
-                cursor: pointer;
-                white-space: nowrap;
-            }
-            .inventory-sort-button:hover .inventory-sort-indicator,
-            .inventory-sort-button:focus-visible .inventory-sort-indicator {
-                opacity: 1;
-                transform: translateY(-1px);
-            }
-            .inventory-sort-indicator {
-                display: inline-block;
-                min-width: 12px;
-                font-size: 11px;
-                line-height: 1;
-                opacity: .88;
-                transition: transform .15s ease, opacity .15s ease;
-            }
-        `;
-        document.head.appendChild(style);
-    }
-
-    const keyByLabel = {
-        PRODUCT: "product",
-        COLOR: "color",
-        QTY: "quantity",
-        QUANTITY: "quantity",
-        CASE: "caseNumber",
-        DATE: "date",
-        STATUS: "status"
-    };
-
-    headerCells.forEach(function (headerCell) {
-        if (headerCell.querySelector("[data-inventory-sort-key]")) return;
-
-        const label = String(headerCell.textContent || "")
-            .replace(/[↕▲▼]/g, "")
-            .trim()
-            .toUpperCase();
-        const key = keyByLabel[label];
-        if (!key) return;
-
-        const visibleLabel = String(headerCell.textContent || "")
-            .replace(/[↕▲▼]/g, "")
-            .trim();
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "inventory-sort-button";
-        button.dataset.inventorySortKey = key;
-        button.innerHTML = `<span>${visibleLabel}</span><span class="inventory-sort-indicator" aria-hidden="true">↕</span>`;
-        button.addEventListener("click", function () {
-            cycleInventorySort(key);
-        });
-
-        headerCell.textContent = "";
-        headerCell.appendChild(button);
-    });
-
-    updateInventorySortHeaders();
-}
-
 function getVisibleInventoryItems() {
     const inventorySearch = searchInput.value.toLowerCase().trim();
 
-    const filteredInventory = inventory.filter(function (item) {
+    return inventory.filter(function (item) {
         const matchesRemoved = showRemoved || item.status !== "Removed from Inventory";
         if (!matchesRemoved) return false;
         if (!inventorySearch) return true;
@@ -3352,12 +3158,9 @@ function getVisibleInventoryItems() {
             return String(value ?? "").toLowerCase().includes(inventorySearch);
         });
     });
-
-    return sortInventoryItems(filteredInventory);
 }
 
 function renderInventory() {
-    ensureInventorySortHeaders();
     const visibleInventory = getVisibleInventoryItems();
     const totalPages = Math.max(1, Math.ceil(visibleInventory.length / INVENTORY_RENDER_PAGE_SIZE));
     inventoryCurrentPage = Math.min(Math.max(1, inventoryCurrentPage), totalPages);
@@ -7162,6 +6965,19 @@ function findCanonicalFamilyInProductionLine(value) {
     const normalizedLine = normalizeMatchText(value);
     if (!normalizedLine) return "";
 
+    // Hard safety rules for overlapping rose families. The more specific
+    // SPRAY ROSE phrase wins; otherwise an explicit ROSE token stays ROSE.
+    if (
+        containsNormalizedPhrase(normalizedLine, "SPRAY ROSE") ||
+        containsNormalizedPhrase(normalizedLine, "ROSE SPRAY")
+    ) {
+        return "SPRAY ROSE";
+    }
+
+    if (containsNormalizedPhrase(normalizedLine, "ROSE")) {
+        return "ROSE";
+    }
+
     // Search every official family and its approved aliases together.
     // The most specific phrase must win. For example:
     // ROSE SPRAY ORANGE -> SPRAY ROSE (not ROSE)
@@ -7277,6 +7093,10 @@ function getRuntimeOperationalFamilyRules() {
 
                 (item.aliases || [])
                     .forEach(function (alias) {
+                        if (isProtectedCanonicalFamilyAlias(alias, item.product)) {
+                            console.warn("Ignored unsafe FlowerBrain alias:", alias, "->", item.product);
+                            return;
+                        }
                         addFamilyRuleName(
                             ruleMap,
                             item.product,
@@ -7288,6 +7108,10 @@ function getRuntimeOperationalFamilyRules() {
         Object.entries(
             window.flowerBrain.productPhrases || {}
         ).forEach(function (entry) {
+            if (isProtectedCanonicalFamilyAlias(entry[0], entry[1])) {
+                console.warn("Ignored unsafe FlowerBrain phrase:", entry[0], "->", entry[1]);
+                return;
+            }
             addFamilyRuleName(
                 ruleMap,
                 entry[1],
@@ -7298,6 +7122,10 @@ function getRuntimeOperationalFamilyRules() {
         Object.entries(
             window.flowerBrain.productAliases || {}
         ).forEach(function (entry) {
+            if (isProtectedCanonicalFamilyAlias(entry[0], entry[1])) {
+                console.warn("Ignored unsafe FlowerBrain product alias:", entry[0], "->", entry[1]);
+                return;
+            }
             addFamilyRuleName(
                 ruleMap,
                 entry[1],
