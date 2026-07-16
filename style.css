@@ -2099,3 +2099,31 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     }
 }
 
+
+/* ===== FloraFlow product life indicator ===== */
+.flower-life-cell {
+    min-width: 54px;
+    text-align: center;
+}
+
+.flower-life-dot {
+    display: inline-block;
+    width: 17px;
+    height: 17px;
+    border-radius: 50%;
+    vertical-align: middle;
+    box-shadow:
+        0 0 0 2px rgba(255,255,255,.95),
+        0 1px 5px rgba(15,23,42,.28);
+}
+
+.mobile-flower-life {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.mobile-life-dot-slot {
+    display: inline-flex;
+    align-items: center;
+}
