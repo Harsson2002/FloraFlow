@@ -104,6 +104,14 @@ const activityTimeline = document.getElementById("activityTimeline");
 const historySearch = document.getElementById("historySearch");
 const historyDate = document.getElementById("historyDate");
 const historyTodayBtn = document.getElementById("historyTodayBtn");
+const explainActivityBtn = document.getElementById("explainActivityBtn");
+const activityExplanation = document.getElementById("activityExplanation");
+const activityPageSize = document.getElementById("activityPageSize");
+const activityPagination = document.getElementById("activityPagination");
+const activityPaginationSummary = document.getElementById("activityPaginationSummary");
+const activityPaginationButtons = document.getElementById("activityPaginationButtons");
+let activityCurrentPage = 1;
+let activityFilteredHistory = [];
 const searchInput = document.getElementById("search");
 
 const activityBtn = document.getElementById("activityBtn");
@@ -3906,77 +3914,130 @@ async function loadHistoryFromSupabase() {
     renderHistory();
     updateDashboard();
 }
-function renderHistory() {
+function getFilteredActivityHistory() {
+    const search = String(historySearch?.value || "").toLowerCase().trim();
+    const selectedDate = historyDate?.value || "";
 
-    activityTimeline.innerHTML = "";
+    return history.filter(function (item) {
+        const matchesSearch =
+            search === "" ||
+            String(item.action ?? "").toLowerCase().includes(search) ||
+            String(item.userName ?? "").toLowerCase().includes(search) ||
+            String(item.product ?? "").toLowerCase().includes(search) ||
+            String(item.color ?? "").toLowerCase().includes(search) ||
+            String(item.caseNumber ?? "").toLowerCase().includes(search) ||
+            String(item.details ?? "").toLowerCase().includes(search);
 
-    const search = historySearch.value.toLowerCase().trim();
-    const selectedDate = historyDate.value;
-
-    const filteredHistory = history.filter(function (item) {
-
-const matchesSearch =
-    search === "" ||
-    (item.action ?? "").toLowerCase().includes(search) ||
-    (item.userName ?? "").toLowerCase().includes(search) ||
-    (item.product ?? "").toLowerCase().includes(search) ||
-    (item.color ?? "").toLowerCase().includes(search) ||
-    String(item.caseNumber ?? "").toLowerCase().includes(search) ||
-    (item.details ?? "").toLowerCase().includes(search);
-
-const matchesDate =
-    selectedDate === "" ||
-    item.date === selectedDate;
-
-return matchesSearch && matchesDate;
+        const matchesDate = selectedDate === "" || item.date === selectedDate;
+        return matchesSearch && matchesDate;
     });
+}
 
-    if (filteredHistory.length === 0) {
+function escapeActivityHtml(value) {
+    return String(value ?? "")
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+}
 
-        activityTimeline.innerHTML = `
-            <p style="
-                text-align:center;
-                color:#777;
-                padding:25px;
-            ">
-                No activity found.
-            </p>
-        `;
+function renderActivityPagination(totalItems, pageSize, totalPages) {
+    if (!activityPagination || !activityPaginationButtons || !activityPaginationSummary) return;
 
+    if (totalItems === 0) {
+        activityPagination.hidden = true;
         return;
     }
 
-    filteredHistory.forEach(function (item, index) {
+    activityPagination.hidden = false;
+    const firstItem = (activityCurrentPage - 1) * pageSize + 1;
+    const lastItem = Math.min(activityCurrentPage * pageSize, totalItems);
+    activityPaginationSummary.textContent = `Showing ${firstItem}-${lastItem} of ${totalItems}`;
+    activityPaginationButtons.innerHTML = "";
 
+    const addButton = function (label, page, disabled, active, ariaLabel) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.textContent = label;
+        button.disabled = Boolean(disabled);
+        button.className = "activity-page-button" + (active ? " active" : "");
+        if (ariaLabel) button.setAttribute("aria-label", ariaLabel);
+        button.addEventListener("click", function () {
+            activityCurrentPage = page;
+            renderHistory();
+            activityTimeline?.scrollIntoView({ behavior: "smooth", block: "start" });
+        });
+        activityPaginationButtons.appendChild(button);
+    };
+
+    addButton("‹", Math.max(1, activityCurrentPage - 1), activityCurrentPage === 1, false, "Previous page");
+
+    const pageWindow = window.matchMedia("(max-width: 600px)").matches ? 1 : 2;
+    const visiblePages = new Set([1, totalPages]);
+    for (let page = activityCurrentPage - pageWindow; page <= activityCurrentPage + pageWindow; page += 1) {
+        if (page >= 1 && page <= totalPages) visiblePages.add(page);
+    }
+
+    let previousPage = 0;
+    Array.from(visiblePages).sort(function (a, b) { return a - b; }).forEach(function (page) {
+        if (page - previousPage > 1) {
+            const ellipsis = document.createElement("span");
+            ellipsis.className = "activity-page-ellipsis";
+            ellipsis.textContent = "…";
+            activityPaginationButtons.appendChild(ellipsis);
+        }
+        addButton(String(page), page, false, page === activityCurrentPage, `Page ${page}`);
+        previousPage = page;
+    });
+
+    addButton("›", Math.min(totalPages, activityCurrentPage + 1), activityCurrentPage === totalPages, false, "Next page");
+}
+
+function renderHistory() {
+    activityTimeline.innerHTML = "";
+    activityFilteredHistory = getFilteredActivityHistory();
+
+    const pageSize = Math.max(1, Number(activityPageSize?.value || 20));
+    const totalPages = Math.max(1, Math.ceil(activityFilteredHistory.length / pageSize));
+    activityCurrentPage = Math.min(Math.max(1, activityCurrentPage), totalPages);
+
+    if (activityFilteredHistory.length === 0) {
+        activityTimeline.innerHTML = `
+            <p style="text-align:center;color:#777;padding:25px;">
+                No activity found.
+            </p>
+        `;
+        renderActivityPagination(0, pageSize, 1);
+        return;
+    }
+
+    const startIndex = (activityCurrentPage - 1) * pageSize;
+    const pageItems = activityFilteredHistory.slice(startIndex, startIndex + pageSize);
+
+    pageItems.forEach(function (item) {
         let icon = "⚪";
         let color = "#999";
         let quantityText = "";
 
         switch (item.action) {
-
             case "ADD":
                 icon = "🟢";
                 color = "#2ecc71";
                 quantityText = `${item.quantity ?? item.afterQty ?? 0} stems added`;
                 break;
-
             case "EDIT":
-    icon = "🟡";
-    color = "#f1c40f";
-
-    if (item.details && item.details !== "EDIT") {
-        quantityText = "✏️ Changes made";
-    } else {
-        quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
-    }
-
-    break;
+                icon = "🟡";
+                color = "#f1c40f";
+                quantityText = item.details && item.details !== "EDIT"
+                    ? "✏️ Changes made"
+                    : `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
+                break;
             case "ROTATE":
                 icon = "🔵";
                 color = "#3498db";
                 quantityText = `${item.beforeQty ?? 0} → ${item.afterQty ?? 0} stems`;
                 break;
-
             case "REMOVE":
                 icon = "🔴";
                 color = "#e74c3c";
@@ -3985,113 +4046,144 @@ return matchesSearch && matchesDate;
         }
 
         const card = document.createElement("div");
+        const detailsMarkup = item.action === "EDIT" && item.details && item.details !== "EDIT"
+            ? `<div class="activity-change-box"><div class="activity-change-title">✏️ Changes</div>${String(item.details).split(" | ").map(function (change) { return `<div>• ${escapeActivityHtml(change)}</div>`; }).join("")}</div>`
+            : "";
+
+        const quantityMarkup = item.action !== "EDIT" || !item.details || item.details === "EDIT"
+            ? `<div class="activity-quantity" style="color:${color};">${escapeActivityHtml(quantityText)}</div>`
+            : "";
 
         card.innerHTML = `
-            <div style="
-                background:white;
-                border-left:6px solid ${color};
-                border-radius:12px;
-                padding:16px;
-                margin-bottom:12px;
-                box-shadow:0 2px 8px rgba(0,0,0,.08);
-            ">
-
-                <div style="
-                    display:flex;
-                    justify-content:space-between;
-                    align-items:center;
-                    margin-bottom:12px;
-                ">
-                    <h3 style="margin:0;">
-                        ${icon} ${item.action}
-                    </h3>
-
-                    <span style="
-                        font-size:13px;
-                        color:#777;
-                    ">
-                        ${item.date} ${item.time}
-                    </span>
-
+            <div class="activity-card" style="border-left-color:${color};">
+                <div class="activity-card-header">
+                    <h3>${icon} ${escapeActivityHtml(item.action)}</h3>
+                    <span>${escapeActivityHtml(item.date)} ${escapeActivityHtml(item.time)}</span>
                 </div>
-
-<div style="
-    font-size:14px;
-    color:#555;
-    margin-bottom:12px;
-    line-height:1.7;
-">
-    👤 <strong>${item.userName || "Unknown"}</strong>
-    &nbsp;•&nbsp;
-    🌸 <strong>${item.product || ""}</strong>
-    &nbsp;•&nbsp;
-    🎨 ${item.color || ""}
-    &nbsp;•&nbsp;
-    📦 ${item.caseNumber || ""}
-</div>
-                
-${
-    item.action === "EDIT" &&
-    item.details &&
-    item.details !== "EDIT"
-        ? `
-            <div style="
-                background:#fff9e6;
-                border:1px solid #f1c40f;
-                border-radius:10px;
-                padding:12px;
-                margin-bottom:12px;
-                font-size:14px;
-                line-height:1.7;
-            ">
-                <div style="
-                    font-weight:bold;
-                    margin-bottom:6px;
-                    color:#8a6d00;
-                ">
-                    ✏️ Changes
+                <div class="activity-card-meta">
+                    👤 <strong>${escapeActivityHtml(item.userName || "Unknown")}</strong>
+                    <span>•</span> 🌸 <strong>${escapeActivityHtml(item.product || "")}</strong>
+                    <span>•</span> 🎨 ${escapeActivityHtml(item.color || "")}
+                    <span>•</span> 📦 ${escapeActivityHtml(item.caseNumber || "")}
                 </div>
-
-                ${item.details
-                    .split(" | ")
-                    .map(function (change) {
-                        return `<div>• ${change}</div>`;
-                    })
-                    .join("")}
-            </div>
-        `
-        : ""
-}
-
-${
-    item.action !== "EDIT" ||
-    !item.details ||
-    item.details === "EDIT"
-        ? `
-            <div style="
-                text-align:center;
-                font-size:18px;
-                font-weight:bold;
-                color:${color};
-            ">
-${
-    item.action === "EDIT" && item.details && item.details !== "EDIT"
-        ? item.details.split(" | ").join("<br>• ")
-        : quantityText
-}
-            </div>
-        `
-        : ""
-}
+                ${detailsMarkup}
+                ${quantityMarkup}
             </div>
         `;
-
         activityTimeline.appendChild(card);
-
-
     });
 
+    renderActivityPagination(activityFilteredHistory.length, pageSize, totalPages);
 }
+
+function extractActivityDestination(details) {
+    const text = String(details || "");
+    const match = text.match(/Destination:\s*([^|]+)/i);
+    return match ? match[1].trim().toUpperCase() : "";
+}
+
+function extractActivityOrder(details) {
+    const text = String(details || "");
+    const match = text.match(/Production Order\s*#?\s*([A-Z0-9-]+)/i);
+    return match ? match[1].trim() : "";
+}
+
+function buildActivityExplanation(items) {
+    if (!items.length) return "No activity matches the current filters.";
+
+    const counts = { ADD: 0, EDIT: 0, ROTATE: 0, REMOVE: 0 };
+    const users = new Set();
+    const productsAdded = new Map();
+    const orders = new Set();
+    const destinations = new Map();
+    const importantEdits = [];
+    let stemsAdded = 0;
+    let stemsRotated = 0;
+
+    items.forEach(function (item) {
+        const action = String(item.action || "").toUpperCase();
+        if (Object.prototype.hasOwnProperty.call(counts, action)) counts[action] += 1;
+        if (item.userName) users.add(item.userName);
+
+        if (action === "ADD") {
+            stemsAdded += Number(item.quantity ?? item.afterQty ?? 0) || 0;
+            const product = item.product || "Unknown product";
+            productsAdded.set(product, (productsAdded.get(product) || 0) + 1);
+        }
+
+        if (action === "ROTATE" || action === "REMOVE") {
+            stemsRotated += Number(item.quantity ?? 0) || 0;
+            const order = extractActivityOrder(item.details);
+            if (order) orders.add(order);
+            const destination = extractActivityDestination(item.details);
+            if (destination) destinations.set(destination, (destinations.get(destination) || 0) + 1);
+        }
+
+        if (action === "EDIT") {
+            const before = Number(item.beforeQty);
+            const after = Number(item.afterQty);
+            if (Number.isFinite(before) && Number.isFinite(after) && before !== after) {
+                importantEdits.push(`${item.product || "Product"} ${item.color || ""}: ${before} → ${after} stems`.trim());
+            } else if (item.details && item.details !== "EDIT") {
+                importantEdits.push(String(item.details).split(" | ")[0]);
+            }
+        }
+    });
+
+    const dateLabel = historyDate?.value ? `On ${historyDate.value}` : "In the selected activity";
+    const actionParts = [];
+    if (counts.ADD) actionParts.push(`${counts.ADD} addition${counts.ADD === 1 ? "" : "s"}`);
+    if (counts.EDIT) actionParts.push(`${counts.EDIT} edit${counts.EDIT === 1 ? "" : "s"}`);
+    if (counts.ROTATE) actionParts.push(`${counts.ROTATE} rotation${counts.ROTATE === 1 ? "" : "s"}`);
+    if (counts.REMOVE) actionParts.push(`${counts.REMOVE} removal${counts.REMOVE === 1 ? "" : "s"}`);
+
+    const paragraphs = [];
+    paragraphs.push(`${dateLabel}, FloraFlow recorded ${items.length} movement${items.length === 1 ? "" : "s"}: ${actionParts.join(", ") || "activity records"}.`);
+
+    if (users.size) paragraphs.push(`The activity was completed by ${Array.from(users).join(", ")}.`);
+
+    if (counts.ADD) {
+        const topProducts = Array.from(productsAdded.entries()).sort(function (a, b) { return b[1] - a[1]; }).slice(0, 8).map(function (entry) { return entry[0]; });
+        paragraphs.push(`${stemsAdded} stems were added. Products included ${topProducts.join(", ")}.`);
+    }
+
+    if (counts.ROTATE || counts.REMOVE) {
+        let sentence = `${stemsRotated} stems were moved out of available inventory.`;
+        if (orders.size) sentence += ` Production orders: ${Array.from(orders).map(function (order) { return "#" + order; }).join(", ")}.`;
+        if (destinations.size) sentence += ` Destinations: ${Array.from(destinations.entries()).map(function (entry) { return `${entry[0]} (${entry[1]})`; }).join(", ")}.`;
+        paragraphs.push(sentence);
+    }
+
+    if (importantEdits.length) paragraphs.push(`Important corrections to review: ${importantEdits.slice(0, 6).join("; ")}${importantEdits.length > 6 ? "; and more" : ""}.`);
+
+    if (!destinations.has("SAMPLES")) paragraphs.push("No movements to Samples were found in the selected results.");
+
+    return paragraphs.join("\n\n");
+}
+
+function explainCurrentActivity() {
+    const items = getFilteredActivityHistory();
+    if (!activityExplanation) return;
+    activityExplanation.hidden = false;
+    activityExplanation.innerHTML = `
+        <div class="activity-explanation-header">
+            <div><strong>Easy Activity Summary</strong><span>Based on all ${items.length} filtered record${items.length === 1 ? "" : "s"}, not only the current page.</span></div>
+            <button type="button" id="copyActivityExplanationBtn">Copy</button>
+        </div>
+        <div class="activity-explanation-text"></div>
+    `;
+    const explanationText = buildActivityExplanation(items);
+    activityExplanation.querySelector(".activity-explanation-text").textContent = explanationText;
+    activityExplanation.querySelector("#copyActivityExplanationBtn").addEventListener("click", async function () {
+        try {
+            await navigator.clipboard.writeText(explanationText);
+            this.textContent = "Copied ✓";
+        } catch (error) {
+            alert("The summary could not be copied automatically.");
+        }
+    });
+}
+
 function getStatusBadge(status) {
     if (status === "Available") {
         return `<span class="status-badge status-available">Available</span>`;
@@ -4291,8 +4383,21 @@ async function loadInventoryFromSupabase() {
 
     return inventoryLoadPromise;
 }
-historySearch.addEventListener("input", renderHistory);
-historyDate.addEventListener("change", renderHistory);
+historySearch.addEventListener("input", function () {
+    activityCurrentPage = 1;
+    if (activityExplanation) activityExplanation.hidden = true;
+    renderHistory();
+});
+historyDate.addEventListener("change", function () {
+    activityCurrentPage = 1;
+    if (activityExplanation) activityExplanation.hidden = true;
+    renderHistory();
+});
+activityPageSize?.addEventListener("change", function () {
+    activityCurrentPage = 1;
+    renderHistory();
+});
+explainActivityBtn?.addEventListener("click", explainCurrentActivity);
 const colorInput = document.getElementById("color");
 
 colorInput.addEventListener("blur", function () {
@@ -4300,6 +4405,8 @@ colorInput.addEventListener("blur", function () {
 });
 historyTodayBtn.addEventListener("click", function () {
     historyDate.value = getToday();
+    activityCurrentPage = 1;
+    if (activityExplanation) activityExplanation.hidden = true;
     renderHistory();
 });
 let pullDistance = 0;

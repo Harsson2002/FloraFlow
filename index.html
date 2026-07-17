@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Lexiflor FloraFlow</title>
-<link rel="stylesheet" href="style.css?v=20260717-mobile-scroll-v2">
+<link rel="stylesheet" href="style.css?v=20260717-activity-pages">
 <link rel="manifest" href="manifest.json">
 <link rel="icon" type="image/png" href="icon.png">
 <link rel="apple-touch-icon" href="icon.png">
@@ -205,8 +205,29 @@
         </button>
     </div>
 
+    <button type="button" id="explainActivityBtn">
+        🧾 Explain Activity
+    </button>
+
 </div>
+
+<div id="activityExplanation" class="activity-explanation" hidden></div>
 <div id="activityTimeline"></div>
+
+<div id="activityPagination" class="activity-pagination">
+    <label>
+        <select id="activityPageSize">
+            <option value="10">10</option>
+            <option value="20" selected>20</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
+        <span>per page</span>
+    </label>
+
+    <div id="activityPaginationSummary" class="activity-pagination-summary"></div>
+    <div id="activityPaginationButtons" class="activity-pagination-buttons"></div>
+</div>
 </div>
 </div>
 
@@ -516,7 +537,7 @@
 <script src="https://cdn.jsdelivr.net/npm/tom-select@2.4.2/dist/js/tom-select.complete.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/tesseract.js@7/dist/tesseract.min.js"></script>
 <script src="flowerBrain.js?v=20260717-production-life"></script>
-<script src="script.js?v=20260717-mobile-scroll-v2"></script>
+<script src="script.js?v=20260717-activity-pages"></script>
 <script>
 if ("serviceWorker" in navigator) {
     navigator.serviceWorker.register("service-worker.js");
