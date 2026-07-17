@@ -2166,3 +2166,93 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
         padding: 5px 8px;
     }
 }
+
+/* ===== FloraFlow mobile Settings scroll fix ===== */
+@media (max-width: 720px) {
+    #catalogModal,
+    #productsManagementOverlay,
+    #usersManagementOverlay {
+        position: fixed !important;
+        inset: 0 !important;
+        width: 100% !important;
+        height: 100dvh !important;
+        padding: 0 !important;
+        overflow: hidden !important;
+        touch-action: auto !important;
+        overscroll-behavior: none !important;
+    }
+
+    #catalogModal .modal-content,
+    #productsManagementOverlay > div,
+    #usersManagementPanel {
+        width: 100% !important;
+        height: 100dvh !important;
+        max-width: none !important;
+        max-height: 100dvh !important;
+        min-height: 0 !important;
+        margin: 0 !important;
+        border-radius: 0 !important;
+        display: flex !important;
+        flex-direction: column !important;
+        overflow: hidden !important;
+        touch-action: auto !important;
+    }
+
+    #catalogModal .modal-header,
+    #productsManagementOverlay > div > div:first-child,
+    #usersManagementHeader {
+        flex: 0 0 auto !important;
+    }
+
+    #catalogModal .form,
+    #catalogMessage,
+    #catalogList,
+    #productsManagementOverlay > div,
+    #usersManagementBody {
+        -webkit-overflow-scrolling: touch !important;
+    }
+
+    #catalogModal .modal-content {
+        padding: 16px 14px calc(20px + env(safe-area-inset-bottom)) !important;
+    }
+
+    #catalogModal .form {
+        flex: 0 0 auto !important;
+        grid-template-columns: 1fr !important;
+        margin-bottom: 12px !important;
+    }
+
+    #catalogList {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        touch-action: pan-y !important;
+        padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
+    }
+
+    #productsManagementOverlay > div {
+        padding: 14px 12px calc(22px + env(safe-area-inset-bottom)) !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        touch-action: pan-y !important;
+    }
+
+    #productsFamiliesList,
+    #productionRulesList {
+        max-height: none !important;
+        overflow: visible !important;
+        touch-action: auto !important;
+    }
+
+    #usersManagementBody {
+        flex: 1 1 auto !important;
+        min-height: 0 !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        overscroll-behavior: contain !important;
+        touch-action: pan-y !important;
+    }
+}
