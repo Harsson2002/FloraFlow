@@ -193,7 +193,7 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 // Inventory performance controls. Keep the complete active inventory available
 // for Production Today, but render only a small block at a time.
 const INVENTORY_FETCH_PAGE_SIZE = 1000;
-const INVENTORY_RENDER_PAGE_SIZE = 75;
+const INVENTORY_RENDER_PAGE_SIZE = 20;
 let inventoryCurrentPage = 1;
 const INVENTORY_SORT_STORAGE_KEY = "floraFlowInventorySort";
 let inventorySort = (function () {
