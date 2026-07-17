@@ -2562,3 +2562,28 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
         align-items: center;
     }
 }
+
+
+/* ===== Reserved inventory state ===== */
+.status-reserved {
+    background: #fff1d6;
+    color: #a14f00;
+    border: 1px solid #f3c66d;
+}
+.ff-reserved-action,
+.ff-table-send-btn.is-reserved,
+.ff-send-pickup-btn.is-reserved {
+    background: #fff4df !important;
+    color: #9a5200 !important;
+    border: 1px solid #efc46f !important;
+    cursor: not-allowed !important;
+    opacity: 1 !important;
+    box-shadow: none !important;
+}
+.mobile-inventory-card:has(.status-reserved) {
+    border-top-color: #d98200;
+    background: #fffdf8;
+}
+tr:has(.status-reserved) {
+    background: #fffaf0 !important;
+}

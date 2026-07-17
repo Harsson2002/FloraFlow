@@ -3302,6 +3302,25 @@ function getFlowerLifeMarkup(dateValue, options = {}) {
     `;
 }
 
+function getInventoryReservation(item) {
+    if (!item || item.id === undefined || item.id === null) {
+        return null;
+    }
+
+    return activeProductionReservations.get(String(item.id)) || null;
+}
+
+function isInventoryReserved(item) {
+    return Boolean(getInventoryReservation(item));
+}
+
+function getInventoryDisplayStatus(item) {
+    if (!item) return "";
+    if (item.status === "Removed from Inventory") return item.status;
+    if (isInventoryReserved(item)) return "Reserved";
+    return item.status || "Available";
+}
+
 function getVisibleInventoryItems() {
     const inventorySearch = searchInput.value.toLowerCase().trim();
 
@@ -3315,7 +3334,7 @@ function getVisibleInventoryItems() {
             item.color,
             item.caseNumber,
             item.notes,
-            item.status
+            getInventoryDisplayStatus(item)
         ].some(function (value) {
             return String(value ?? "").toLowerCase().includes(inventorySearch);
         });
@@ -3344,6 +3363,7 @@ function renderInventory() {
         });
 
         const row = document.createElement("tr");
+        row.dataset.inventoryId = String(item.id ?? "");
         if (item.status === "Removed from Inventory") {
             row.classList.add("removed-row");
         }
@@ -3373,16 +3393,24 @@ function renderInventory() {
         notesCell.textContent = item.notes ?? "";
         row.appendChild(notesCell);
 
+        const displayStatus = getInventoryDisplayStatus(item);
         const statusCell = document.createElement("td");
-        statusCell.innerHTML = getStatusBadge(item.status);
+        statusCell.innerHTML = getStatusBadge(displayStatus);
         row.appendChild(statusCell);
 
         const actionsCell = document.createElement("td");
-        if (item.status !== "Removed from Inventory") {
+        if (item.status !== "Removed from Inventory" && !isInventoryReserved(item)) {
             const rotateBtn = document.createElement("button");
             rotateBtn.textContent = "Rotate";
             rotateBtn.addEventListener("click", function () { rotateProduct(index); });
             actionsCell.appendChild(rotateBtn);
+        } else if (isInventoryReserved(item)) {
+            const reservedBtn = document.createElement("button");
+            reservedBtn.type = "button";
+            reservedBtn.textContent = "🔒 Reserved";
+            reservedBtn.disabled = true;
+            reservedBtn.className = "ff-reserved-action";
+            actionsCell.appendChild(reservedBtn);
         }
 
         const editBtn = document.createElement("button");
@@ -3395,6 +3423,7 @@ function renderInventory() {
 
         const mobileCard = document.createElement("div");
         mobileCard.className = "mobile-inventory-card";
+        mobileCard.dataset.inventoryId = String(item.id ?? "");
         mobileCard.innerHTML = `
             <button class="mobile-copy-btn" title="Copy product information">📋</button>
             <button class="mobile-product-title">🌸 ${escapeProductionPickHtml(item.product || "")}</button>
@@ -3405,14 +3434,14 @@ function renderInventory() {
                 <span>📅 ${escapeProductionPickHtml(item.date || "")}</span>
                 <span class="mobile-flower-life">Life <span class="mobile-life-dot-slot"></span></span>
             </div>
-            <div class="mobile-product-status">${getStatusBadge(item.status)}</div>
+            <div class="mobile-product-status">${getStatusBadge(displayStatus)}</div>
         `;
 
         const mobileLifeSlot = mobileCard.querySelector(".mobile-life-dot-slot");
         if (mobileLifeSlot) mobileLifeSlot.appendChild(createFlowerLifeDot(item.date));
 
         mobileCard.querySelector(".mobile-copy-btn").addEventListener("click", async function () {
-            const productText = `🌸 ${item.product || ""}\n🎨 ${item.color || ""}\n📦 Case ${item.caseNumber || ""}\n🌿 ${item.quantity ?? 0} stems\n📅 ${item.date || ""}\nStatus: ${item.status || ""}`;
+            const productText = `🌸 ${item.product || ""}\n🎨 ${item.color || ""}\n📦 Case ${item.caseNumber || ""}\n🌿 ${item.quantity ?? 0} stems\n📅 ${item.date || ""}\nStatus: ${displayStatus}`;
             try {
                 await navigator.clipboard.writeText(productText);
                 const copyBtn = mobileCard.querySelector(".mobile-copy-btn");
@@ -3429,11 +3458,18 @@ function renderInventory() {
 
         const mobileActions = document.createElement("div");
         mobileActions.className = "mobile-inventory-actions";
-        if (item.status !== "Removed from Inventory") {
+        if (item.status !== "Removed from Inventory" && !isInventoryReserved(item)) {
             const mobileRotateBtn = document.createElement("button");
             mobileRotateBtn.textContent = "🔄 Rotate";
             mobileRotateBtn.addEventListener("click", function () { rotateProduct(index); });
             mobileActions.appendChild(mobileRotateBtn);
+        } else if (isInventoryReserved(item)) {
+            const mobileReservedBtn = document.createElement("button");
+            mobileReservedBtn.type = "button";
+            mobileReservedBtn.textContent = "🔒 Reserved";
+            mobileReservedBtn.disabled = true;
+            mobileReservedBtn.className = "ff-reserved-action";
+            mobileActions.appendChild(mobileReservedBtn);
         }
         const mobileEditBtn = document.createElement("button");
         mobileEditBtn.textContent = "✏️ Edit";
@@ -3450,6 +3486,11 @@ function renderInventory() {
 
 async function rotateProduct(index) {
     const item = inventory[index];
+
+    if (isInventoryReserved(item)) {
+        alert("This product is reserved and cannot be rotated until the reservation is completed or canceled.");
+        return;
+    }
 
     rotatingIndex = index;
 
@@ -4187,6 +4228,10 @@ function explainCurrentActivity() {
 function getStatusBadge(status) {
     if (status === "Available") {
         return `<span class="status-badge status-available">Available</span>`;
+    }
+
+    if (status === "Reserved") {
+        return `<span class="status-badge status-reserved">🔒 Reserved</span>`;
     }
 
     if (status === "Rotated") {
@@ -9872,6 +9917,13 @@ async function loadActiveProductionReservations() {
             status: item.status
         });
     });
+
+    if (typeof renderInventory === "function" && Array.isArray(inventory)) {
+        renderInventory();
+    }
+    if (typeof updateDashboard === "function") {
+        updateDashboard();
+    }
 }
 
 async function createProductionPickList(productionOrderNumber, selectedMatches) {
@@ -11954,6 +12006,10 @@ window.addEventListener("floraflow-auth-ready", function () {
             throw new Error('No leftover product is selected.');
         }
 
+        if (isInventoryReserved(manualPickupItem)) {
+            throw new Error('This product is already reserved. Refresh the inventory and choose another product.');
+        }
+
         const quantity = Number(overlay.querySelector('#ffPickupQuantity').value || 0);
         const destination = overlay.querySelector('#ffPickupDestination .active')?.dataset.value || 'Production';
         const recipients = Array.from(
@@ -12129,40 +12185,68 @@ window.addEventListener("floraflow-auth-ready", function () {
         }
     }
 
+    function findInventoryItemByRenderedElement(element) {
+        const inventoryId = String(element?.dataset?.inventoryId || "");
+        if (!inventoryId) return null;
+
+        return inventory.find(function (entry) {
+            return String(entry.id) === inventoryId;
+        }) || null;
+    }
+
     function attachSendPickupButtons() {
-        document.querySelectorAll('.mobile-inventory-card').forEach(function (card, cardIndex) {
+        document.querySelectorAll('.mobile-inventory-card').forEach(function (card) {
             if (card.querySelector('.ff-send-pickup-btn')) return;
-            const visibleCards = Array.from(document.querySelectorAll('.mobile-inventory-card'));
-            const item = inventory.filter(function (entry) {
-                const search = (searchInput?.value || '').toLowerCase().trim();
-                const matchesRemoved = showRemoved || entry.status !== 'Removed from Inventory';
-                const matchesSearch = !search || [entry.product, entry.color, entry.caseNumber, entry.notes, entry.status].some(function (value) { return String(value || '').toLowerCase().includes(search); });
-                return matchesRemoved && matchesSearch;
-            })[cardIndex];
+
+            const item = findInventoryItemByRenderedElement(card);
             if (!item || item.status === 'Removed from Inventory') return;
+
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'ff-send-pickup-btn';
-            button.title = 'Send pickup request';
-            button.setAttribute('aria-label', 'Send pickup request');
-            button.innerHTML = createIconSvg('send');
-            button.addEventListener('click', function () { openSendPickupModal(item); });
+
+            if (isInventoryReserved(item)) {
+                button.title = 'Product reserved';
+                button.setAttribute('aria-label', 'Product reserved');
+                button.innerHTML = '🔒';
+                button.disabled = true;
+                button.classList.add('is-reserved');
+            } else {
+                button.title = 'Send pickup request';
+                button.setAttribute('aria-label', 'Send pickup request');
+                button.innerHTML = createIconSvg('send');
+                button.addEventListener('click', function () {
+                    openSendPickupModal(item);
+                });
+            }
+
             card.appendChild(button);
         });
 
         document.querySelectorAll('#inventoryTable tr').forEach(function (row) {
             if (row.querySelector('.ff-table-send-btn')) return;
-            const productButton = row.querySelector('.product-history-link');
-            if (!productButton) return;
-            const item = inventory.find(function (entry) { return entry.product === productButton.textContent.trim() && entry.status !== 'Removed from Inventory'; });
-            const actions = row.cells?.[7];
-            if (!item || !actions) return;
+
+            const item = findInventoryItemByRenderedElement(row);
+            const actions = row.cells?.[8];
+            if (!item || !actions || item.status === 'Removed from Inventory') return;
+
             const button = document.createElement('button');
             button.type = 'button';
             button.className = 'ff-table-send-btn';
-            button.title = 'Send pickup request';
-            button.innerHTML = createIconSvg('send') + '<span>Send</span>';
-            button.addEventListener('click', function () { openSendPickupModal(item); });
+
+            if (isInventoryReserved(item)) {
+                button.title = 'Product reserved';
+                button.innerHTML = '<span>🔒 Reserved</span>';
+                button.disabled = true;
+                button.classList.add('is-reserved');
+            } else {
+                button.title = 'Send pickup request';
+                button.innerHTML = createIconSvg('send') + '<span>Send</span>';
+                button.addEventListener('click', function () {
+                    openSendPickupModal(item);
+                });
+            }
+
             actions.appendChild(button);
         });
     }
