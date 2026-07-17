@@ -905,7 +905,7 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
 /* Pickup request actions */
 .ff-pickup-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
     margin-top: 14px;
 }
@@ -915,6 +915,20 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     width: 100%;
     min-height: 48px;
     margin: 0;
+}
+
+
+.ff-process-action {
+    width: 100%;
+    min-height: 48px;
+    margin: 0;
+    background: #6f155e;
+    color: #ffffff;
+    border: 1px solid #6f155e;
+}
+
+.ff-process-action:hover {
+    background: #4f0f43;
 }
 
 .ff-secondary-action {
@@ -928,7 +942,7 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     color: #b31350;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 760px) {
     .ff-pickup-actions {
         grid-template-columns: 1fr;
     }
@@ -1949,7 +1963,7 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
 /* Pickup request actions */
 .ff-pickup-actions {
     display: grid;
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: 1fr 1fr 1fr;
     gap: 10px;
     margin-top: 14px;
 }
@@ -1972,7 +1986,7 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     color: #b31350;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 760px) {
     .ff-pickup-actions {
         grid-template-columns: 1fr;
     }

@@ -193,7 +193,7 @@ let history = JSON.parse(localStorage.getItem("history")) || [];
 // Inventory performance controls. Keep the complete active inventory available
 // for Production Today, but render only a small block at a time.
 const INVENTORY_FETCH_PAGE_SIZE = 1000;
-const INVENTORY_RENDER_PAGE_SIZE = 20;
+const INVENTORY_RENDER_PAGE_SIZE = 75;
 let inventoryCurrentPage = 1;
 const INVENTORY_SORT_STORAGE_KEY = "floraFlowInventorySort";
 let inventorySort = (function () {
@@ -11924,6 +11924,7 @@ window.addEventListener("floraflow-auth-ready", function () {
                 <div id="ffPickupRecipients" class="ff-recipient-grid"></div>
                 <div class="ff-privacy-note"><strong>Case number stays hidden</strong><span>Product, color, quantity and date remain visible. The case appears only after the teammate accepts the task.</span></div>
                 <div class="ff-pickup-actions">
+                    <button type="button" id="ffSendPickupToProcess" class="ff-process-action">Send to Process</button>
                     <button type="button" id="ffCreatePickupRequest" class="ff-primary-action">Send internally</button>
                     <button type="button" id="ffSharePickupWhatsApp" class="ff-secondary-action">Share by WhatsApp</button>
                 </div>
@@ -11940,6 +11941,7 @@ window.addEventListener("floraflow-auth-ready", function () {
             overlay.querySelectorAll('#ffPickupDestination button').forEach(function (item) { item.classList.remove('active'); });
             button.classList.add('active');
         });
+        overlay.querySelector('#ffSendPickupToProcess').addEventListener('click', sendManualPickupToProcess);
         overlay.querySelector('#ffCreatePickupRequest').addEventListener('click', createManualPickupRequest);
         overlay.querySelector('#ffSharePickupWhatsApp').addEventListener('click', shareManualPickupByWhatsApp);
         return overlay;
@@ -12046,6 +12048,49 @@ window.addEventListener("floraflow-auth-ready", function () {
         }).join('') || '<div class="ff-empty-state">No other active users are available.</div>';
         overlay.querySelector('#ffPickupStatus').textContent = '';
         overlay.style.display = 'flex';
+    }
+
+    async function sendManualPickupToProcess() {
+        const overlay = ensureSendPickupModal();
+        const button = overlay.querySelector('#ffSendPickupToProcess');
+        const status = overlay.querySelector('#ffPickupStatus');
+
+        if (!manualPickupItem) return;
+
+        let formData;
+        try {
+            formData = getManualPickupFormData(overlay);
+        } catch (error) {
+            alert(error.message);
+            return;
+        }
+
+        button.disabled = true;
+        button.textContent = 'Sending to Process...';
+        status.textContent = 'Reserving the requested quantity and sending it directly to Process...';
+
+        try {
+            const pickList = await createProductionPickList(
+                buildManualPickupReference(),
+                [formData.requestItem]
+            );
+            pickList.link += '&mode=pickup';
+
+            status.innerHTML = '<strong>Product sent to Process.</strong><br>No teammate was selected. The request is now available in the Process workflow.';
+
+            await loadActiveProductionReservations();
+            await loadInventoryFromSupabase();
+
+            setTimeout(function () {
+                overlay.style.display = 'none';
+            }, 1500);
+        } catch (error) {
+            console.error('Send to Process error:', error);
+            status.textContent = 'The product could not be sent to Process. ' + (error?.message || String(error));
+        } finally {
+            button.disabled = false;
+            button.textContent = 'Send to Process';
+        }
     }
 
     async function createManualPickupRequest() {
