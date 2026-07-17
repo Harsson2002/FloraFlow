@@ -1511,6 +1511,10 @@ function extractProductionColor(line) {
             aliases: ["WHITE", "WHIITE", "WHITTE", "WIRTTE", "WHIT", "WHT", "WI"]
         },
         {
+            color: "MAUVE",
+            aliases: ["MAUVE", "MVE", "MV"]
+        },
+        {
             color: "PURPLE",
             aliases: ["PURPLE", "PURALE", "PLRPLE", "PRPLE", "PURP", "PRPL", "PU"]
         },
@@ -7732,6 +7736,8 @@ function getProductionColorFromCode(code) {
         HP: "HOT PINK",
         HPNK: "HOT PINK",
         LV: "LAVENDER",
+        MV: "MAUVE",
+        MVE: "MAUVE",
         OR: "ORANGE",
         ORG: "ORANGE",
         PE: "PEACH",
@@ -8068,6 +8074,7 @@ function getKnownArticleColors() {
         "BLUE",
         "CREAM",
         "LAVENDER",
+        "MAUVE",
         "BRONZE",
         "CORAL",
         "PEACH",
@@ -12131,7 +12138,7 @@ window.addEventListener("floraflow-auth-ready", function () {
     document.addEventListener("touchmove", function (event) {
         if (!locked) return;
         const scrollRegion = event.target.closest(
-            ".modal-content, .ff-sheet, #floraFlowNotificationPanel, #floraFlowProductionProgressPanel, #productionPickPage, #usersManagementBody, #usersManagementPanel, #productsManagementOverlay > div, #productsFamiliesList, #productionRulesList, #catalogModal .modal-content, #catalogList"
+            ".modal-content, .ff-sheet, #floraFlowNotificationPanel, #floraFlowProductionProgressPanel, #productionPickPage"
         );
         if (!scrollRegion) event.preventDefault();
     }, { passive: false, capture: true });
