@@ -12131,7 +12131,7 @@ window.addEventListener("floraflow-auth-ready", function () {
     document.addEventListener("touchmove", function (event) {
         if (!locked) return;
         const scrollRegion = event.target.closest(
-            ".modal-content, .ff-sheet, #floraFlowNotificationPanel, #floraFlowProductionProgressPanel, #productionPickPage"
+            ".modal-content, .ff-sheet, #floraFlowNotificationPanel, #floraFlowProductionProgressPanel, #productionPickPage, #usersManagementBody, #usersManagementPanel, #productsManagementOverlay > div, #productsFamiliesList, #productionRulesList, #catalogModal .modal-content, #catalogList"
         );
         if (!scrollRegion) event.preventDefault();
     }, { passive: false, capture: true });

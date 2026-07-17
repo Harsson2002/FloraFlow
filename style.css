@@ -2167,92 +2167,90 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     }
 }
 
-/* ===== FloraFlow mobile Settings scroll fix ===== */
+
+/* ===== DEFINITIVE MOBILE SETTINGS SCROLL FIX ===== */
 @media (max-width: 720px) {
+    /* The backdrop stays fixed. Only the panel/body scrolls. */
     #catalogModal,
-    #productsManagementOverlay,
-    #usersManagementOverlay {
+    #settingsModal,
+    #usersManagementOverlay,
+    #productsManagementOverlay {
         position: fixed !important;
         inset: 0 !important;
         width: 100% !important;
         height: 100dvh !important;
-        padding: 0 !important;
         overflow: hidden !important;
-        touch-action: auto !important;
         overscroll-behavior: none !important;
+        touch-action: none !important;
+    }
+
+    #catalogModal,
+    #settingsModal {
+        padding: 0 !important;
     }
 
     #catalogModal .modal-content,
-    #productsManagementOverlay > div,
-    #usersManagementPanel {
+    #settingsModal .modal-content,
+    #usersManagementPanel,
+    #productsManagementOverlay > div {
+        position: relative !important;
         width: 100% !important;
         height: 100dvh !important;
-        max-width: none !important;
-        max-height: 100dvh !important;
         min-height: 0 !important;
+        max-height: 100dvh !important;
         margin: 0 !important;
         border-radius: 0 !important;
-        display: flex !important;
-        flex-direction: column !important;
-        overflow: hidden !important;
-        touch-action: auto !important;
+        overflow-y: auto !important;
+        overflow-x: hidden !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain !important;
+        touch-action: pan-y !important;
     }
 
-    #catalogModal .modal-header,
-    #productsManagementOverlay > div > div:first-child,
+    #catalogModal .modal-content,
+    #settingsModal .modal-content,
+    #productsManagementOverlay > div {
+        padding: 16px 14px calc(28px + env(safe-area-inset-bottom)) !important;
+    }
+
+    #usersManagementPanel {
+        display: flex !important;
+        flex-direction: column !important;
+    }
+
     #usersManagementHeader {
         flex: 0 0 auto !important;
     }
 
-    #catalogModal .form,
-    #catalogMessage,
-    #catalogList,
-    #productsManagementOverlay > div,
     #usersManagementBody {
-        -webkit-overflow-scrolling: touch !important;
-    }
-
-    #catalogModal .modal-content {
-        padding: 16px 14px calc(20px + env(safe-area-inset-bottom)) !important;
-    }
-
-    #catalogModal .form {
-        flex: 0 0 auto !important;
-        grid-template-columns: 1fr !important;
-        margin-bottom: 12px !important;
-    }
-
-    #catalogList {
         flex: 1 1 auto !important;
         min-height: 0 !important;
         overflow-y: auto !important;
         overflow-x: hidden !important;
-        overscroll-behavior: contain !important;
-        touch-action: pan-y !important;
-        padding-bottom: calc(24px + env(safe-area-inset-bottom)) !important;
-    }
-
-    #productsManagementOverlay > div {
-        padding: 14px 12px calc(22px + env(safe-area-inset-bottom)) !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        overscroll-behavior: contain !important;
+        -webkit-overflow-scrolling: touch !important;
+        overscroll-behavior-y: contain !important;
         touch-action: pan-y !important;
     }
 
+    #catalogList,
     #productsFamiliesList,
     #productionRulesList {
         max-height: none !important;
         overflow: visible !important;
-        touch-action: auto !important;
+        touch-action: pan-y !important;
     }
 
-    #usersManagementBody {
-        flex: 1 1 auto !important;
-        min-height: 0 !important;
-        overflow-y: auto !important;
-        overflow-x: hidden !important;
-        overscroll-behavior: contain !important;
-        touch-action: pan-y !important;
+    #catalogModal .form {
+        grid-template-columns: 1fr !important;
+    }
+
+    #catalogModal .modal-header,
+    #settingsModal .modal-header,
+    #usersManagementHeader {
+        position: sticky !important;
+        top: 0 !important;
+        z-index: 20 !important;
+        background: #fff !important;
+        padding-top: max(10px, env(safe-area-inset-top)) !important;
     }
 }
