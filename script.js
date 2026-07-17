@@ -11264,14 +11264,25 @@ function renderProductionProgressLists() {
                 <div style="height:10px;border-radius:999px;background:#e2e8f0;overflow:hidden;"><div style="width:${progress.percentage}%;height:100%;background:#166534;border-radius:999px;transition:width .25s ease;"></div></div>
             </div>
             ${lastConfirmed ? `<div style="margin-top:12px;padding:10px;border-radius:10px;background:#f8fafc;font-size:12px;color:#475569;">Last update: ${escapeProductionPickHtml(lastConfirmed.product || "Product")} · Case ${escapeProductionPickHtml(lastConfirmed.case_number || "")} · ${escapeProductionPickHtml(formatProgressCenterTime(lastConfirmed.confirmed_at))}</div>` : ""}
-            <details style="margin-top:12px;">
-                <summary style="cursor:pointer;font-weight:800;color:#334155;">View box details</summary>
-                <div style="margin-top:10px;display:grid;gap:8px;">
-                    ${(list.items || []).map(function (item) {
-                        return `<div style="padding:10px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><strong>${escapeProductionPickHtml(item.product || "Product")}</strong><br><span style="color:#64748b;">${escapeProductionPickHtml(item.color || "")} · Case ${escapeProductionPickHtml(item.case_number || "")}</span></div><div style="text-align:right;"><strong>${escapeProductionPickHtml(getProductionProgressLabel(item.status))}</strong><br><span style="color:#64748b;">${Number(item.quantity_taken || 0)} / ${Number(item.reserved_quantity || 0)} stems</span></div></div>`;
-                    }).join("") || `<div style="color:#64748b;">No box details available.</div>`}
-                </div>
-            </details>
+            ${(() => {
+                const boxItems = list.items || [];
+                const renderBox = function (item) {
+                    return `<div style="padding:10px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><strong>${escapeProductionPickHtml(item.product || "Product")}</strong><br><span style="color:#64748b;">${escapeProductionPickHtml(item.color || "")} · Case ${escapeProductionPickHtml(item.case_number || "")}</span></div><div style="text-align:right;"><strong>${escapeProductionPickHtml(getProductionProgressLabel(item.status))}</strong><br><span style="color:#64748b;">${Number(item.quantity_taken || 0)} / ${Number(item.reserved_quantity || 0)} stems</span></div></div>`;
+                };
+
+                if (boxItems.length === 1) {
+                    return `<div style="margin-top:12px;display:grid;gap:8px;">${renderBox(boxItems[0])}</div>`;
+                }
+
+                if (boxItems.length > 1) {
+                    return `<details style="margin-top:12px;">
+                        <summary style="cursor:pointer;font-weight:800;color:#334155;">View box details (${boxItems.length})</summary>
+                        <div style="margin-top:10px;display:grid;gap:8px;">${boxItems.map(renderBox).join("")}</div>
+                    </details>`;
+                }
+
+                return `<div style="margin-top:12px;color:#64748b;">No box details available.</div>`;
+            })()}
             <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;">
                 <button type="button" class="open-progress-pick" style="background:#166534;color:white;border:0;border-radius:9px;padding:10px 13px;font-weight:800;">Open Pick List</button>
                 <button type="button" class="copy-progress-link">Copy Link</button>
