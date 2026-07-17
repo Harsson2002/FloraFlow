@@ -3378,7 +3378,11 @@ function renderInventory() {
         productCell.appendChild(productLink);
         row.appendChild(productCell);
 
-        [item.color, item.quantity, item.caseNumber, item.date].forEach(function (value) {
+        const colorCell = document.createElement("td");
+        colorCell.innerHTML = getProductionColorBadgeMarkup(item.color, "");
+        row.appendChild(colorCell);
+
+        [item.quantity, item.caseNumber, item.date].forEach(function (value) {
             const cell = document.createElement("td");
             cell.textContent = value ?? "";
             row.appendChild(cell);
@@ -3428,7 +3432,7 @@ function renderInventory() {
             <button class="mobile-copy-btn" title="Copy product information">📋</button>
             <button class="mobile-product-title">🌸 ${escapeProductionPickHtml(item.product || "")}</button>
             <div class="mobile-product-details">
-                <span>🎨 ${escapeProductionPickHtml(item.color || "")}</span>
+                <span>🎨 ${getProductionColorBadgeMarkup(item.color, "")}</span>
                 <span>📦 Case ${escapeProductionPickHtml(item.caseNumber || "")}</span>
                 <span>🌿 ${Number(item.quantity ?? 0)} stems</span>
                 <span>📅 ${escapeProductionPickHtml(item.date || "")}</span>
@@ -3497,8 +3501,11 @@ async function rotateProduct(index) {
     document.getElementById("rotateProductName").textContent =
         item.product || "";
 
-    document.getElementById("rotateProductColor").textContent =
-        item.color || "";
+    applyColorBadgeToElement(
+        document.getElementById("rotateProductColor"),
+        item.color,
+        "No color"
+    );
 
     document.getElementById("rotateProductCase").textContent =
         item.caseNumber || "";
@@ -3615,7 +3622,7 @@ confirmRotateBtn.addEventListener("click", async function () {
 function openProductHistory(item) {
 
     document.getElementById("historyProductName").textContent = item.product || "";
-    document.getElementById("historyProductColor").textContent = item.color || "";
+    applyColorBadgeToElement(document.getElementById("historyProductColor"), item.color, "No color");
     document.getElementById("historyProductCase").textContent = item.caseNumber || "";
     document.getElementById("historyProductQty").textContent = item.quantity ?? 0;
 
@@ -4104,7 +4111,7 @@ function renderHistory() {
                 <div class="activity-card-meta">
                     👤 <strong>${escapeActivityHtml(item.userName || "Unknown")}</strong>
                     <span>•</span> 🌸 <strong>${escapeActivityHtml(item.product || "")}</strong>
-                    <span>•</span> 🎨 ${escapeActivityHtml(item.color || "")}
+                    <span>•</span> 🎨 ${getProductionColorBadgeMarkup(item.color, "")}
                     <span>•</span> 📦 ${escapeActivityHtml(item.caseNumber || "")}
                 </div>
                 ${detailsMarkup}
@@ -6027,7 +6034,7 @@ function showProductionRecommendations(
                     line-height:1.8;
                     font-size:14px;
                 ">
-                    🎨 Color: ${match.color || match.requestedColor || "Not specified"}<br>
+                    🎨 Color: ${getProductionColorBadgeMarkup(match.color || match.requestedColor, "Not specified")}<br>
                     📦 Case: ${match.caseNumber || "Not specified"}<br>
                     🌿 Available: ${match.quantity ?? 0} stems<br>
                     📅 Date received: ${formatProductionShareDate(match.date)}<br>
@@ -6086,7 +6093,7 @@ function showProductionRecommendations(
                                 color:#444;
                                 margin-bottom:5px;
                             ">
-                                Color: ${match.color}
+                                Color: ${getProductionColorBadgeMarkup(match.color, "Not specified")}
                             </div>
                         `
                         : ""
@@ -10481,7 +10488,7 @@ function buildProductionPickPage(data) {
                         ${escapeProductionPickHtml(item.product)}
                     </div>
                     <div style="font-size:14px;color:#475569;line-height:1.6;margin-top:4px;">
-                        Color: ${escapeProductionPickHtml(item.color || "Not specified")}<br>
+                        Color: ${getProductionColorBadgeMarkup(item.color, "Not specified")}<br>
                         Case: <span class="pick-case-value" data-case="${escapeProductionPickHtml(item.case_number || "Not specified")}">${requiresAcceptance ? "••••••" : escapeProductionPickHtml(item.case_number || "Not specified")}</span><br>
                         Available: ${available} stems<br>
                         Date received: ${escapeProductionPickHtml(formatProductionShareDate(item.date_received))}<br>
@@ -11243,6 +11250,16 @@ function getProductionColorBadgeStyle(colorValue) {
 
     const match = colorMap[color] || { background: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
     return `display:inline-flex;align-items:center;margin-top:5px;padding:3px 8px;border-radius:999px;background:${match.background};color:${match.text};border:1px solid ${match.border};font-size:12px;font-weight:850;line-height:1.2;`;
+}
+
+function getProductionColorBadgeMarkup(colorValue, fallbackText = "No color") {
+    const label = String(colorValue || "").trim() || fallbackText;
+    return `<span class="ff-color-badge" style="${getProductionColorBadgeStyle(label)}">${escapeProductionPickHtml(label)}</span>`;
+}
+
+function applyColorBadgeToElement(element, colorValue, fallbackText = "No color") {
+    if (!element) return;
+    element.innerHTML = getProductionColorBadgeMarkup(colorValue, fallbackText);
 }
 
 function renderProductionProgressLists() {
@@ -12134,7 +12151,7 @@ window.addEventListener("floraflow-auth-ready", function () {
         const overlay = ensureSendPickupModal();
         overlay.querySelector('#ffPickupSummary').innerHTML = `
             <strong>${escapeProductionPickHtml(item.product || '')}</strong>
-            <span>${escapeProductionPickHtml(item.color || '')} · ${Number(item.quantity || 0)} stems available · ${escapeProductionPickHtml(formatProductionShareDate(item.date))}</span>`;
+            <span>${getProductionColorBadgeMarkup(item.color, "No color")} · ${Number(item.quantity || 0)} stems available · ${escapeProductionPickHtml(formatProductionShareDate(item.date))}</span>`;
         const qty = overlay.querySelector('#ffPickupQuantity');
         qty.max = Number(item.quantity || 0);
         qty.value = Math.min(30, Number(item.quantity || 0));

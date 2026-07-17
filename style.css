@@ -2587,3 +2587,11 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
 tr:has(.status-reserved) {
     background: #fffaf0 !important;
 }
+
+
+/* Color labels shown consistently throughout FloraFlow */
+.ff-color-badge {
+    vertical-align: middle;
+    white-space: nowrap;
+    max-width: 100%;
+}
