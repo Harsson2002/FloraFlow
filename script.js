@@ -3275,6 +3275,21 @@ function createFlowerLifeDot(dateValue) {
     return dot;
 }
 
+function getFlowerLifeMarkup(dateValue, options = {}) {
+    const life = getFlowerLifeIndicator(dateValue);
+    const compact = options.compact === true;
+    const dayLabel = life.days === null
+        ? "Date unavailable"
+        : life.days + (life.days === 1 ? " day" : " days");
+
+    return `
+        <span class="production-life-indicator${compact ? " is-compact" : ""}" title="${escapeProductionPickHtml(life.title)}" aria-label="${escapeProductionPickHtml(life.title)}">
+            <span class="production-life-dot" style="background:${life.color};"></span>
+            <span class="production-life-text">Life: ${escapeProductionPickHtml(dayLabel)}</span>
+        </span>
+    `;
+}
+
 function getVisibleInventoryItems() {
     const inventorySearch = searchInput.value.toLowerCase().trim();
 
@@ -5860,6 +5875,7 @@ function showProductionRecommendations(
                     📦 Case: ${match.caseNumber || "Not specified"}<br>
                     🌿 Available: ${match.quantity ?? 0} stems<br>
                     📅 Date received: ${formatProductionShareDate(match.date)}<br>
+                    ${getFlowerLifeMarkup(match.date)}<br>
                     ${
                         match.articleName
                             ? `📝 Article: ${match.articleName}<br>`
@@ -10302,7 +10318,8 @@ function buildProductionPickPage(data) {
                         Color: ${escapeProductionPickHtml(item.color || "Not specified")}<br>
                         Case: <span class="pick-case-value" data-case="${escapeProductionPickHtml(item.case_number || "Not specified")}">${requiresAcceptance ? "••••••" : escapeProductionPickHtml(item.case_number || "Not specified")}</span><br>
                         Available: ${available} stems<br>
-                        Date received: ${escapeProductionPickHtml(formatProductionShareDate(item.date_received))}
+                        Date received: ${escapeProductionPickHtml(formatProductionShareDate(item.date_received))}<br>
+                        ${getFlowerLifeMarkup(item.date_received, { compact: true })}
                     </div>
                 </div>
             </label>

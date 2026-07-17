@@ -2127,3 +2127,42 @@ body.ff-secondary-view-open #floraFlowNotificationLauncher {
     display: inline-flex;
     align-items: center;
 }
+
+
+/* ===== Product life indicator in Today's Production and Pick Lists ===== */
+.production-life-indicator {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 4px;
+    padding: 5px 9px;
+    border: 1px solid #e2e8f0;
+    border-radius: 999px;
+    background: #ffffff;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 800;
+    line-height: 1;
+    vertical-align: middle;
+    white-space: nowrap;
+}
+.production-life-indicator.is-compact {
+    margin-top: 6px;
+    padding: 5px 8px;
+}
+.production-life-dot {
+    width: 13px;
+    height: 13px;
+    flex: 0 0 13px;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px rgba(255,255,255,.95), 0 1px 4px rgba(15,23,42,.28);
+}
+.production-life-text {
+    display: inline-block;
+}
+@media (max-width: 520px) {
+    .production-life-indicator {
+        font-size: 11px;
+        padding: 5px 8px;
+    }
+}
