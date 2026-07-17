@@ -11085,7 +11085,7 @@ function ensureProductionProgressCenter() {
                 </div>
                 <div style="display:flex;gap:8px;align-items:center;">
                     <button type="button" id="floraFlowProductionProgressRefreshBtn">Refresh</button>
-                    <button type="button" id="floraFlowProductionProgressCloseBtn" style="width:42px;height:42px;border:0;border-radius:11px;background:#e2e8f0;font-size:25px;cursor:pointer;">×</button>
+                    <button type="button" id="floraFlowProductionProgressCloseBtn" aria-label="Close Production Progress" title="Close" style="width:42px;height:42px;min-width:42px;border:2px solid #991b1b;border-radius:11px;background:#dc2626;color:#ffffff;font-size:27px;font-weight:900;line-height:1;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 4px 12px rgba(220,38,38,.28);">×</button>
                 </div>
             </header>
             <div style="padding:14px;">
@@ -11216,6 +11216,35 @@ function updateProductionProgressBadge() {
     badge.style.display = activeCount > 0 ? "flex" : "none";
 }
 
+function getProductionColorBadgeStyle(colorValue) {
+    const color = normalizeMatchText(colorValue);
+    const colorMap = {
+        "ORANGE": { background: "#f97316", text: "#ffffff", border: "#c2410c" },
+        "YELLOW": { background: "#facc15", text: "#422006", border: "#ca8a04" },
+        "WHITE": { background: "#ffffff", text: "#334155", border: "#cbd5e1" },
+        "HOT PINK": { background: "#ec4899", text: "#ffffff", border: "#be185d" },
+        "PINK": { background: "#f9a8d4", text: "#831843", border: "#ec4899" },
+        "RED": { background: "#dc2626", text: "#ffffff", border: "#991b1b" },
+        "PURPLE": { background: "#9333ea", text: "#ffffff", border: "#6b21a8" },
+        "LAVENDER": { background: "#ddd6fe", text: "#5b21b6", border: "#a78bfa" },
+        "GREEN": { background: "#22c55e", text: "#052e16", border: "#15803d" },
+        "BLUE": { background: "#3b82f6", text: "#ffffff", border: "#1d4ed8" },
+        "BURGUNDY": { background: "#7f1d1d", text: "#ffffff", border: "#450a0a" },
+        "CREAM": { background: "#fff7d6", text: "#5c3b00", border: "#e8cf8d" },
+        "PEACH": { background: "#fdba9a", text: "#7c2d12", border: "#fb923c" },
+        "CORAL": { background: "#fb7185", text: "#ffffff", border: "#e11d48" },
+        "MAUVE": { background: "#c08497", text: "#ffffff", border: "#9f6278" },
+        "BRONZE": { background: "#a16207", text: "#ffffff", border: "#713f12" },
+        "BROWN": { background: "#92400e", text: "#ffffff", border: "#78350f" },
+        "GRAY": { background: "#94a3b8", text: "#0f172a", border: "#64748b" },
+        "GREY": { background: "#94a3b8", text: "#0f172a", border: "#64748b" },
+        "GOLD": { background: "#d4a017", text: "#ffffff", border: "#a16207" }
+    };
+
+    const match = colorMap[color] || { background: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
+    return `display:inline-flex;align-items:center;margin-top:5px;padding:3px 8px;border-radius:999px;background:${match.background};color:${match.text};border:1px solid ${match.border};font-size:12px;font-weight:850;line-height:1.2;`;
+}
+
 function renderProductionProgressLists() {
     const container = document.getElementById("floraFlowProductionProgressList");
     const overlay = document.getElementById("floraFlowProductionProgressOverlay");
@@ -11267,7 +11296,7 @@ function renderProductionProgressLists() {
             ${(() => {
                 const boxItems = list.items || [];
                 const renderBox = function (item) {
-                    return `<div style="padding:10px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><strong>${escapeProductionPickHtml(item.product || "Product")}</strong><br><span style="color:#64748b;">${escapeProductionPickHtml(item.color || "")} · Case ${escapeProductionPickHtml(item.case_number || "")}</span></div><div style="text-align:right;"><strong>${escapeProductionPickHtml(getProductionProgressLabel(item.status))}</strong><br><span style="color:#64748b;">${Number(item.quantity_taken || 0)} / ${Number(item.reserved_quantity || 0)} stems</span></div></div>`;
+                    return `<div style="padding:10px;border:1px solid #e2e8f0;border-radius:10px;font-size:13px;display:flex;justify-content:space-between;gap:10px;align-items:center;flex-wrap:wrap;"><div><strong>${escapeProductionPickHtml(item.product || "Product")}</strong><br><span style="${getProductionColorBadgeStyle(item.color)}">${escapeProductionPickHtml(item.color || "No color")}</span><span style="color:#64748b;margin-left:7px;">Case ${escapeProductionPickHtml(item.case_number || "")}</span></div><div style="text-align:right;"><strong>${escapeProductionPickHtml(getProductionProgressLabel(item.status))}</strong><br><span style="color:#64748b;">${Number(item.quantity_taken || 0)} / ${Number(item.reserved_quantity || 0)} stems</span></div></div>`;
                 };
 
                 if (boxItems.length === 1) {
