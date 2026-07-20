@@ -9898,10 +9898,36 @@ function getProductionPickLink(token) {
 }
 
 async function loadActiveProductionReservations() {
+    // A box is reserved only while BOTH the pick-list and its item remain active.
+    // This prevents an old/stale item row from locking inventory after its order
+    // was completed or cancelled.
+    const { data: activeLists, error: listError } = await supabaseClient
+        .from(PRODUCTION_PICK_LIST_TABLE)
+        .select("id, status")
+        .in("status", ["PENDING", "IN_PROGRESS", "PROCESSING"]);
+
+    if (listError) {
+        console.warn("Could not load active production lists:", listError);
+        activeProductionReservations = new Map();
+        return;
+    }
+
+    const activeListIds = (activeLists || []).map(function (list) {
+        return list.id;
+    });
+
+    if (activeListIds.length === 0) {
+        activeProductionReservations = new Map();
+        if (typeof renderInventory === "function" && Array.isArray(inventory)) renderInventory();
+        if (typeof updateDashboard === "function") updateDashboard();
+        return;
+    }
+
     const { data, error } = await supabaseClient
         .from(PRODUCTION_PICK_ITEM_TABLE)
-        .select("inventory_id, pick_list_id, reserved_quantity, status")
-        .in("status", ["RESERVED", "PENDING"]);
+        .select("id, inventory_id, pick_list_id, reserved_quantity, status")
+        .in("pick_list_id", activeListIds)
+        .in("status", ["RESERVED", "PENDING", "PROCESSING"]);
 
     if (error) {
         console.warn("Could not load active production reservations:", error);
@@ -9913,24 +9939,18 @@ async function loadActiveProductionReservations() {
 
     (data || []).forEach(function (item) {
         const inventoryId = String(item.inventory_id ?? "");
-
-        if (!inventoryId) {
-            return;
-        }
+        if (!inventoryId) return;
 
         activeProductionReservations.set(inventoryId, {
+            itemId: item.id,
             pickListId: item.pick_list_id,
             quantity: Number(item.reserved_quantity || 0),
             status: item.status
         });
     });
 
-    if (typeof renderInventory === "function" && Array.isArray(inventory)) {
-        renderInventory();
-    }
-    if (typeof updateDashboard === "function") {
-        updateDashboard();
-    }
+    if (typeof renderInventory === "function" && Array.isArray(inventory)) renderInventory();
+    if (typeof updateDashboard === "function") updateDashboard();
 }
 
 async function createProductionPickList(productionOrderNumber, selectedMatches) {
@@ -10683,7 +10703,8 @@ function buildProductionPickPage(data) {
                         confirmed_by: getCurrentUserName(),
                         confirmed_at: now
                     })
-                    .eq("id", item.id);
+                    .eq("id", item.id)
+                    .in("status", ["RESERVED", "PENDING", "PROCESSING"]);
             });
             const itemResults = await Promise.all(itemUpdates);
             const itemFailure = itemResults.find(function (result) { return result.error; });
@@ -10697,7 +10718,7 @@ function buildProductionPickPage(data) {
                     completed_at: now
                 })
                 .eq("id", list.id)
-                .in("status", ["PENDING", "IN_PROGRESS"]);
+                .in("status", ["PENDING", "IN_PROGRESS", "PROCESSING"]);
             if (listError) throw listError;
 
             await Promise.all([
@@ -10727,11 +10748,16 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
     const decisions = [];
 
     for (const item of items) {
+        const itemStatus = String(item.status || "").toUpperCase();
+        if (!["RESERVED", "PENDING", "PROCESSING"].includes(itemStatus)) {
+            continue;
+        }
+
         const card = overlay.querySelector(
             `.production-pick-item[data-item-id="${item.id}"]`
         );
         const selected = Boolean(card?.querySelector(".pick-item-selected")?.checked);
-        const available = Number(item.available_quantity || 0);
+        const reserved = Number(item.reserved_quantity || item.available_quantity || 0);
         const quantity = selected
             ? Number(card.querySelector(".pick-quantity").value || 0)
             : 0;
@@ -10739,28 +10765,30 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
             ? card.querySelector(".pick-destination").value
             : "RETURN";
 
-        if (selected && destination !== "NOT_TAKEN" && (!Number.isFinite(quantity) || quantity <= 0 || quantity > available)) {
-            alert(
-                "Enter a valid quantity for " + item.product +
-                " between 1 and " + available + "."
-            );
+        if (selected && destination !== "NOT_TAKEN" &&
+            (!Number.isFinite(quantity) || quantity <= 0 || quantity > reserved)) {
+            alert("Enter a valid quantity for " + item.product + " between 1 and " + reserved + ".");
             return;
         }
 
-        decisions.push({ item, selected, quantity, destination });
+        decisions.push({ item, selected, quantity, destination, reserved });
+    }
+
+    if (decisions.length === 0) {
+        alert("This pick list no longer has active reservations.");
+        await loadActiveProductionReservations();
+        return;
     }
 
     const selectedCount = decisions.filter(function (decision) {
-        return decision.selected;
+        return decision.selected && decision.destination !== "NOT_TAKEN";
     }).length;
 
     if (!confirm(
-        selectedCount + " product(s) will be processed. " +
+        selectedCount + " product(s) will be removed from inventory. " +
         (decisions.length - selectedCount) +
-        " unselected product(s) will return to available inventory. Continue?"
-    )) {
-        return;
-    }
+        " product(s) will be released back to Available. Continue?"
+    )) return;
 
     confirmButton.disabled = true;
     confirmButton.textContent = "Updating inventory...";
@@ -10769,25 +10797,18 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
     try {
         const { data: claimedList, error: claimError } = await supabaseClient
             .from(PRODUCTION_PICK_LIST_TABLE)
-            .update({
-                status: "PROCESSING",
-                completed_by: confirmedBy
-            })
+            .update({ status: "PROCESSING", completed_by: confirmedBy })
             .eq("id", list.id)
-            .in("status", ["PENDING", "IN_PROGRESS"])
+            .in("status", ["PENDING", "IN_PROGRESS", "PROCESSING"])
             .select("id")
             .maybeSingle();
 
-        if (claimError) {
-            throw claimError;
-        }
-
-        if (!claimedList) {
-            throw new Error("This pick list was already processed by another user.");
-        }
+        if (claimError) throw claimError;
+        if (!claimedList) throw new Error("This pick list was already closed by another user.");
 
         for (const decision of decisions) {
             const item = decision.item;
+            const now = new Date().toISOString();
 
             if (!decision.selected || decision.destination === "NOT_TAKEN") {
                 const notTaken = decision.destination === "NOT_TAKEN";
@@ -10798,43 +10819,63 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                         destination: notTaken ? "NOT_TAKEN" : "RETURN",
                         quantity_taken: 0,
                         confirmed_by: confirmedBy,
-                        confirmed_at: new Date().toISOString()
+                        confirmed_at: now
                     })
-                    .eq("id", item.id);
-
+                    .eq("id", item.id)
+                    .in("status", ["RESERVED", "PENDING", "PROCESSING"]);
                 if (error) throw error;
                 continue;
             }
 
-            const inventoryItem = inventory.find(function (candidate) {
-                return String(candidate.id) === String(item.inventory_id);
-            });
+            // Claim the item before changing inventory so a second device cannot
+            // process the same reservation at the same time.
+            const { data: claimedItem, error: itemClaimError } = await supabaseClient
+                .from(PRODUCTION_PICK_ITEM_TABLE)
+                .update({ status: "PROCESSING" })
+                .eq("id", item.id)
+                .in("status", ["RESERVED", "PENDING"])
+                .select("id")
+                .maybeSingle();
 
-            let currentQuantity = inventoryItem
-                ? Number(inventoryItem.quantity || 0)
-                : Number(item.available_quantity || 0);
-
-            const newQuantity = Math.max(0, currentQuantity - decision.quantity);
-            const newStatus = newQuantity === 0
-                ? "Removed from Inventory"
-                : "Available";
-
-            const { error: inventoryError } = await supabaseClient
-                .from("inventory")
-                .update({
-                    quantity: newQuantity,
-                    status: newStatus
-                })
-                .eq("id", item.inventory_id)
-                .eq("quantity", currentQuantity);
-
-            if (inventoryError) {
-                throw inventoryError;
+            if (itemClaimError) throw itemClaimError;
+            if (!claimedItem && String(item.status || "").toUpperCase() !== "PROCESSING") {
+                throw new Error(item.product + " was already processed on another device.");
             }
 
-            const action = decision.destination === "PRODUCTION"
-                ? "ROTATE"
-                : "REMOVE";
+            const { data: currentRow, error: readInventoryError } = await supabaseClient
+                .from("inventory")
+                .select("id, quantity, status")
+                .eq("id", item.inventory_id)
+                .maybeSingle();
+
+            if (readInventoryError) throw readInventoryError;
+            if (!currentRow) throw new Error("Inventory item " + item.product + " no longer exists.");
+
+            const currentQuantity = Number(currentRow.quantity || 0);
+            if (decision.quantity > currentQuantity) {
+                throw new Error(
+                    item.product + " only has " + currentQuantity +
+                    " stems available now. Refresh and confirm the actual quantity."
+                );
+            }
+
+            const newQuantity = Math.max(0, currentQuantity - decision.quantity);
+            const newStatus = newQuantity === 0 ? "Removed from Inventory" : "Available";
+
+            const { data: updatedInventory, error: inventoryError } = await supabaseClient
+                .from("inventory")
+                .update({ quantity: newQuantity, status: newStatus })
+                .eq("id", item.inventory_id)
+                .eq("quantity", currentQuantity)
+                .select("id, quantity, status")
+                .maybeSingle();
+
+            if (inventoryError) throw inventoryError;
+            if (!updatedInventory) {
+                throw new Error(item.product + " changed on another device. Refresh and try again.");
+            }
+
+            const action = decision.destination === "PRODUCTION" ? "ROTATE" : "REMOVE";
 
             await addHistory(
                 item.inventory_id,
@@ -10847,7 +10888,7 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                 newQuantity,
                 "Production Order #" + list.production_order +
                 " | Destination: " + decision.destination +
-                " | Confirmed from Pick Link"
+                " | Reservation completed"
             );
 
             const { error: itemUpdateError } = await supabaseClient
@@ -10857,9 +10898,10 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                     destination: decision.destination,
                     quantity_taken: decision.quantity,
                     confirmed_by: confirmedBy,
-                    confirmed_at: new Date().toISOString()
+                    confirmed_at: now
                 })
-                .eq("id", item.id);
+                .eq("id", item.id)
+                .eq("status", "PROCESSING");
 
             if (itemUpdateError) throw itemUpdateError;
         }
@@ -10871,48 +10913,49 @@ async function confirmProductionPickList(list, items, overlay, confirmedBy) {
                 completed_by: confirmedBy,
                 completed_at: new Date().toISOString()
             })
-            .eq("id", list.id);
+            .eq("id", list.id)
+            .eq("status", "PROCESSING");
 
-        if (completeError) {
-            throw completeError;
-        }
+        if (completeError) throw completeError;
 
-        await loadActiveProductionReservations();
-        await loadInventoryFromSupabase();
-        await loadHistoryFromSupabase();
+        await Promise.all([
+            loadActiveProductionReservations(),
+            loadInventoryFromSupabase(),
+            loadHistoryFromSupabase()
+        ]);
 
-        statusElement.innerHTML = `
-            <div style="padding:14px;border-radius:10px;background:#ecfdf5;color:#166534;font-weight:800;">
-                Pick confirmed. Inventory and activity history were updated.
-            </div>
-        `;
+        statusElement.innerHTML = '<div style="padding:14px;border-radius:10px;background:#ecfdf5;color:#166534;font-weight:800;">Reservation completed. Taken stems went to their selected destination; untaken stems returned to Available.</div>';
         confirmButton.textContent = "Completed";
 
         setTimeout(function () {
             overlay.remove();
             document.body.style.overflow = "";
             window.history.replaceState({}, "", window.location.origin + window.location.pathname);
-            if (typeof loadProductionProgressLists === "function") {
-                loadProductionProgressLists();
-            }
-        }, 350);
+            if (typeof loadProductionProgressLists === "function") loadProductionProgressLists();
+        }, 500);
 
     } catch (error) {
         console.error("Pick confirmation error:", error);
 
+        // Keep unresolved items reserved, but never reactivate items that already
+        // reached COMPLETED / RETURNED / NOT_TAKEN.
         await supabaseClient
             .from(PRODUCTION_PICK_LIST_TABLE)
-            .update({ status: list.status === "IN_PROGRESS" ? "IN_PROGRESS" : "PENDING" })
+            .update({ status: "IN_PROGRESS" })
             .eq("id", list.id)
             .eq("status", "PROCESSING");
 
+        await supabaseClient
+            .from(PRODUCTION_PICK_ITEM_TABLE)
+            .update({ status: "RESERVED" })
+            .eq("pick_list_id", list.id)
+            .eq("status", "PROCESSING");
+
+        await loadActiveProductionReservations();
         confirmButton.disabled = false;
         confirmButton.textContent = "Confirm Pick and Update Inventory";
-        statusElement.textContent = "The confirmation failed. Nothing else should be changed until this is reviewed.";
-        alert(
-            "The pick could not be confirmed. " +
-            (error?.message || String(error))
-        );
+        statusElement.textContent = "The confirmation stopped safely. Completed items stayed completed; unresolved items remain reserved for review.";
+        alert("The pick could not be fully confirmed. " + (error?.message || String(error)));
     }
 }
 
