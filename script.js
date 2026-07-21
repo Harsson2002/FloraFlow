@@ -11397,6 +11397,12 @@ function ensureProductionProgressCenter() {
                 touch-action: none;
             }
             @media (max-width: 720px) {
+                #floraFlowProcessSearchRow {
+                    grid-template-columns: 1fr !important;
+                }
+                #floraFlowProcessSearchClearBtn {
+                    width: 100%;
+                }
                 /* Progress is opened from the bottom navigation on phones. */
                 #floraFlowProductionProgressLauncher {
                     display: none !important;
@@ -11460,6 +11466,23 @@ function ensureProductionProgressCenter() {
                     <button type="button" class="progress-filter-btn" data-filter="COMPLETED">Completed</button>
                     <button type="button" class="progress-filter-btn" data-filter="ALL">All</button>
                 </div>
+                <div id="floraFlowProcessSearchRow" style="display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-bottom:12px;">
+                    <input
+                        id="floraFlowProcessSearchInput"
+                        type="search"
+                        autocomplete="off"
+                        placeholder="Search PO, product, color or case..."
+                        aria-label="Search Processes"
+                        style="width:100%;min-height:44px;padding:11px 13px;border:1px solid #cbd5e1;border-radius:11px;background:#ffffff;color:#0f172a;font-size:15px;"
+                    >
+                    <button
+                        id="floraFlowProcessSearchClearBtn"
+                        type="button"
+                        style="display:none;min-height:44px;padding:10px 13px;background:#ffffff;color:#7a145f;border:1px solid #e8cfe2;border-radius:11px;white-space:nowrap;"
+                    >
+                        Clear
+                    </button>
+                </div>
                 <div id="floraFlowProductionProgressStatus" style="min-height:20px;font-size:13px;color:#475569;margin-bottom:10px;"></div>
                 <div id="floraFlowProductionProgressList"></div>
             </div>
@@ -11468,6 +11491,40 @@ function ensureProductionProgressCenter() {
     document.body.appendChild(overlay);
 
     overlay.dataset.filter = "ACTIVE";
+
+    const processSearchStorageKey = "floraFlowProcessSearch";
+    const processSearchInput = overlay.querySelector("#floraFlowProcessSearchInput");
+    const processSearchClearBtn = overlay.querySelector("#floraFlowProcessSearchClearBtn");
+
+    function syncProcessSearchControls() {
+        const hasSearch = Boolean(String(processSearchInput?.value || "").trim());
+        if (processSearchClearBtn) {
+            processSearchClearBtn.style.display = hasSearch ? "inline-flex" : "none";
+            processSearchClearBtn.style.alignItems = "center";
+            processSearchClearBtn.style.justifyContent = "center";
+        }
+    }
+
+    if (processSearchInput) {
+        processSearchInput.value = localStorage.getItem(processSearchStorageKey) || "";
+        syncProcessSearchControls();
+        processSearchInput.addEventListener("input", function () {
+            localStorage.setItem(processSearchStorageKey, this.value);
+            syncProcessSearchControls();
+            renderProductionProgressLists();
+        });
+    }
+
+    if (processSearchClearBtn) {
+        processSearchClearBtn.addEventListener("click", function () {
+            if (!processSearchInput) return;
+            processSearchInput.value = "";
+            localStorage.removeItem(processSearchStorageKey);
+            syncProcessSearchControls();
+            renderProductionProgressLists();
+            processSearchInput.focus();
+        });
+    }
 
     let lockedScrollY = 0;
 
@@ -11497,6 +11554,10 @@ function ensureProductionProgressCenter() {
         const panel = overlay.querySelector("#floraFlowProductionProgressPanel");
         if (panel) panel.scrollTop = 0;
         await loadProductionProgressLists();
+        setTimeout(function () {
+            const searchField = overlay.querySelector("#floraFlowProcessSearchInput");
+            if (searchField) searchField.focus({ preventScroll: true });
+        }, 80);
     });
     overlay.querySelector("#floraFlowProductionProgressCloseBtn").addEventListener("click", close);
     overlay.querySelector("#floraFlowProductionProgressRefreshBtn").addEventListener("click", loadProductionProgressLists);
@@ -11627,15 +11688,54 @@ function renderProductionProgressLists() {
     if (!container || !overlay) return;
 
     const filter = overlay.dataset.filter || "ACTIVE";
+    const searchInput = document.getElementById("floraFlowProcessSearchInput");
+    const searchTerm = normalizeMatchText(searchInput?.value || "");
+
     const visible = productionProgressLists.filter(function (list) {
         const status = String(list.status || "PENDING").toUpperCase();
-        if (filter === "ACTIVE") return !["COMPLETED", "CANCELLED"].includes(status);
-        if (filter === "COMPLETED") return status === "COMPLETED";
-        return true;
+        const matchesStatus = filter === "ACTIVE"
+            ? !["COMPLETED", "CANCELLED"].includes(status)
+            : filter === "COMPLETED"
+                ? status === "COMPLETED"
+                : true;
+
+        if (!matchesStatus) return false;
+        if (!searchTerm) return true;
+
+        const searchableParts = [
+            list.production_order,
+            list.status,
+            list.created_by,
+            ...(list.assignments || []).map(function (assignment) {
+                return assignment.assignedName;
+            })
+        ];
+
+        (list.items || []).forEach(function (item) {
+            searchableParts.push(
+                item.product,
+                item.color,
+                item.case_number,
+                item.inventory_id,
+                item.destination,
+                item.status
+            );
+        });
+
+        return normalizeMatchText(searchableParts.filter(Boolean).join(" "))
+            .includes(searchTerm);
     });
 
+    const statusElement = document.getElementById("floraFlowProductionProgressStatus");
+    if (statusElement && searchTerm) {
+        statusElement.textContent = visible.length + (visible.length === 1 ? " result" : " results") + " for “" + String(searchInput.value || "").trim() + "”";
+    }
+
     if (visible.length === 0) {
-        container.innerHTML = `<div style="padding:34px 18px;text-align:center;color:#64748b;background:white;border-radius:14px;">No Pick Lists in this section.</div>`;
+        const emptyMessage = searchTerm
+            ? "No Processes match this search."
+            : "No Pick Lists in this section.";
+        container.innerHTML = `<div style="padding:34px 18px;text-align:center;color:#64748b;background:white;border-radius:14px;">${emptyMessage}</div>`;
         return;
     }
 
