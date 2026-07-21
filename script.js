@@ -3384,11 +3384,25 @@ function renderInventory() {
         colorCell.innerHTML = getProductionColorBadgeMarkup(item.color, "");
         row.appendChild(colorCell);
 
-        [item.quantity, item.caseNumber, item.date].forEach(function (value) {
-            const cell = document.createElement("td");
-            cell.textContent = value ?? "";
-            row.appendChild(cell);
+        const quantityCell = document.createElement("td");
+        quantityCell.textContent = item.quantity ?? "";
+        row.appendChild(quantityCell);
+
+        const caseCell = document.createElement("td");
+        const caseHistoryLink = document.createElement("button");
+        caseHistoryLink.type = "button";
+        caseHistoryLink.textContent = item.caseNumber || "No Case";
+        caseHistoryLink.className = "case-history-link";
+        caseHistoryLink.title = "Open history for this case";
+        caseHistoryLink.addEventListener("click", function () {
+            openProductHistory(item);
         });
+        caseCell.appendChild(caseHistoryLink);
+        row.appendChild(caseCell);
+
+        const dateCell = document.createElement("td");
+        dateCell.textContent = item.date ?? "";
+        row.appendChild(dateCell);
 
         const lifeCell = document.createElement("td");
         lifeCell.className = "flower-life-cell";
@@ -3435,7 +3449,7 @@ function renderInventory() {
             <button class="mobile-product-title">🌸 ${escapeProductionPickHtml(item.product || "")}</button>
             <div class="mobile-product-details">
                 <span>🎨 ${getProductionColorBadgeMarkup(item.color, "")}</span>
-                <span>📦 Case ${escapeProductionPickHtml(item.caseNumber || "")}</span>
+                <button type="button" class="mobile-case-history-link">📦 Case ${escapeProductionPickHtml(item.caseNumber || "No Case")}</button>
                 <span>🌿 ${Number(item.quantity ?? 0)} stems</span>
                 <span>📅 ${escapeProductionPickHtml(item.date || "")}</span>
                 <span class="mobile-flower-life">Life <span class="mobile-life-dot-slot"></span></span>
@@ -3461,6 +3475,13 @@ function renderInventory() {
         mobileCard.querySelector(".mobile-product-title").addEventListener("click", function () {
             openProductHistory(item);
         });
+
+        const mobileCaseHistoryLink = mobileCard.querySelector(".mobile-case-history-link");
+        if (mobileCaseHistoryLink) {
+            mobileCaseHistoryLink.addEventListener("click", function () {
+                openProductHistory(item);
+            });
+        }
 
         const mobileActions = document.createElement("div");
         mobileActions.className = "mobile-inventory-actions";

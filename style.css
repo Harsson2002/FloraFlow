@@ -2608,3 +2608,29 @@ tr:has(.status-reserved) {
 #exportProductHistoryBtn:hover {
     background: #650b56;
 }
+
+
+/* Product history access from Case Number */
+.case-history-link,
+.mobile-case-history-link {
+    appearance: none;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    font-weight: 700;
+    padding: 0;
+    cursor: pointer;
+    text-decoration: underline;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 3px;
+}
+
+.case-history-link:hover,
+.mobile-case-history-link:hover {
+    opacity: 0.72;
+}
+
+.mobile-case-history-link {
+    text-align: left;
+}
