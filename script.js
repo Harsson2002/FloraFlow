@@ -3928,19 +3928,33 @@ async function addHistory(
     }
 }
 async function loadHistoryFromSupabase() {
-    const { data, error } = await supabaseClient
-        .from("activity")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(1000);
+    const pageSize = 1000;
+    let start = 0;
+    let allActivity = [];
 
-    if (error) {
-        alert("Error loading activity: " + error.message);
-        console.error(error);
-        return;
+    while (true) {
+        const { data, error } = await supabaseClient
+            .from("activity")
+            .select("*")
+            .order("created_at", { ascending: false })
+            .range(start, start + pageSize - 1);
+
+        if (error) {
+            alert("Error loading activity: " + error.message);
+            console.error(error);
+            return;
+        }
+
+        allActivity = allActivity.concat(data || []);
+
+        if (!data || data.length < pageSize) {
+            break;
+        }
+
+        start += pageSize;
     }
 
-    history = data.map(item => ({
+    history = allActivity.map(item => ({
         date: item.created_at ? item.created_at.split("T")[0] : "",
         time: item.created_at
             ? new Date(item.created_at).toLocaleTimeString([], {
@@ -4299,9 +4313,162 @@ exportInventorySettingsBtn.addEventListener("click", function () {
     exportToCSV(inventory, "FloraFlow_Inventory.csv");
 });
 
-exportActivitySettingsBtn.addEventListener("click", function () {
-    exportToCSV(history, "FloraFlow_Activity.csv");
+exportActivitySettingsBtn.addEventListener("click", async function () {
+    await exportSimpleActivityWorkbook();
 });
+
+function normalizeActivityDestination(item) {
+    const details = String(item?.details || "").toUpperCase();
+
+    if (details.includes("OLD")) return "OLD";
+    if (details.includes("SAMPLE")) return "Samples";
+    if (details.includes("PRODUCTION")) return "Production";
+
+    return "";
+}
+
+function getSimpleActivityMovement(item) {
+    const action = String(item?.action || "").toUpperCase();
+    const quantity = Math.max(0, Number(item?.quantity || 0));
+
+    if (action === "ADD") {
+        return {
+            type: "Added",
+            quantity: Math.max(0, Number(item?.afterQty ?? item?.quantity ?? 0)),
+            destination: "Inventory"
+        };
+    }
+
+    if (action === "ROTATE" || action === "REMOVE") {
+        return {
+            type: "Removed",
+            quantity: quantity,
+            destination: normalizeActivityDestination(item) || "Other"
+        };
+    }
+
+    return null;
+}
+
+function buildSimpleActivityReport() {
+    const dailyMap = new Map();
+    const detailRows = [];
+
+    history.forEach(function (item) {
+        const movement = getSimpleActivityMovement(item);
+        if (!movement || movement.quantity <= 0) return;
+
+        const date = item.date || "Unknown";
+        if (!dailyMap.has(date)) {
+            dailyMap.set(date, {
+                Date: date,
+                "Stems Added": 0,
+                "Stems Removed": 0,
+                Production: 0,
+                Samples: 0,
+                OLD: 0
+            });
+        }
+
+        const daily = dailyMap.get(date);
+
+        if (movement.type === "Added") {
+            daily["Stems Added"] += movement.quantity;
+        } else {
+            daily["Stems Removed"] += movement.quantity;
+            if (movement.destination === "Production") daily.Production += movement.quantity;
+            if (movement.destination === "Samples") daily.Samples += movement.quantity;
+            if (movement.destination === "OLD") daily.OLD += movement.quantity;
+        }
+
+        detailRows.push({
+            Date: date,
+            Time: item.time || "",
+            User: item.userName || "",
+            Product: item.product || "",
+            Color: item.color || "",
+            Case: item.caseNumber || "",
+            Movement: movement.type,
+            Stems: movement.quantity,
+            Destination: movement.destination
+        });
+    });
+
+    const dailyRows = Array.from(dailyMap.values()).sort(function (a, b) {
+        return String(a.Date).localeCompare(String(b.Date));
+    });
+
+    detailRows.sort(function (a, b) {
+        return (String(a.Date) + " " + String(a.Time))
+            .localeCompare(String(b.Date) + " " + String(b.Time));
+    });
+
+    return { dailyRows, detailRows };
+}
+
+function loadSheetJsForActivityExport() {
+    if (window.XLSX) return Promise.resolve(window.XLSX);
+
+    return new Promise(function (resolve, reject) {
+        const existing = document.getElementById("floraFlowSheetJs");
+        if (existing) {
+            existing.addEventListener("load", function () { resolve(window.XLSX); }, { once: true });
+            existing.addEventListener("error", reject, { once: true });
+            return;
+        }
+
+        const script = document.createElement("script");
+        script.id = "floraFlowSheetJs";
+        script.src = "https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js";
+        script.onload = function () { resolve(window.XLSX); };
+        script.onerror = function () { reject(new Error("The Excel exporter could not be loaded.")); };
+        document.head.appendChild(script);
+    });
+}
+
+function styleActivityWorksheet(worksheet, widths) {
+    worksheet["!cols"] = widths.map(function (width) { return { wch: width }; });
+    worksheet["!autofilter"] = { ref: worksheet["!ref"] };
+    worksheet["!freeze"] = { xSplit: 0, ySplit: 1 };
+}
+
+async function exportSimpleActivityWorkbook() {
+    if (!Array.isArray(history) || history.length === 0) {
+        alert("No activity data to export.");
+        return;
+    }
+
+    const report = buildSimpleActivityReport();
+    if (report.detailRows.length === 0) {
+        alert("There are no stem movements to export yet.");
+        return;
+    }
+
+    try {
+        const XLSX = await loadSheetJsForActivityExport();
+        const workbook = XLSX.utils.book_new();
+
+        const dailySheet = XLSX.utils.json_to_sheet(report.dailyRows, {
+            header: ["Date", "Stems Added", "Stems Removed", "Production", "Samples", "OLD"]
+        });
+        styleActivityWorksheet(dailySheet, [14, 16, 17, 14, 12, 12]);
+
+        const detailSheet = XLSX.utils.json_to_sheet(report.detailRows, {
+            header: ["Date", "Time", "User", "Product", "Color", "Case", "Movement", "Stems", "Destination"]
+        });
+        styleActivityWorksheet(detailSheet, [14, 12, 18, 22, 18, 14, 14, 12, 16]);
+
+        XLSX.utils.book_append_sheet(workbook, dailySheet, "Daily Summary");
+        XLSX.utils.book_append_sheet(workbook, detailSheet, "Activity Detail");
+
+        const today = getToday();
+        XLSX.writeFile(workbook, "FloraFlow_Activity_" + today + ".xlsx");
+    } catch (error) {
+        console.error("Activity Excel export error:", error);
+        alert("The Excel report could not be created. " + (error?.message || error));
+    }
+}
+
 function exportToCSV(data, filename) {
     if (data.length === 0) {
         alert("No data to export.");
