@@ -2595,3 +2595,16 @@ tr:has(.status-reserved) {
     white-space: nowrap;
     max-width: 100%;
 }
+
+
+/* Product history export */
+#exportProductHistoryBtn {
+    width: 100%;
+    margin: 14px 0 18px;
+    min-height: 46px;
+    background: #8a0f75;
+}
+
+#exportProductHistoryBtn:hover {
+    background: #650b56;
+}

@@ -168,7 +168,9 @@ const catalogMessage =
 const editModal = document.getElementById("editModal");
 const closeEditModal = document.getElementById("closeEditModal");
 const closeProductHistoryModal = document.getElementById("closeProductHistoryModal");
+const exportProductHistoryBtn = document.getElementById("exportProductHistoryBtn");
 const saveEditBtn = document.getElementById("saveEditBtn");
+let selectedProductHistoryItem = null;
 
 const exportInventoryBtn = document.getElementById("exportInventoryBtn");
 const exportHistoryBtn = document.getElementById("exportHistoryBtn");
@@ -3621,6 +3623,8 @@ confirmRotateBtn.addEventListener("click", async function () {
 
 function openProductHistory(item) {
 
+    selectedProductHistoryItem = item;
+
     document.getElementById("historyProductName").textContent = item.product || "";
     applyColorBadgeToElement(document.getElementById("historyProductColor"), item.color, "No color");
     document.getElementById("historyProductCase").textContent = item.caseNumber || "";
@@ -3774,6 +3778,130 @@ timeline.appendChild(card);
     document.getElementById("productHistoryModal").style.display = "block";
 
 }
+
+function sanitizeProductHistoryFileName(value) {
+    return String(value || "Product")
+        .trim()
+        .replace(/[^a-z0-9_-]+/gi, "_")
+        .replace(/^_+|_+$/g, "") || "Product";
+}
+
+function getProductHistoryExportRows(item) {
+    const records = history
+        .filter(function (record) { return record.id === item.id; })
+        .slice()
+        .reverse();
+
+    return records.map(function (record) {
+        const action = String(record.action || "").toUpperCase();
+        const destination = normalizeActivityDestination(record);
+        let movement = action;
+        let stemsIn = 0;
+        let stemsOut = 0;
+
+        if (action === "ADD") {
+            movement = "Added";
+            stemsIn = Math.max(0, Number(record.afterQty ?? record.quantity ?? 0));
+        } else if (action === "ROTATE") {
+            movement = destination || "Rotated";
+            stemsOut = Math.max(0, Number(record.quantity || 0));
+        } else if (action === "REMOVE") {
+            movement = destination || "Removed";
+            stemsOut = Math.max(0, Number(record.quantity || record.beforeQty || 0));
+        } else if (action === "EDIT") {
+            const before = Number(record.beforeQty || 0);
+            const after = Number(record.afterQty || 0);
+            if (after > before) stemsIn = after - before;
+            if (before > after) stemsOut = before - after;
+            movement = "Inventory Adjustment";
+        }
+
+        return {
+            Date: record.date || "",
+            Time: record.time || "",
+            Movement: movement,
+            "Stems In": stemsIn || "",
+            "Stems Out": stemsOut || "",
+            Destination: destination || (action === "ADD" ? "Inventory" : ""),
+            Balance: Number(record.afterQty ?? (action === "ADD" ? record.quantity : 0))
+        };
+    });
+}
+
+async function exportSelectedProductHistory() {
+    const item = selectedProductHistoryItem;
+    if (!item) {
+        alert("Open a product history first.");
+        return;
+    }
+
+    const rows = getProductHistoryExportRows(item);
+    if (rows.length === 0) {
+        alert("No history is available for this product.");
+        return;
+    }
+
+    try {
+        const XLSX = await loadSheetJsForActivityExport();
+        const workbook = XLSX.utils.book_new();
+
+        const totalAdded = rows.reduce(function (sum, row) {
+            return sum + Number(row["Stems In"] || 0);
+        }, 0);
+        const totalProduction = rows.reduce(function (sum, row) {
+            return sum + (row.Destination === "Production" ? Number(row["Stems Out"] || 0) : 0);
+        }, 0);
+        const totalSamples = rows.reduce(function (sum, row) {
+            return sum + (row.Destination === "Samples" ? Number(row["Stems Out"] || 0) : 0);
+        }, 0);
+        const totalOld = rows.reduce(function (sum, row) {
+            return sum + (row.Destination === "OLD" ? Number(row["Stems Out"] || 0) : 0);
+        }, 0);
+
+        const summaryRows = [
+            ["Product", item.product || ""],
+            ["Color / Variety", item.color || ""],
+            ["Case", item.caseNumber || ""],
+            ["Total Added", totalAdded],
+            ["Used for Production", totalProduction],
+            ["Used for Samples", totalSamples],
+            ["Sent to OLD", totalOld],
+            ["Current Balance", Number(item.quantity || 0)]
+        ];
+
+        const sheet = XLSX.utils.aoa_to_sheet(summaryRows);
+        XLSX.utils.sheet_add_json(sheet, rows, {
+            origin: "A11",
+            header: ["Date", "Time", "Movement", "Stems In", "Stems Out", "Destination", "Balance"]
+        });
+        sheet["!cols"] = [
+            { wch: 14 }, { wch: 12 }, { wch: 23 }, { wch: 12 },
+            { wch: 12 }, { wch: 16 }, { wch: 12 }
+        ];
+        sheet["!autofilter"] = { ref: "A11:G" + (11 + rows.length) };
+        sheet["!freeze"] = { xSplit: 0, ySplit: 11 };
+
+        XLSX.utils.book_append_sheet(workbook, sheet, "Product History");
+
+        const fileName = [
+            "FloraFlow_Product_History",
+            sanitizeProductHistoryFileName(item.product),
+            sanitizeProductHistoryFileName(item.color),
+            "Case_" + sanitizeProductHistoryFileName(item.caseNumber),
+            getToday()
+        ].filter(Boolean).join("_") + ".xlsx";
+
+        XLSX.writeFile(workbook, fileName);
+    } catch (error) {
+        console.error("Product history export error:", error);
+        alert("The product history could not be exported. " + (error?.message || error));
+    }
+}
+
+if (exportProductHistoryBtn) {
+    exportProductHistoryBtn.addEventListener("click", exportSelectedProductHistory);
+}
+
 function openEditModal(index) {
     editingIndex = index;
     const item = inventory[index];
